@@ -49,6 +49,7 @@ export function WheelSection({
     useRef<WheelAnimationController | null>(null);
 
   const [rotation, setRotation] = useState(0);
+  const rotationRef = useRef(rotation);
   const [spinning, setSpinning] = useState(
     wheel.status === "SPINNING",
   );
@@ -58,6 +59,12 @@ export function WheelSection({
       ? wheel.winnerDisplayName ?? wheel.winnerValue
       : null,
   );
+
+  useEffect(() => {
+    return () => {
+      animationController.current?.cancel();
+    };
+  }, []);
 
   const selectedDuration =
     fetcher.data?.wheelId === wheel.id &&
@@ -146,25 +153,24 @@ export function WheelSection({
 
     setResult(null);
     setSpinning(true);
+    animationController.current?.cancel();
 
     if (remainingSeconds === 0) {
       completeRecoveredSpin();
       return;
     }
 
-    animationController.current?.cancel();
     animationController.current = animateWheelSpin({
-      startRotation: 0,
+      startRotation: rotationRef.current,
       entryCount: wheel.entries.length,
       winnerEntryIndex: wheel.winnerEntryIndex,
       durationSeconds: remainingSeconds,
-      onFrame: setRotation,
+      onFrame: (nextRotation) => {
+        rotationRef.current = nextRotation;
+        setRotation(nextRotation);
+      },
       onComplete: completeRecoveredSpin,
     });
-
-    return () => {
-      animationController.current?.cancel();
-    };
   }, [
     fetcher,
     wheel.entries.length,
@@ -205,11 +211,14 @@ export function WheelSection({
     animationController.current?.cancel();
 
     animationController.current = animateWheelSpin({
-      startRotation: rotation,
+      startRotation: rotationRef.current,
       entryCount: wheel.entries.length,
       winnerEntryIndex: data.winnerEntryIndex,
       durationSeconds: data.spinDurationSeconds,
-      onFrame: setRotation,
+      onFrame: (nextRotation) => {
+        rotationRef.current = nextRotation;
+        setRotation(nextRotation);
+      },
       onComplete: () => {
         setResult(finalResult);
         setSpinning(false);
@@ -241,12 +250,8 @@ export function WheelSection({
       },
     });
 
-    return () => {
-      animationController.current?.cancel();
-    };
   }, [
     fetcher,
-    rotation,
     themeKey,
     wheel.entries.length,
     wheel.id,
