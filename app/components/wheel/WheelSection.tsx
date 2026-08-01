@@ -9,6 +9,7 @@ import { useFetcher } from "react-router";
 import {
   animateWheelSpin,
   createConfettiBurst,
+  playContainmentLock,
   playWinnerTone,
   type WheelAnimationController,
 } from "../../lib/wheel-effects.client";
@@ -18,6 +19,7 @@ import {
 } from "../../lib/asylum-themes";
 import { WheelCanvas } from "./WheelCanvas";
 import { WheelConsole } from "./WheelConsole";
+import { ContainmentReveal } from "./ContainmentReveal";
 import type {
   WheelActionData,
   WheelData,
@@ -47,9 +49,13 @@ export function WheelSection({
   const completionSent = useRef(false);
   const animationController =
     useRef<WheelAnimationController | null>(null);
+  const revealActive = useRef(false);
+  const revealDismissTimer = useRef<number | null>(null);
 
   const [rotation, setRotation] = useState(0);
   const rotationRef = useRef(rotation);
+  const [pointerTick, setPointerTick] = useState(0);
+  const [revealResult, setRevealResult] = useState<string | null>(null);
   const [spinning, setSpinning] = useState(
     wheel.status === "SPINNING",
   );
@@ -63,6 +69,10 @@ export function WheelSection({
   useEffect(() => {
     return () => {
       animationController.current?.cancel();
+
+      if (revealDismissTimer.current !== null) {
+        window.clearTimeout(revealDismissTimer.current);
+      }
     };
   }, []);
 
@@ -94,7 +104,7 @@ export function WheelSection({
   }, [wheel.entries, wheel.type]);
 
   useEffect(() => {
-    if (wheel.status === "COMPLETED") {
+    if (wheel.status === "COMPLETED" && !revealActive.current) {
       setResult(
         wheel.winnerDisplayName ??
           wheel.winnerValue,
@@ -136,8 +146,10 @@ export function WheelSection({
     );
 
     const completeRecoveredSpin = () => {
-      setResult(finalResult);
       setSpinning(false);
+      revealActive.current = true;
+      setRevealResult(finalResult);
+      playContainmentLock();
 
       if (!completionSent.current) {
         completionSent.current = true;
@@ -152,6 +164,8 @@ export function WheelSection({
     };
 
     setResult(null);
+    setRevealResult(null);
+    revealActive.current = false;
     setSpinning(true);
     animationController.current?.cancel();
 
@@ -168,6 +182,9 @@ export function WheelSection({
       onFrame: (nextRotation) => {
         rotationRef.current = nextRotation;
         setRotation(nextRotation);
+      },
+      onTick: () => {
+        setPointerTick((tick) => tick + 1);
       },
       onComplete: completeRecoveredSpin,
     });
@@ -206,6 +223,8 @@ export function WheelSection({
       "Result";
 
     setResult(null);
+    setRevealResult(null);
+    revealActive.current = false;
     setSpinning(true);
 
     animationController.current?.cancel();
@@ -219,20 +238,14 @@ export function WheelSection({
         rotationRef.current = nextRotation;
         setRotation(nextRotation);
       },
+      onTick: () => {
+        setPointerTick((tick) => tick + 1);
+      },
       onComplete: () => {
-        setResult(finalResult);
         setSpinning(false);
-        playWinnerTone();
-
-        const theme = ASYLUM_THEMES[themeKey];
-
-        createConfettiBurst({
-          primary: theme.primary,
-          secondary:
-            wheel.type === "VALUE"
-              ? theme.valuePrimary
-              : theme.secondary,
-        });
+        revealActive.current = true;
+        setRevealResult(finalResult);
+        playContainmentLock();
 
         if (!completionSent.current) {
           completionSent.current = true;
@@ -316,7 +329,34 @@ export function WheelSection({
             rotation={rotation}
             spinning={spinning}
             duration={selectedDuration}
+            pointerTick={pointerTick}
           />
+
+          {revealResult ? (
+            <ContainmentReveal
+              key={lastSpinToken.current ?? revealResult}
+              result={revealResult}
+              onReveal={() => {
+                setResult(revealResult);
+                playWinnerTone();
+
+                const theme = ASYLUM_THEMES[themeKey];
+
+                createConfettiBurst({
+                  primary: theme.primary,
+                  secondary:
+                    wheel.type === "VALUE"
+                      ? theme.valuePrimary
+                      : theme.secondary,
+                });
+
+                revealDismissTimer.current = window.setTimeout(() => {
+                  revealActive.current = false;
+                  setRevealResult(null);
+                }, 1600);
+              }}
+            />
+          ) : null}
         </div>
 
         <WheelConsole
@@ -344,7 +384,7 @@ export function WheelSection({
             </div>
 
             <div>
-              <span>Spin time</span>
+              <span>Selected duration</span>
               <strong>
                 {selectedDuration
                   ? `${selectedDuration} seconds`

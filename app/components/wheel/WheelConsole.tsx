@@ -13,9 +13,14 @@ export function WheelConsole({
 }: WheelConsoleProps) {
   return (
     <aside className="studio-console">
+      <span className="studio-console-bolt studio-console-bolt-nw" aria-hidden="true" />
+      <span className="studio-console-bolt studio-console-bolt-ne" aria-hidden="true" />
+      <span className="studio-console-bolt studio-console-bolt-sw" aria-hidden="true" />
+      <span className="studio-console-bolt studio-console-bolt-se" aria-hidden="true" />
+
       <header className="studio-console-header">
         <div>
-          <p>Control console</p>
+          <p>Operator control machine</p>
           <h3>{label}</h3>
         </div>
 

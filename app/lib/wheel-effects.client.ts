@@ -8,6 +8,7 @@ type AnimateWheelSpinOptions = {
   winnerEntryIndex: number;
   durationSeconds: number;
   onFrame: (rotation: number) => void;
+  onTick?: (intensity: number) => void;
   onComplete: () => void;
 };
 
@@ -16,60 +17,104 @@ let sharedAudioContext: AudioContext | null = null;
 function getAudioContext() {
   if (typeof window === "undefined") return null;
 
-  sharedAudioContext ??= new AudioContext();
+  try {
+    sharedAudioContext ??= new AudioContext();
+  } catch {
+    return null;
+  }
+
   return sharedAudioContext;
 }
 
 function playTick(intensity: number) {
-  const context = getAudioContext();
-  if (!context) return;
+  try {
+    const context = getAudioContext();
+    if (!context) return;
 
-  const oscillator = context.createOscillator();
-  const gain = context.createGain();
-
-  oscillator.type = "square";
-  oscillator.frequency.value = 520 + intensity * 320;
-
-  const now = context.currentTime;
-  gain.gain.setValueAtTime(0.0001, now);
-  gain.gain.exponentialRampToValueAtTime(
-    0.025 + intensity * 0.02,
-    now + 0.004,
-  );
-  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.045);
-
-  oscillator.connect(gain);
-  gain.connect(context.destination);
-
-  oscillator.start(now);
-  oscillator.stop(now + 0.05);
-}
-
-export function playWinnerTone() {
-  const context = getAudioContext();
-  if (!context) return;
-
-  const now = context.currentTime;
-  const notes = [392, 523.25, 659.25, 783.99];
-
-  notes.forEach((frequency, index) => {
     const oscillator = context.createOscillator();
     const gain = context.createGain();
 
-    oscillator.type = index % 2 === 0 ? "sawtooth" : "triangle";
-    oscillator.frequency.value = frequency;
+    oscillator.type = "square";
+    oscillator.frequency.value = 420 + intensity * 260;
 
-    const start = now + index * 0.09;
-    gain.gain.setValueAtTime(0.0001, start);
-    gain.gain.exponentialRampToValueAtTime(0.06, start + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.42);
+    const now = context.currentTime;
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(
+      0.025 + intensity * 0.025,
+      now + 0.003,
+    );
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.045);
 
     oscillator.connect(gain);
     gain.connect(context.destination);
 
-    oscillator.start(start);
-    oscillator.stop(start + 0.45);
-  });
+    oscillator.start(now);
+    oscillator.stop(now + 0.05);
+  } catch {
+    // Audio must never interrupt wheel animation.
+  }
+}
+
+export function playWinnerTone() {
+  try {
+    const context = getAudioContext();
+    if (!context) return;
+
+    const now = context.currentTime;
+    const notes = [392, 523.25, 659.25, 783.99];
+
+    notes.forEach((frequency, index) => {
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+
+      oscillator.type = index % 2 === 0 ? "sawtooth" : "triangle";
+      oscillator.frequency.value = frequency;
+
+      const start = now + index * 0.09;
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(0.06, start + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.42);
+
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+
+      oscillator.start(start);
+      oscillator.stop(start + 0.45);
+    });
+  } catch {
+    // Audio must never block the saved result.
+  }
+}
+
+export function playContainmentLock() {
+  try {
+    const context = getAudioContext();
+    if (!context) return;
+
+    const now = context.currentTime;
+    [118, 82].forEach((frequency, index) => {
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      const start = now + index * 0.12;
+
+      oscillator.type = "square";
+      oscillator.frequency.setValueAtTime(frequency, start);
+      oscillator.frequency.exponentialRampToValueAtTime(
+        frequency * 0.72,
+        start + 0.18,
+      );
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(0.075, start + 0.008);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.24);
+
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start(start);
+      oscillator.stop(start + 0.25);
+    });
+  } catch {
+    // Audio must never block the reveal.
+  }
 }
 
 function easeWheel(progress: number) {
@@ -97,6 +142,7 @@ export function animateWheelSpin(
     winnerEntryIndex,
     durationSeconds,
     onFrame,
+    onTick,
     onComplete,
   } = options;
 
@@ -133,6 +179,7 @@ export function animateWheelSpin(
     if (currentSegment !== previousSegment) {
       const intensity = Math.max(0.15, 1 - rawProgress);
       playTick(intensity);
+      onTick?.(intensity);
       previousSegment = currentSegment;
     }
 

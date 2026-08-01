@@ -12,6 +12,7 @@ type WheelCanvasProps = {
   rotation: number;
   spinning: boolean;
   duration: number | null;
+  pointerTick: number;
 };
 
 function entryLabel(entry: WheelEntry) {
@@ -60,25 +61,28 @@ function drawWheel(
 
     context.fill();
 
-    const light = context.createLinearGradient(
-      center - radius,
-      center - radius,
-      center + radius,
-      center + radius,
+    const light = context.createRadialGradient(
+      center * 0.78,
+      center * 0.72,
+      radius * 0.08,
+      center,
+      center,
+      radius,
     );
 
-    light.addColorStop(0, "rgba(255,255,255,.13)");
-    light.addColorStop(0.42, "rgba(255,255,255,0)");
-    light.addColorStop(1, "rgba(0,0,0,.25)");
+    light.addColorStop(0, "rgba(255,255,255,.2)");
+    light.addColorStop(0.46, "rgba(255,255,255,.025)");
+    light.addColorStop(0.84, "rgba(0,0,0,.2)");
+    light.addColorStop(1, "rgba(0,0,0,.48)");
 
     context.fillStyle = light;
     context.fill();
 
-    context.strokeStyle = theme.wheelDark;
-    context.lineWidth = entries.length > 100 ? 1 : 2;
+    context.strokeStyle = "rgba(5,5,7,.72)";
+    context.lineWidth = entries.length > 100 ? 1 : 2.5;
     context.stroke();
 
-    if (type === "NAME" && entries.length > 90) {
+    if (entries.length > 96) {
       return;
     }
 
@@ -92,23 +96,39 @@ function drawWheel(
     const fontSize =
       type === "VALUE"
         ? 31
-        : entries.length > 60
-          ? 15
-          : entries.length > 35
-            ? 19
-            : 25;
+        : entries.length > 72
+          ? 13
+          : entries.length > 52
+            ? 16
+            : entries.length > 32
+              ? 20
+              : 26;
 
     context.font = `900 ${fontSize}px Inter, Arial, sans-serif`;
 
     const rawLabel = entryLabel(entry);
     const label =
-      rawLabel.length > 22
-        ? `${rawLabel.slice(0, 21)}…`
+      rawLabel.length > (entries.length > 52 ? 12 : 22)
+        ? `${rawLabel.slice(0, entries.length > 52 ? 11 : 21)}…`
         : rawLabel;
 
-    context.fillText(label, radius - 42, 0);
+    context.shadowColor = "rgba(0,0,0,.8)";
+    context.shadowBlur = 5;
+    context.fillText(label, radius - 46, 0);
     context.restore();
   });
+
+  context.beginPath();
+  context.arc(center, center, radius - 5, 0, Math.PI * 2);
+  context.strokeStyle = "rgba(255,255,255,.18)";
+  context.lineWidth = 5;
+  context.stroke();
+
+  context.beginPath();
+  context.arc(center, center, radius * 0.29, 0, Math.PI * 2);
+  context.strokeStyle = "rgba(0,0,0,.42)";
+  context.lineWidth = 9;
+  context.stroke();
 }
 
 export function WheelCanvas({
@@ -118,6 +138,7 @@ export function WheelCanvas({
   rotation,
   spinning,
   duration,
+  pointerTick,
 }: WheelCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -130,17 +151,26 @@ export function WheelCanvas({
   }, [entries, themeKey, type]);
 
   return (
-    <div className="studio-wheel-machine">
-      <div className="studio-wheel-pointer" aria-hidden="true">
+    <div
+      className={`studio-wheel-machine${spinning ? " studio-wheel-machine-spinning" : ""}`}
+    >
+      <div className="studio-wheel-frame-inset" aria-hidden="true" />
+
+      <div
+        className={`studio-wheel-pointer${pointerTick > 0 ? " studio-wheel-pointer-recoil" : ""}`}
+        aria-hidden="true"
+        key={pointerTick}
+      >
+        <i />
         <span />
       </div>
 
       <div className="studio-wheel-rivets" aria-hidden="true">
-        {Array.from({ length: 24 }, (_, index) => (
+        {Array.from({ length: 32 }, (_, index) => (
           <i
             key={index}
             style={{
-              transform: `rotate(${index * 15}deg) translateY(-50%)`,
+              transform: `rotate(${index * 11.25}deg) translateY(-50%)`,
             }}
           />
         ))}
@@ -155,6 +185,12 @@ export function WheelCanvas({
       />
 
       <div className="studio-wheel-hub">
+        <div className="studio-wheel-bearing" aria-hidden="true">
+          {Array.from({ length: 8 }, (_, index) => (
+            <i key={index} />
+          ))}
+        </div>
+
         <div className="studio-wheel-hub-ring">
           <strong>A</strong>
           <span>ASYLUM</span>
