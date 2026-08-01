@@ -31,3 +31,26 @@ export type WheelActionData = {
   spinDurationSeconds?: number;
   spinToken?: string;
 };
+
+export type WheelOperatorAction =
+  | "shuffle-wheel"
+  | "select-duration"
+  | "spin-wheel";
+
+export type WheelOperatorState = {
+  id: string;
+  label: string;
+  status: WheelData["status"];
+  selectedDuration: number | null;
+  spinning: boolean;
+};
+
+export type WheelOperatorResult = {
+  triggered: boolean;
+  message?: string;
+};
+
+export type WheelOperatorHandle = {
+  runAction: (action: WheelOperatorAction) => WheelOperatorResult;
+  scrollIntoView: (reducedMotion: boolean) => void;
+};

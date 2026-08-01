@@ -21,7 +21,11 @@ import {
   getGameForShop,
   updateGameStatus,
 } from "../models/game.server";
+import { getGameResults } from "../models/game-results.server";
+import { GameResultsSummary } from "../components/results/GameResultsSummary";
 import { authenticate } from "../shopify.server";
+
+import "../styles/game-results.css";
 
 export async function loader({
   request,
@@ -39,9 +43,10 @@ export async function loader({
     throw new Response("Game not found.", { status: 404 });
   }
 
-  const [claims, totals] = await Promise.all([
+  const [claims, totals, results] = await Promise.all([
     getClaimsForGame(game.id),
     getClaimTotals(game.id),
+    getGameResults(game.id),
   ]);
 
   const requestUrl = new URL(request.url);
@@ -69,6 +74,7 @@ export async function loader({
       createdAt: claim.createdAt.toISOString(),
     })),
     totals,
+    results,
     publicUrl: `${requestUrl.origin}/games/${game.id}`,
   };
 }
@@ -305,7 +311,7 @@ type FilterValue = "ALL" | "PENDING" | "CONFIRMED" | "CANCELED";
 export default function GameControlCenter() {
   const navigate = useNavigate();
   const fetcher = useFetcher<ActionData>();
-  const { game, claims, totals, publicUrl } = useLoaderData<typeof loader>();
+  const { game, claims, totals, publicUrl, results } = useLoaderData<typeof loader>();
 
   const [filter, setFilter] = useState<FilterValue>("ALL");
   const [search, setSearch] = useState("");
@@ -381,6 +387,14 @@ export default function GameControlCenter() {
             <div className="control-progress-head"><span>Game progress</span><span>{claimed} / {game.totalSpots} · {percentage}%</span></div>
             <div className="control-progress-track"><div className="control-progress-fill" style={{ width: `${percentage}%` }} /></div>
           </section>
+
+          {results ? (
+            <GameResultsSummary
+              results={results}
+              heading={game.status === "COMPLETED" ? "Completed wheels" : "Wheel progress"}
+              action={<a className="game-results-action" href={`/app/games/${game.id}/play#game-results`}>Open Game Results</a>}
+            />
+          ) : null}
 
           {fetcher.data?.error ? <div className="control-message control-message-error">{fetcher.data.error}</div> : null}
           {fetcher.data?.success ? <div className="control-message control-message-success">{fetcher.data.success}</div> : null}

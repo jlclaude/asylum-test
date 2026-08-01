@@ -1,5 +1,7 @@
 import {
+  forwardRef,
   useEffect,
+  useImperativeHandle,
   useMemo,
   useRef,
   useState,
@@ -17,18 +19,27 @@ import {
   ASYLUM_THEMES,
   type AsylumThemeKey,
 } from "../../lib/asylum-themes";
+import { wheelActionBlockReason, wheelScrollBehavior } from "../../lib/game-mode-operator";
 import { WheelCanvas } from "./WheelCanvas";
 import { WheelConsole } from "./WheelConsole";
 import { ContainmentReveal } from "./ContainmentReveal";
 import type {
   WheelActionData,
   WheelData,
+  WheelOperatorAction,
+  WheelOperatorHandle,
+  WheelOperatorState,
 } from "./types";
 
 type WheelSectionProps = {
   wheel: WheelData;
   themeKey: AsylumThemeKey;
   sequenceNumber: number;
+  isActive: boolean;
+  isOperatorLocked: boolean;
+  onSelect: (wheelId: string) => void;
+  onCompleted: (wheelId: string) => void;
+  onOperatorStateChange: (state: WheelOperatorState) => void;
 };
 
 function entryLabel(
@@ -39,11 +50,17 @@ function entryLabel(
     : entry.value;
 }
 
-export function WheelSection({
+export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(function WheelSection({
   wheel,
   themeKey,
   sequenceNumber,
-}: WheelSectionProps) {
+  isActive,
+  isOperatorLocked,
+  onSelect,
+  onCompleted,
+  onOperatorStateChange,
+}, operatorRef) {
+  const sectionRef = useRef<HTMLElement>(null);
   const fetcher = useFetcher<WheelActionData>();
   const lastSpinToken = useRef<string | null>(null);
   const completionSent = useRef(false);
@@ -81,6 +98,35 @@ export function WheelSection({
     fetcher.data.spinDurationSeconds
       ? fetcher.data.spinDurationSeconds
       : wheel.spinDurationSeconds;
+
+  const busy = fetcher.state !== "idle" || spinning;
+  const ready = wheel.status === "READY" && !spinning;
+
+  useImperativeHandle(operatorRef, () => ({
+    runAction: (action: WheelOperatorAction) => {
+      const blocked = wheelActionBlockReason(action, { status: wheel.status, spinning, busy: fetcher.state !== "idle", selectedDuration });
+      if (blocked) return { triggered: false, message: blocked };
+
+      fetcher.submit({ intent: action, wheelId: wheel.id }, { method: "post" });
+      return { triggered: true, message: `${wheel.label}: command submitted.` };
+    },
+    scrollIntoView: (reducedMotion: boolean) => {
+      sectionRef.current?.scrollIntoView({
+        behavior: wheelScrollBehavior(reducedMotion),
+        block: "start",
+      });
+    },
+  }), [fetcher, selectedDuration, spinning, wheel.id, wheel.label, wheel.status]);
+
+  useEffect(() => {
+    onOperatorStateChange({
+      id: wheel.id,
+      label: wheel.label,
+      status: spinning ? "SPINNING" : wheel.status,
+      selectedDuration,
+      spinning,
+    });
+  }, [onOperatorStateChange, selectedDuration, spinning, wheel.id, wheel.label, wheel.status]);
 
   const uniqueCount = useMemo(() => {
     if (wheel.type === "VALUE") {
@@ -161,6 +207,8 @@ export function WheelSection({
           { method: "post" },
         );
       }
+
+      onCompleted(wheel.id);
     };
 
     setResult(null);
@@ -190,6 +238,7 @@ export function WheelSection({
     });
   }, [
     fetcher,
+    onCompleted,
     wheel.entries.length,
     wheel.id,
     wheel.spinDurationSeconds,
@@ -260,6 +309,8 @@ export function WheelSection({
             },
           );
         }
+
+        onCompleted(wheel.id);
       },
     });
 
@@ -269,15 +320,8 @@ export function WheelSection({
     wheel.entries.length,
     wheel.id,
     wheel.type,
+    onCompleted,
   ]);
-
-  const busy =
-    fetcher.state !== "idle" ||
-    spinning;
-
-  const ready =
-    wheel.status === "READY" &&
-    !spinning;
 
   const visibleStatus = spinning
     ? "SPINNING"
@@ -290,12 +334,20 @@ export function WheelSection({
 
   return (
     <section
+      ref={sectionRef}
       className={[
         "studio-wheel-section",
+        isActive ? "studio-wheel-section-active" : "",
         wheel.type === "VALUE"
           ? "studio-wheel-section-value"
           : "",
       ].join(" ")}
+      aria-current={isActive ? "true" : undefined}
+      data-wheel-id={wheel.id}
+      data-operator-locked={isOperatorLocked ? "true" : "false"}
+      onPointerDown={() => {
+        if (!isOperatorLocked) onSelect(wheel.id);
+      }}
     >
       <div className="studio-wheel-heading">
         <div>
@@ -316,7 +368,7 @@ export function WheelSection({
         </div>
 
         <span className="studio-wheel-heading-status">
-          {visibleStatus}
+          {isActive ? `ACTIVE · ${visibleStatus}` : visibleStatus}
         </span>
       </div>
 
@@ -527,4 +579,4 @@ export function WheelSection({
       </div>
     </section>
   );
-}
+});

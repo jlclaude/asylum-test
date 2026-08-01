@@ -16,6 +16,11 @@ import {
   getPublicClaimsForGame,
 } from "../models/claim.server";
 import { getPublicGame } from "../models/game.server";
+import { getPublicGameResults } from "../models/game-results.server";
+import { PublicGameResults } from "../components/results/PublicGameResults";
+import { formatPublicName } from "../lib/public-name";
+
+import "../styles/game-results.css";
 
 export async function loader({
   params,
@@ -34,9 +39,12 @@ export async function loader({
     });
   }
 
-  const [totals, claims] = await Promise.all([
+  const [totals, claims, results] = await Promise.all([
     getClaimTotals(game.id),
     getPublicClaimsForGame(game.id),
+    game.status === "COMPLETED"
+      ? getPublicGameResults(game.id)
+      : Promise.resolve(null),
   ]);
 
   return {
@@ -49,9 +57,10 @@ export async function loader({
       status: game.status,
     },
     totals,
+    results,
     claims: claims.map((claim) => ({
       id: claim.id,
-      displayName: claim.displayName,
+      displayName: formatPublicName(claim.displayName),
       quantity: claim.quantity,
       comment: claim.comment,
       status: claim.status,
@@ -171,16 +180,6 @@ function formatDate(value: string) {
     hour: "numeric",
     minute: "2-digit",
   }).format(new Date(value));
-}
-
-function publicName(name: string) {
-  const parts = name.trim().split(/\s+/);
-
-  if (parts.length < 2) {
-    return parts[0] || "Member";
-  }
-
-  return `${parts[0]} ${parts[parts.length - 1][0]}.`;
 }
 
 const styles = `
@@ -641,7 +640,7 @@ const styles = `
 `;
 
 export default function PublicGamePage() {
-  const { game, totals, claims } =
+  const { game, totals, claims, results } =
     useLoaderData<typeof loader>();
 
   const actionData = useActionData<ActionData>();
@@ -690,7 +689,7 @@ export default function PublicGamePage() {
             <div className="public-hero-body">
               <div>
                 <p className="public-eyebrow">
-                  Secure your spots
+                  {game.status === "COMPLETED" ? "Official game record" : "Secure your spots"}
                 </p>
 
                 <h2>{game.title}</h2>
@@ -709,7 +708,7 @@ export default function PublicGamePage() {
                     : "",
                 ].join(" ")}
               >
-                {claimsOpen ? "CLAIMS OPEN" : "CLAIMS CLOSED"}
+                {game.status === "COMPLETED" ? "GAME COMPLETE" : claimsOpen ? "CLAIMS OPEN" : "CLAIMS CLOSED"}
               </span>
             </div>
           </section>
@@ -775,6 +774,10 @@ export default function PublicGamePage() {
             <div className="public-message public-message-success">
               {actionData.success}
             </div>
+          ) : null}
+
+          {game.status === "COMPLETED" && results ? (
+            <PublicGameResults gameTitle={game.title} results={results} />
           ) : null}
 
           <section className="public-grid">
@@ -892,7 +895,7 @@ export default function PublicGamePage() {
                     >
                       <div className="public-claim-top">
                         <div>
-                          <h4>{publicName(claim.displayName)}</h4>
+                          <h4>{claim.displayName}</h4>
 
                           <p className="public-claim-meta">
                             {claim.quantity}{" "}

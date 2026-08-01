@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   ActionFunctionArgs,
   LoaderFunctionArgs,
@@ -13,11 +13,23 @@ import {
 
 import { AsylumBrand } from "../components/asylum/AsylumBrand";
 import { GameIdentityCard } from "../components/asylum/GameIdentityCard";
+import { GameCompletionCard } from "../components/results/GameCompletionCard";
+import { GameResultsSummary } from "../components/results/GameResultsSummary";
 import { WheelSection } from "../components/wheel/WheelSection";
+import { GameModeShortcuts } from "../components/wheel/GameModeShortcuts";
+import { GameModeToolbar } from "../components/wheel/GameModeToolbar";
 import type {
   WheelActionData,
   WheelData,
+  WheelOperatorAction,
+  WheelOperatorHandle,
+  WheelOperatorResult,
+  WheelOperatorState,
 } from "../components/wheel/types";
+import { useFullscreen } from "../hooks/useFullscreen";
+import { useGameModeShortcuts } from "../hooks/useGameModeShortcuts";
+import { useSoundPreference } from "../hooks/useSoundPreference";
+import { adjacentWheelId, unfinishedWheelIds } from "../lib/game-mode-operator";
 import {
   ASYLUM_THEMES,
   type AsylumThemeKey,
@@ -32,9 +44,11 @@ import {
   startGameWheelSpin,
 } from "../models/game-run.server";
 import { getGameForShop } from "../models/game.server";
+import { getGameResults } from "../models/game-results.server";
 import { authenticate } from "../shopify.server";
 
 import "../styles/asylum-brand.css";
+import "../styles/game-results.css";
 import "../styles/wheel-studio.css";
 
 export async function loader({
@@ -66,7 +80,10 @@ export async function loader({
     );
   }
 
-  const run = await getGameRun(game.id);
+  const [run, results] = await Promise.all([
+    getGameRun(game.id),
+    getGameResults(game.id),
+  ]);
 
   return {
     game: {
@@ -82,6 +99,7 @@ export async function loader({
         game.createdAt.toISOString(),
     },
 
+    results,
     run: run
       ? {
           id: run.id,
@@ -278,15 +296,147 @@ export async function action({
 
 export default function GameModePage() {
   const navigate = useNavigate();
+  const fullscreenTarget = useRef<HTMLElement>(null);
+  const wheelRefs = useRef(new Map<string, WheelOperatorHandle>());
+  const operatorStatesRef = useRef<Record<string, WheelOperatorState>>({});
+  const completionAdvance = useRef(false);
+  const firstScroll = useRef(true);
 
   const beginFetcher =
     useFetcher<WheelActionData>();
 
-  const { game, run } =
+  const { game, run, results } =
     useLoaderData<typeof loader>();
 
   const [themeKey, setThemeKey] =
     useState<AsylumThemeKey>("classic");
+  const [operatorStates, setOperatorStates] = useState<Record<string, WheelOperatorState>>({});
+  const [operatorMessage, setOperatorMessage] = useState<string | null>(null);
+  const [completedLocally, setCompletedLocally] = useState<Set<string>>(() => new Set());
+  const [focusReleased, setFocusReleased] = useState(false);
+
+  const orderedWheels = useMemo(
+    () => run?.rounds.flatMap((round) => round.wheels) ?? [],
+    [run],
+  );
+  const unfinishedWheels = useMemo(
+    () => {
+      const ids = new Set(unfinishedWheelIds(orderedWheels, completedLocally));
+      return orderedWheels.filter((wheel) => ids.has(wheel.id));
+    },
+    [completedLocally, orderedWheels],
+  );
+  const [activeWheelId, setActiveWheelId] = useState<string | null>(
+    () => unfinishedWheels[0]?.id ?? null,
+  );
+  const { muted, toggleMuted } = useSoundPreference();
+  const { isFullscreen, toggleFullscreen } = useFullscreen(fullscreenTarget);
+
+  useEffect(() => {
+    if (focusReleased && activeWheelId === null) return;
+    if (activeWheelId && unfinishedWheels.some((wheel) => wheel.id === activeWheelId)) return;
+    setActiveWheelId(unfinishedWheels[0]?.id ?? null);
+  }, [activeWheelId, focusReleased, unfinishedWheels]);
+
+  useEffect(() => {
+    if (!operatorMessage) return;
+    const timer = window.setTimeout(() => setOperatorMessage(null), 3200);
+    return () => window.clearTimeout(timer);
+  }, [operatorMessage]);
+
+  useEffect(() => {
+    if (!activeWheelId) return;
+    if (firstScroll.current) {
+      firstScroll.current = false;
+      return;
+    }
+
+    const anySpinning = Object.values(operatorStatesRef.current).some((state) => state.spinning);
+    if (anySpinning && !completionAdvance.current) return;
+
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    wheelRefs.current.get(activeWheelId)?.scrollIntoView(reducedMotion);
+    completionAdvance.current = false;
+  }, [activeWheelId]);
+
+  const updateOperatorState = useCallback((state: WheelOperatorState) => {
+    operatorStatesRef.current = { ...operatorStatesRef.current, [state.id]: state };
+    setOperatorStates((current) => {
+      const previous = current[state.id];
+      if (previous && previous.label === state.label && previous.status === state.status && previous.selectedDuration === state.selectedDuration && previous.spinning === state.spinning) return current;
+      return { ...current, [state.id]: state };
+    });
+  }, []);
+
+  const selectWheel = useCallback((wheelId: string) => {
+    setFocusReleased(false);
+    setActiveWheelId(wheelId);
+  }, []);
+
+  const handleWheelCompleted = useCallback((wheelId: string) => {
+    setCompletedLocally((current) => new Set(current).add(wheelId));
+    setFocusReleased(false);
+    setActiveWheelId((current) => {
+      if (current !== wheelId) return current;
+      const currentIndex = orderedWheels.findIndex((wheel) => wheel.id === wheelId);
+      const candidates = [
+        ...orderedWheels.slice(currentIndex + 1),
+        ...orderedWheels.slice(0, currentIndex),
+      ];
+      const next = candidates.find((wheel) => wheel.id !== wheelId && wheel.status !== "COMPLETED");
+      completionAdvance.current = true;
+      return next?.id ?? null;
+    });
+  }, [orderedWheels]);
+
+  const activeWheel = activeWheelId
+    ? operatorStates[activeWheelId] ?? (() => {
+        const wheel = orderedWheels.find((candidate) => candidate.id === activeWheelId);
+        return wheel ? { id: wheel.id, label: wheel.label, status: wheel.status, selectedDuration: wheel.spinDurationSeconds, spinning: wheel.status === "SPINNING" } : null;
+      })()
+    : null;
+
+  const runActiveAction = useCallback((action: WheelOperatorAction): WheelOperatorResult => {
+    if (!activeWheelId) return { triggered: false, message: "No unfinished wheel is selected." };
+    return wheelRefs.current.get(activeWheelId)?.runAction(action) ?? { triggered: false, message: "Active wheel controls are unavailable." };
+  }, [activeWheelId]);
+
+  const navigateWheel = useCallback((direction: 1 | -1): WheelOperatorResult => {
+    if (activeWheel?.spinning) return { triggered: false, message: "Wheel is currently spinning." };
+    if (unfinishedWheels.length === 0) return { triggered: false, message: "All wheels are completed." };
+    const nextId = adjacentWheelId(unfinishedWheels.map((wheel) => wheel.id), activeWheelId, direction);
+    const nextWheel = unfinishedWheels.find((wheel) => wheel.id === nextId);
+    if (!nextWheel) return { triggered: false, message: "No unfinished wheel is available." };
+    setFocusReleased(false);
+    setActiveWheelId(nextWheel.id);
+    return { triggered: true, message: `${nextWheel.label} selected.` };
+  }, [activeWheel?.spinning, activeWheelId, unfinishedWheels]);
+
+  const shortcutHandlers = useMemo(() => ({
+    shuffle: () => runActiveAction("shuffle-wheel"),
+    selectDuration: () => runActiveAction("select-duration"),
+    spin: () => runActiveAction("spin-wheel"),
+    nextWheel: () => navigateWheel(1),
+    previousWheel: () => navigateWheel(-1),
+    releaseFocus: () => {
+      setFocusReleased(true);
+      setActiveWheelId(null);
+      return { triggered: true, message: "Operator focus released." };
+    },
+    toggleFullscreen: () => {
+      void toggleFullscreen().then((success) => {
+        if (!success) setOperatorMessage("Fullscreen is unavailable in this browser.");
+      });
+      return { triggered: true, message: "Fullscreen command requested." };
+    },
+    toggleSound: () => {
+      toggleMuted();
+      return { triggered: true, message: muted ? "Wheel sound enabled." : "Wheel sound muted." };
+    },
+    showMessage: setOperatorMessage,
+  }), [muted, navigateWheel, runActiveAction, toggleFullscreen, toggleMuted]);
+
+  useGameModeShortcuts(shortcutHandlers);
 
   const theme =
     ASYLUM_THEMES[themeKey];
@@ -317,6 +467,7 @@ export default function GameModePage() {
 
   return (
     <main
+      ref={fullscreenTarget}
       className="studio-page"
       style={variables}
     >
@@ -374,6 +525,18 @@ export default function GameModePage() {
             ))}
           </select>
         </div>
+
+        <GameModeToolbar
+          activeWheel={activeWheel}
+          muted={muted}
+          fullscreen={isFullscreen}
+          onToggleMuted={toggleMuted}
+          onToggleFullscreen={() => {
+            void toggleFullscreen().then((success) => {
+              if (!success) setOperatorMessage("Fullscreen is unavailable in this browser.");
+            });
+          }}
+        />
 
         <GameIdentityCard
           title={game.title}
@@ -434,7 +597,8 @@ export default function GameModePage() {
             </beginFetcher.Form>
           </section>
         ) : (
-          run.rounds.map((round) => (
+          <>
+          {run.rounds.map((round) => (
             <section
               className="studio-round"
               key={round.id}
@@ -454,6 +618,10 @@ export default function GameModePage() {
                 {round.wheels.map(
                   (wheel, index) => (
                     <WheelSection
+                      ref={(handle) => {
+                        if (handle) wheelRefs.current.set(wheel.id, handle);
+                        else wheelRefs.current.delete(wheel.id);
+                      }}
                       key={wheel.id}
                       wheel={
                         wheel as WheelData
@@ -462,13 +630,31 @@ export default function GameModePage() {
                       sequenceNumber={
                         index + 1
                       }
+                      isActive={activeWheelId === wheel.id}
+                      isOperatorLocked={wheel.status === "COMPLETED" || completedLocally.has(wheel.id)}
+                      onSelect={selectWheel}
+                      onCompleted={handleWheelCompleted}
+                      onOperatorStateChange={updateOperatorState}
                     />
                   ),
                 )}
               </div>
             </section>
-          ))
+          ))}
+
+          {results ? <GameResultsSummary results={results} heading="Live wheel record" /> : null}
+
+          {game.status === "COMPLETED" && results?.completedAt ? (
+            <GameCompletionCard
+              gameTitle={game.title}
+              results={results}
+              controlCenterHref={`/app/games/${game.id}`}
+            />
+          ) : null}
+          </>
         )}
+
+        {run ? <GameModeShortcuts message={operatorMessage} /> : null}
 
         <footer className="studio-statusbar">
           <div>

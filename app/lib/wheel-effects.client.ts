@@ -13,6 +13,15 @@ type AnimateWheelSpinOptions = {
 };
 
 let sharedAudioContext: AudioContext | null = null;
+let wheelAudioMuted = false;
+
+export function setWheelAudioMuted(muted: boolean) {
+  wheelAudioMuted = muted;
+}
+
+export function isWheelAudioMuted() {
+  return wheelAudioMuted;
+}
 
 function getAudioContext() {
   if (typeof window === "undefined") return null;
@@ -28,6 +37,7 @@ function getAudioContext() {
 
 function playTick(intensity: number) {
   try {
+    if (wheelAudioMuted) return;
     const context = getAudioContext();
     if (!context) return;
 
@@ -57,6 +67,7 @@ function playTick(intensity: number) {
 
 export function playWinnerTone() {
   try {
+    if (wheelAudioMuted) return;
     const context = getAudioContext();
     if (!context) return;
 
@@ -88,6 +99,7 @@ export function playWinnerTone() {
 
 export function playContainmentLock() {
   try {
+    if (wheelAudioMuted) return;
     const context = getAudioContext();
     if (!context) return;
 

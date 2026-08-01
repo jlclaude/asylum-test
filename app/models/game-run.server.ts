@@ -377,15 +377,22 @@ export async function completeGameWheelSpin(
       throw new Error("No saved result exists for this wheel.");
     }
 
-    if (wheel.status !== "COMPLETED") {
-      await transaction.gameWheel.update({
-        where: { id: wheel.id },
-        data: {
-          status: "COMPLETED",
-          completedAt: new Date(),
-        },
-      });
+    if (wheel.status === "COMPLETED") {
+      return {
+        wheelId: wheel.id,
+        winnerDisplayName: wheel.winnerDisplayName,
+        winnerValue: wheel.winnerValue,
+        gameCompleted: wheel.gameRound.gameRun.completedAt !== null,
+      };
     }
+
+    await transaction.gameWheel.update({
+      where: { id: wheel.id },
+      data: {
+        status: "COMPLETED",
+        completedAt: new Date(),
+      },
+    });
 
     const unfinishedRoundWheels = await transaction.gameWheel.count({
       where: {
