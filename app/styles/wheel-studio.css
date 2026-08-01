@@ -136,6 +136,7 @@ body {
 }
 
 .studio-toolbar button,
+.studio-toolbar a,
 .studio-toolbar select {
   height: 40px;
   padding: 0 13px;
@@ -148,8 +149,15 @@ body {
   font-weight: 800;
 }
 
-.studio-toolbar button {
+.studio-toolbar button,
+.studio-toolbar a {
   cursor: pointer;
+  text-decoration: none;
+}
+
+.studio-toolbar a {
+  display: inline-flex;
+  align-items: center;
 }
 
 .studio-operator-toolbar { display:flex;align-items:stretch;justify-content:space-between;gap:12px;padding:12px 18px;border-bottom:2px solid var(--theme-border);background:linear-gradient(180deg,rgba(255,255,255,.035),transparent),#101012 }

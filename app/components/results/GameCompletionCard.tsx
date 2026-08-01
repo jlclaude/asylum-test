@@ -1,12 +1,13 @@
+import { Link } from "react-router";
 import type { GameResults } from "./types";
 
 type Props = {
+  gameId: string;
   gameTitle: string;
   results: GameResults;
-  controlCenterHref: string;
 };
 
-export function GameCompletionCard({ gameTitle, results, controlCenterHref }: Props) {
+export function GameCompletionCard({ gameId, gameTitle, results }: Props) {
   const wheels = results.rounds.flatMap((round) => round.wheels);
   const names = wheels.filter((wheel) => wheel.type === "NAME" && wheel.status === "COMPLETED");
   const value = wheels.find((wheel) => wheel.type === "VALUE" && wheel.status === "COMPLETED");
@@ -25,7 +26,7 @@ export function GameCompletionCard({ gameTitle, results, controlCenterHref }: Pr
         {names.map((wheel, index) => <li key={`${wheel.label}-${index}`}><span>{wheel.label}</span><strong>{wheel.winner}</strong></li>)}
         {value ? <li><span>{value.label}</span><strong>{value.winner}</strong></li> : null}
       </ul>
-      <a className="game-results-action" href={controlCenterHref}>Back to Game Control Center</a>
+      <Link className="game-results-action" to={`/app/games/${gameId}`}>Return to Game Center</Link>
     </section>
   );
 }

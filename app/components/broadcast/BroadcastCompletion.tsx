@@ -9,7 +9,7 @@ export function BroadcastCompletion({ gameId, gameTitle, results }: {
   if (!results.completedAt) return null;
   return (
     <div className="broadcast-completion">
-      <GameCompletionCard gameTitle={gameTitle} results={results} controlCenterHref={`/app/games/${gameId}`} />
+      <GameCompletionCard gameId={gameId} gameTitle={gameTitle} results={results} />
       <a className="game-results-action" href={`/app/games/${gameId}/play#game-results`}>View completed results</a>
     </div>
   );

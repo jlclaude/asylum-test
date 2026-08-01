@@ -5,6 +5,7 @@ import type {
 } from "react-router";
 import {
   isRouteErrorResponse,
+  Link,
   useFetcher,
   useLoaderData,
   useNavigate,
@@ -494,12 +495,9 @@ export default function GameModePage() {
 
         <div className="studio-toolbar">
           <div>
-            <button
-              type="button"
-              onClick={() => navigate(`/app/games/${game.id}`)}
-            >
+            <Link to={`/app/games/${game.id}`}>
               ← Return to Game Control
-            </button>
+            </Link>
             {run ? (
               <button type="button" onClick={() => navigate(`/app/games/${game.id}/broadcast`)}>
                 OPEN BROADCAST MODE
@@ -651,9 +649,9 @@ export default function GameModePage() {
 
           {game.status === "COMPLETED" && results?.completedAt ? (
             <GameCompletionCard
+              gameId={game.id}
               gameTitle={game.title}
               results={results}
-              controlCenterHref={`/app/games/${game.id}`}
             />
           ) : null}
           </>
