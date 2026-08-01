@@ -2,6 +2,25 @@ export type WheelAnimationController = {
   cancel: () => void;
 };
 
+export function remainingSpinSeconds(
+  spunAt: string,
+  durationSeconds: number,
+  now = Date.now(),
+) {
+  const startedAt = Date.parse(spunAt);
+
+  if (
+    !Number.isFinite(startedAt) ||
+    !Number.isFinite(durationSeconds) ||
+    durationSeconds <= 0 ||
+    !Number.isFinite(now)
+  ) {
+    return null;
+  }
+
+  return Math.max(durationSeconds - Math.max(0, (now - startedAt) / 1000), 0);
+}
+
 type AnimateWheelSpinOptions = {
   startRotation: number;
   entryCount: number;
@@ -157,6 +176,23 @@ export function animateWheelSpin(
     onTick,
     onComplete,
   } = options;
+
+  if (
+    typeof window === "undefined" ||
+    typeof performance === "undefined" ||
+    typeof requestAnimationFrame === "undefined" ||
+    typeof cancelAnimationFrame === "undefined" ||
+    !Number.isFinite(startRotation) ||
+    !Number.isInteger(entryCount) ||
+    entryCount <= 0 ||
+    !Number.isInteger(winnerEntryIndex) ||
+    winnerEntryIndex < 0 ||
+    winnerEntryIndex >= entryCount ||
+    !Number.isFinite(durationSeconds) ||
+    durationSeconds <= 0
+  ) {
+    return { cancel: () => undefined };
+  }
 
   let canceled = false;
   let frameId = 0;

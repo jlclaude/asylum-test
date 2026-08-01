@@ -386,13 +386,32 @@ export async function completeGameWheelSpin(
       };
     }
 
-    await transaction.gameWheel.update({
-      where: { id: wheel.id },
+    const completion = await transaction.gameWheel.updateMany({
+      where: {
+        id: wheel.id,
+        status: { not: "COMPLETED" },
+      },
       data: {
         status: "COMPLETED",
         completedAt: new Date(),
       },
     });
+
+    if (completion.count === 0) {
+      const completedWheel = await transaction.gameWheel.findUniqueOrThrow({
+        where: { id: wheel.id },
+        include: {
+          gameRound: { include: { gameRun: true } },
+        },
+      });
+
+      return {
+        wheelId: completedWheel.id,
+        winnerDisplayName: completedWheel.winnerDisplayName,
+        winnerValue: completedWheel.winnerValue,
+        gameCompleted: completedWheel.gameRound.gameRun.completedAt !== null,
+      };
+    }
 
     const unfinishedRoundWheels = await transaction.gameWheel.count({
       where: {

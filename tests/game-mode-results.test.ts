@@ -4,6 +4,7 @@ import test from "node:test";
 import { toPublicGameResults } from "../app/lib/game-results.ts";
 import { adjacentWheelId, fullscreenIsActive, savedSoundIsMuted, shortcutTargetIsEditable, unfinishedWheelIds, wheelActionBlockReason, wheelScrollBehavior } from "../app/lib/game-mode-operator.ts";
 import { formatPublicName } from "../app/lib/public-name.ts";
+import { remainingSpinSeconds } from "../app/lib/wheel-effects.client.ts";
 
 test("public names use the existing privacy convention", () => {
   assert.equal(formatPublicName("John Quincy Smith"), "John S.");
@@ -60,4 +61,19 @@ test("fullscreen state recognizes standard and Safari elements", () => {
   assert.equal(fullscreenIsActive(null), false);
   assert.equal(fullscreenIsActive(element), true);
   assert.equal(fullscreenIsActive(null, element), true);
+});
+
+test("saved spin recovery resumes only the remaining duration", () => {
+  const startedAt = "2026-01-01T00:00:00.000Z";
+  const halfway = Date.parse("2026-01-01T00:00:30.000Z");
+  const elapsed = Date.parse("2026-01-01T00:02:00.000Z");
+
+  assert.equal(remainingSpinSeconds(startedAt, 60, halfway), 30);
+  assert.equal(remainingSpinSeconds(startedAt, 60, elapsed), 0);
+});
+
+test("saved spin recovery rejects invalid timing values", () => {
+  assert.equal(remainingSpinSeconds("not-a-date", 60), null);
+  assert.equal(remainingSpinSeconds("2026-01-01T00:00:00.000Z", 0), null);
+  assert.equal(remainingSpinSeconds("2026-01-01T00:00:00.000Z", Number.NaN), null);
 });

@@ -703,6 +703,17 @@ export function ErrorBoundary() {
     >
       <h1>Game Mode error</h1>
       <p>{message}</p>
+      {import.meta.env.DEV && error instanceof Error && error.stack ? (
+        <pre
+          style={{
+            maxWidth: 960,
+            overflow: "auto",
+            whiteSpace: "pre-wrap",
+          }}
+        >
+          {error.stack}
+        </pre>
+      ) : null}
       <a href="/app">
         Return to dashboard
       </a>

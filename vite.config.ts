@@ -15,11 +15,18 @@ if (
   delete process.env.HOST;
 }
 
-const host = new URL(process.env.SHOPIFY_APP_URL || "http://localhost")
-  .hostname;
+const appUrl = new URL(
+  process.env.SHOPIFY_APP_URL || "http://localhost",
+);
+const host = appUrl.hostname;
 
 let hmrConfig;
-if (host === "localhost") {
+if (host === "localhost" && appUrl.protocol === "https:") {
+  // Shopify CLI's local HTTPS proxy does not forward WebSocket upgrades,
+  // and its dedicated HMR port serves plain WS. Disable HMR in this one
+  // configuration so the secure page never tries to open a TLS socket to it.
+  hmrConfig = false;
+} else if (host === "localhost") {
   hmrConfig = {
     protocol: "ws",
     host: "localhost",

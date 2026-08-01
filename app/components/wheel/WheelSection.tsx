@@ -13,6 +13,7 @@ import {
   createConfettiBurst,
   playContainmentLock,
   playWinnerTone,
+  remainingSpinSeconds,
   type WheelAnimationController,
 } from "../../lib/wheel-effects.client";
 import {
@@ -73,6 +74,7 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
   const rotationRef = useRef(rotation);
   const [pointerTick, setPointerTick] = useState(0);
   const [revealResult, setRevealResult] = useState<string | null>(null);
+  const [recoveryError, setRecoveryError] = useState<string | null>(null);
   const [spinning, setSpinning] = useState(
     wheel.status === "SPINNING",
   );
@@ -182,14 +184,23 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
       wheel.winnerValue ??
       "Result";
 
-    const elapsedSeconds = Math.max(
-      0,
-      (Date.now() - new Date(wheel.spunAt).getTime()) / 1000,
+    const remainingSeconds = remainingSpinSeconds(
+      wheel.spunAt,
+      wheel.spinDurationSeconds,
     );
-    const remainingSeconds = Math.max(
-      wheel.spinDurationSeconds - elapsedSeconds,
-      0,
-    );
+
+    if (
+      remainingSeconds === null ||
+      wheel.entries.length === 0 ||
+      wheel.winnerEntryIndex < 0 ||
+      wheel.winnerEntryIndex >= wheel.entries.length
+    ) {
+      setSpinning(false);
+      setRecoveryError(
+        "This saved spin contains invalid recovery data. Reload Game Mode or return to the Control Center.",
+      );
+      return;
+    }
 
     const completeRecoveredSpin = () => {
       setSpinning(false);
@@ -212,6 +223,7 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
     };
 
     setResult(null);
+    setRecoveryError(null);
     setRevealResult(null);
     revealActive.current = false;
     setSpinning(true);
@@ -327,8 +339,9 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
     ? "SPINNING"
     : wheel.status;
 
-  const actionMessage =
-    fetcher.data?.wheelId === wheel.id
+  const actionMessage = recoveryError
+    ? { error: recoveryError }
+    : fetcher.data?.wheelId === wheel.id
       ? fetcher.data
       : null;
 
