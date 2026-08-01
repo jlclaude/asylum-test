@@ -1,14 +1,26 @@
 import { useEffect, useSyncExternalStore } from "react";
+import type { SpinMusicSnapshot } from "../lib/wheel-music";
 import {
   getSpinMusicSnapshot, initializeSpinMusic, previewSpinMusic, resumeSpinMusic,
   selectSpinMusicTrack, setSpinMusicMuted, setSpinMusicVolume, startSpinMusic,
-  stopSpinMusic, stopSpinMusicPreview, subscribeSpinMusic,
-} from "../lib/wheel-music.client";
+  stopSpinMusic, stopSpinMusicPreview, subscribeToSpinMusic,
+} from "../lib/wheel-music";
 
-const serverSnapshot = getSpinMusicSnapshot();
+const SERVER_SNAPSHOT: SpinMusicSnapshot = {
+  tracks: [],
+  trackId: "",
+  volume: 0.7,
+  muted: false,
+  status: "OFF",
+  warning: null,
+};
 
 export function useSpinMusic() {
-  const snapshot = useSyncExternalStore(subscribeSpinMusic, getSpinMusicSnapshot, () => serverSnapshot);
+  const snapshot = useSyncExternalStore(
+    subscribeToSpinMusic,
+    getSpinMusicSnapshot,
+    () => SERVER_SNAPSHOT,
+  );
   useEffect(() => initializeSpinMusic(), []);
   return {
     ...snapshot,

@@ -23,7 +23,10 @@ let playbackRequest = 0;
 const state: SpinMusicSnapshot = { tracks: [], trackId: "", volume: 0.7, muted: false, status: "OFF", warning: null };
 let snapshot: SpinMusicSnapshot = { ...state };
 const emit = () => { snapshot = { ...state }; listeners.forEach((listener) => listener()); };
-const save = (key: string, value: string) => { try { localStorage.setItem(key, value); } catch { /* non-blocking */ } };
+const save = (key: string, value: string) => {
+  if (typeof window === "undefined") return;
+  try { window.localStorage.setItem(key, value); } catch { /* non-blocking */ }
+};
 
 function validTrack(value: unknown): value is SpinMusicTrack {
   if (!value || typeof value !== "object") return false;
@@ -81,6 +84,7 @@ function stopAudio() {
 }
 
 async function play(owner: string, elapsedSeconds: number, loop: boolean) {
+  if (typeof window === "undefined") return false;
   const track = state.tracks.find((item) => item.id === state.trackId);
   stopAudio();
   state.warning = null;
@@ -156,5 +160,10 @@ export function setSpinMusicMuted(muted: boolean) {
   if (muted) { playbackRequest += 1; stopAudio(); }
   state.status = state.trackId && !muted ? "READY" : "OFF"; emit();
 }
-export function getSpinMusicSnapshot() { return snapshot; }
-export function subscribeSpinMusic(listener: () => void) { listeners.add(listener); return () => listeners.delete(listener); }
+export function getSpinMusicSnapshot(): SpinMusicSnapshot { return snapshot; }
+export function subscribeToSpinMusic(listener: () => void) {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}

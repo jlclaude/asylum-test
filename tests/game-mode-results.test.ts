@@ -5,7 +5,11 @@ import { toPublicGameResults } from "../app/lib/game-results.ts";
 import { adjacentWheelId, broadcastWheelStatus, defaultActiveWheelId, defaultBroadcastActiveWheelId, fullscreenIsActive, nextUnfinishedWheelId, savedSoundIsMuted, shortcutTargetIsEditable, unfinishedWheelIds, wheelActionBlockReason, wheelScrollBehavior } from "../app/lib/game-mode-operator.ts";
 import { formatPublicName } from "../app/lib/public-name.ts";
 import { idleRotationAt, remainingSpinSeconds, wheelPositionAt, wheelSpinTotalDegrees } from "../app/lib/wheel-effects.client.ts";
-import { loopingPlaybackOffset } from "../app/lib/wheel-music.client.ts";
+import {
+  getSpinMusicSnapshot,
+  loopingPlaybackOffset,
+  subscribeToSpinMusic,
+} from "../app/lib/wheel-music.ts";
 import { broadcastCountdownLabels, shouldAnimateBroadcastCountdown } from "../app/lib/broadcast-countdown.ts";
 import { normalizeDashboardGameCounts } from "../app/lib/dashboard-game-counts.ts";
 
@@ -184,4 +188,19 @@ test("recovered spin music resumes at the looping playback offset", () => {
   assert.equal(loopingPlaybackOffset(67, 20), 7);
   assert.equal(loopingPlaybackOffset(12, 20), 12);
   assert.equal(loopingPlaybackOffset(12, 0), 0);
+});
+
+test("spin music store exposes an SSR-safe stable named API", () => {
+  assert.deepEqual(getSpinMusicSnapshot(), {
+    tracks: [],
+    trackId: "",
+    volume: 0.7,
+    muted: false,
+    status: "OFF",
+    warning: null,
+  });
+
+  const unsubscribe = subscribeToSpinMusic(() => undefined);
+  assert.equal(typeof unsubscribe, "function");
+  unsubscribe();
 });
