@@ -16,6 +16,26 @@ import {
   gameSetupTemplateInput,
   validateGameTemplate,
 } from "../app/lib/game-template-validation.ts";
+import {
+  PAYMENT_INSTRUCTIONS_MAX_LENGTH,
+  publicPaymentInstructionsPayload,
+  validatePaymentInstructions,
+} from "../app/lib/payment-instructions.ts";
+
+test("payment instructions preserve internal lines, trim edges, and allow clearing", () => {
+  assert.deepEqual(validatePaymentInstructions("  PayPal: host@example.com\nVenmo: @host  "), {
+    value: "PayPal: host@example.com\nVenmo: @host",
+  });
+  assert.deepEqual(validatePaymentInstructions("   \n  "), { value: "" });
+  assert.equal(Boolean(validatePaymentInstructions("x".repeat(PAYMENT_INSTRUCTIONS_MAX_LENGTH + 1)).error), true);
+});
+
+test("public payment payload exposes only plain instruction text", () => {
+  const unsafeLookingText = "<script>alert('no')</script>\nhttps://example.com";
+  assert.equal(publicPaymentInstructionsPayload({ paymentInstructions: unsafeLookingText }), unsafeLookingText);
+  assert.equal(publicPaymentInstructionsPayload(null), null);
+  assert.deepEqual(Object.keys({ paymentInstructions: publicPaymentInstructionsPayload({ paymentInstructions: unsafeLookingText }) }), ["paymentInstructions"]);
+});
 
 test("template validation accepts new-game limits and rejects invalid statuses", () => {
   const valid = validateGameTemplate({ name: "Friday", description: "", defaultGameTitle: "Friday Game", defaultGameDescription: "Prize", totalSpots: "100", pricePerSpot: "5.25", wheelCount: "2", initialStatus: "OPEN", isDefault: true });

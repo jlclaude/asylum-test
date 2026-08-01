@@ -25,6 +25,7 @@ import {
 import { createGameTemplate } from "../models/game-template.server";
 import { gameSetupTemplateInput, validateGameTemplate } from "../lib/game-template-validation";
 import { getGameResults } from "../models/game-results.server";
+import { getShopSettings } from "../models/shop-settings.server";
 import { GameResultsSummary } from "../components/results/GameResultsSummary";
 import { authenticate } from "../shopify.server";
 
@@ -46,10 +47,11 @@ export async function loader({
     throw new Response("Game not found.", { status: 404 });
   }
 
-  const [claims, totals, results] = await Promise.all([
+  const [claims, totals, results, shopSettings] = await Promise.all([
     getClaimsForGame(game.id),
     getClaimTotals(game.id),
     getGameResults(game.id),
+    getShopSettings(session.shop),
   ]);
 
   const requestUrl = new URL(request.url);
@@ -78,6 +80,7 @@ export async function loader({
     })),
     totals,
     results,
+    paymentInstructionsConfigured: Boolean(shopSettings?.paymentInstructions),
     publicUrl: `${requestUrl.origin}/games/${game.id}`,
   };
 }
@@ -317,6 +320,9 @@ const styles = `
   .control-button-full { width:100%; }
   .control-empty { padding:48px 20px; border:1px dashed #3a3a3f; border-radius:12px; color:#77787e; text-align:center; }
   .control-actions { display:grid; gap:10px; }
+  .control-payment-status { padding:13px; border:1px solid #3a3a40; border-radius:10px; background:#151517; }
+  .control-payment-status p { margin:0 0 5px; color:#898a90; font-size:10px; font-weight:850; letter-spacing:.08em; text-transform:uppercase; }
+  .control-payment-status strong { display:block; margin-bottom:10px; }
   .control-copy-status { min-height:19px; margin:11px 0 0; color:#84d49d; font-size:12px; text-align:center; }
   .control-divider { height:1px; margin:21px 0; background:#303034; }
   .control-form { display:grid; gap:13px; }
@@ -337,7 +343,7 @@ type FilterValue = "ALL" | "PENDING" | "CONFIRMED" | "CANCELED";
 export default function GameControlCenter() {
   const navigate = useNavigate();
   const fetcher = useFetcher<ActionData>();
-  const { game, claims, totals, publicUrl, results } = useLoaderData<typeof loader>();
+  const { game, claims, totals, publicUrl, results, paymentInstructionsConfigured } = useLoaderData<typeof loader>();
 
   const [filter, setFilter] = useState<FilterValue>("ALL");
   const [search, setSearch] = useState("");
@@ -474,6 +480,7 @@ export default function GameControlCenter() {
             <aside className="control-card">
               <div className="control-section-head"><h2>Quick actions</h2><p>Manage the public game and wheel session.</p></div>
               <div className="control-actions">
+                <div className="control-payment-status"><p>Payment instructions</p><strong>{paymentInstructionsConfigured ? "Configured" : "Not configured"}</strong><button className="control-button control-button-secondary control-button-full" type="button" onClick={() => navigate("/app/settings")}>Edit Payment Instructions</button></div>
                 <button className="control-button control-button-primary control-button-full" type="button" onClick={() => navigate(`/app/games/${game.id}/play`)}>{wheelButtonLabel}</button>
                 {results ? <button className="control-button control-button-full" type="button" onClick={() => navigate(`/app/games/${game.id}/broadcast`)}>OPEN BROADCAST MODE</button> : null}
                 <button className="control-button control-button-secondary control-button-full" type="button" onClick={copyPublicLink}>Copy public claim link</button>

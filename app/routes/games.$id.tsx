@@ -18,7 +18,9 @@ import {
 import { getPublicGame } from "../models/game.server";
 import { getPublicGameResults } from "../models/game-results.server";
 import { PublicGameResults } from "../components/results/PublicGameResults";
+import { PaymentInstructionsCard } from "../components/payment/PaymentInstructionsCard";
 import { formatPublicName } from "../lib/public-name";
+import { getPublicPaymentInstructions } from "../models/shop-settings.server";
 
 import "../styles/game-results.css";
 
@@ -39,12 +41,13 @@ export async function loader({
     });
   }
 
-  const [totals, claims, results] = await Promise.all([
+  const [totals, claims, results, paymentInstructions] = await Promise.all([
     getClaimTotals(game.id),
     getPublicClaimsForGame(game.id),
     game.status === "COMPLETED"
       ? getPublicGameResults(game.id)
       : Promise.resolve(null),
+    getPublicPaymentInstructions(game.shop),
   ]);
 
   return {
@@ -58,6 +61,7 @@ export async function loader({
     },
     totals,
     results,
+    paymentInstructions,
     claims: claims.map((claim) => ({
       id: claim.id,
       displayName: formatPublicName(claim.displayName),
@@ -434,6 +438,49 @@ const styles = `
     gap: 16px;
   }
 
+  .payment-instructions-card {
+    margin: 18px 0;
+    padding: 18px;
+    border: 2px solid #9f3441;
+    border-radius: 13px;
+    background: linear-gradient(145deg, rgba(159, 52, 65, .15), transparent 45%), #121214;
+  }
+
+  .payment-instructions-kicker {
+    margin: 0 0 7px;
+    color: #ef6573;
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: .13em;
+    text-transform: uppercase;
+  }
+
+  .payment-instructions-card h3 {
+    margin: 0;
+    font-size: 17px;
+  }
+
+  .payment-instructions-text,
+  .payment-instructions-empty {
+    margin: 16px 0;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    line-height: 1.65;
+  }
+
+  .payment-instructions-empty {
+    color: #b5b5ba;
+  }
+
+  .payment-instructions-note {
+    margin: 0;
+    padding-top: 13px;
+    border-top: 1px solid #3d3d42;
+    color: #b8b8bd;
+    font-size: 12px;
+    line-height: 1.55;
+  }
+
   .public-field {
     display: grid;
     gap: 7px;
@@ -640,7 +687,7 @@ const styles = `
 `;
 
 export default function PublicGamePage() {
-  const { game, totals, claims, results } =
+  const { game, totals, claims, results, paymentInstructions } =
     useLoaderData<typeof loader>();
 
   const actionData = useActionData<ActionData>();
@@ -788,6 +835,8 @@ export default function PublicGamePage() {
                 Your claim reserves spots immediately and remains
                 pending until the host confirms it.
               </p>
+
+              <PaymentInstructionsCard instructions={paymentInstructions} />
 
               <Form className="public-form" method="post">
                 <div className="public-field">
