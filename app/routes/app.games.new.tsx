@@ -42,11 +42,13 @@ export async function loader({
 type ActionData = {
   errors?: {
     title?: string;
+    description?: string;
     totalSpots?: string;
     pricePerSpot?: string;
     wheelCount?: string;
     status?: string;
     templateName?: string;
+    templateDescription?: string;
     form?: string;
   };
   values?: {
@@ -56,6 +58,8 @@ type ActionData = {
     pricePerSpot: string;
     wheelCount: string;
     status: string;
+    templateName?: string;
+    templateDescription?: string;
   };
   success?: string;
 };
@@ -91,10 +95,71 @@ export async function action({
   );
   const intent = String(formData.get("intent") ?? "create-game");
   const templateName = String(formData.get("templateName") ?? "").trim();
+  const templateDescription = String(
+    formData.get("templateDescription") ?? "",
+  ).trim();
 
   const totalSpots = Number(totalSpotsValue);
   const pricePerSpot = Number(pricePerSpotValue);
   const wheelCount = Number(wheelCountValue);
+
+  const values = {
+    title,
+    description,
+    totalSpots: totalSpotsValue,
+    pricePerSpot: pricePerSpotValue,
+    wheelCount: wheelCountValue,
+    status: statusValue,
+    templateName,
+    templateDescription,
+  };
+
+  if (intent === "save-template") {
+    const templateValidation = validateGameTemplate({
+      name: templateName,
+      description: templateDescription,
+      defaultGameTitle: title,
+      defaultGameDescription: description,
+      totalSpots: totalSpotsValue,
+      pricePerSpot: pricePerSpotValue,
+      wheelCount: wheelCountValue,
+      initialStatus: statusValue,
+      isDefault: false,
+    });
+
+    if (!templateValidation.input) {
+      return {
+        errors: {
+          templateName: templateValidation.errors.name,
+          templateDescription: templateValidation.errors.description,
+          title: templateValidation.errors.defaultGameTitle,
+          description: templateValidation.errors.defaultGameDescription,
+          totalSpots: templateValidation.errors.totalSpots,
+          pricePerSpot: templateValidation.errors.pricePerSpot,
+          wheelCount: templateValidation.errors.wheelCount,
+          status: templateValidation.errors.initialStatus,
+          form: templateValidation.errors.form,
+        },
+        values,
+      };
+    }
+
+    try {
+      await createGameTemplate(session.shop, templateValidation.input);
+      return { success: "Template saved.", values };
+    } catch (error) {
+      console.error("Failed to save game template:", error);
+      const duplicateTemplate =
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002";
+      return {
+        errors: duplicateTemplate
+          ? { templateName: "A template with this name already exists." }
+          : { form: "The template could not be saved. Check the server log for details." },
+        values,
+      };
+    }
+  }
 
   const errors: NonNullable<ActionData["errors"]> = {};
 
@@ -138,15 +203,6 @@ export async function action({
     errors.status = "Select a valid game status.";
   }
 
-  const values = {
-    title,
-    description,
-    totalSpots: totalSpotsValue,
-    pricePerSpot: pricePerSpotValue,
-    wheelCount: wheelCountValue,
-    status: statusValue,
-  };
-
   if (Object.keys(errors).length > 0) {
     return {
       errors,
@@ -154,33 +210,11 @@ export async function action({
     };
   }
 
-  try {
-    if (intent === "save-template") {
-      const templateValidation = validateGameTemplate({
-        name: templateName,
-        description: "",
-        defaultGameTitle: title,
-        defaultGameDescription: description,
-        totalSpots: totalSpotsValue,
-        pricePerSpot: pricePerSpotValue,
-        wheelCount: wheelCountValue,
-        initialStatus: statusValue,
-        isDefault: false,
-      });
-      if (!templateValidation.input) {
-        return {
-          errors: {
-            ...errors,
-            templateName: templateValidation.errors.name,
-            form: templateValidation.errors.form,
-          },
-          values,
-        };
-      }
-      await createGameTemplate(session.shop, templateValidation.input);
-      return { success: `Saved template “${templateName}”.`, values };
-    }
+  if (intent !== "create-game") {
+    return { errors: { form: "Unknown game form action." }, values };
+  }
 
+  try {
     await createGame({
       shop: session.shop,
       title,
@@ -192,19 +226,12 @@ export async function action({
     });
   } catch (error) {
     console.error("Failed to create game:", error);
-    const duplicateTemplate = intent === "save-template" &&
-      error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
 
     return {
       errors: {
-        ...(duplicateTemplate
-          ? { templateName: "A template with this name already exists for this shop." }
-          : {}),
-        form: duplicateTemplate
-          ? undefined
-          : error instanceof Error
-            ? error.message
-            : "The game could not be saved.",
+        form: error instanceof Error
+          ? error.message
+          : "The game could not be saved.",
       },
       values,
     };
@@ -797,10 +824,13 @@ export default function NewGamePage() {
                   placeholder="Describe the prize, rules, or information members should know."
                 />
 
-                <p className="game-help">
-                  Optional information shown on the public game
-                  page.
-                </p>
+                {actionData?.errors?.description ? (
+                  <p className="game-error">{actionData.errors.description}</p>
+                ) : (
+                  <p className="game-help">
+                    Optional information shown on the public game page.
+                  </p>
+                )}
               </div>
 
               <div className="game-field">
@@ -838,11 +868,14 @@ export default function NewGamePage() {
                 <div className="game-template-actions">
                   <div className="game-field">
                     <label className="game-label" id="save-template-heading" htmlFor="templateName">Save current settings as template</label>
-                    <input className="game-input" id="templateName" name="templateName" maxLength={100} placeholder="Template name" />
+                    <input className="game-input" id="templateName" name="templateName" maxLength={100} defaultValue={values?.templateName} placeholder="Template name" />
                     {actionData?.errors?.templateName ? <p className="game-error">{actionData.errors.templateName}</p> : null}
+                    <label className="game-label" htmlFor="templateDescription">Template description</label>
+                    <textarea className="game-textarea" id="templateDescription" name="templateDescription" maxLength={500} defaultValue={values?.templateDescription} placeholder="Optional note about when to use this setup" />
+                    {actionData?.errors?.templateDescription ? <p className="game-error">{actionData.errors.templateDescription}</p> : null}
                     {actionData?.success ? <p className="game-help" role="status">{actionData.success}</p> : null}
                   </div>
-                  <button className="game-button game-button-secondary" type="submit" name="intent" value="save-template" disabled={isSubmitting}>Save settings as template</button>
+                  <button className="game-button game-button-secondary" type="submit" name="intent" value="save-template" formNoValidate disabled={isSubmitting}>Save Template</button>
                 </div>
               </section>
             </div>

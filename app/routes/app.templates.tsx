@@ -67,6 +67,7 @@ export async function action({ request }: ActionFunctionArgs): Promise<ActionDat
     return { intent, errors: { form: "Unknown template action." }, values };
   } catch (error) {
     const duplicate = error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+    if (!duplicate) console.error("Template action failed:", error);
     return {
       intent,
       templateId,
