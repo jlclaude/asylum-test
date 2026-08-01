@@ -5,6 +5,7 @@ import { toPublicGameResults } from "../app/lib/game-results.ts";
 import { adjacentWheelId, broadcastWheelStatus, defaultActiveWheelId, defaultBroadcastActiveWheelId, fullscreenIsActive, nextUnfinishedWheelId, savedSoundIsMuted, shortcutTargetIsEditable, unfinishedWheelIds, wheelActionBlockReason, wheelScrollBehavior } from "../app/lib/game-mode-operator.ts";
 import { formatPublicName } from "../app/lib/public-name.ts";
 import { idleRotationAt, remainingSpinSeconds, wheelPositionAt, wheelSpinTotalDegrees } from "../app/lib/wheel-effects.client.ts";
+import { loopingPlaybackOffset } from "../app/lib/wheel-music.client.ts";
 import { broadcastCountdownLabels, shouldAnimateBroadcastCountdown } from "../app/lib/broadcast-countdown.ts";
 
 test("public names use the existing privacy convention", () => {
@@ -147,4 +148,10 @@ test("idle rotation is constant and completes one silent visual turn in 28 secon
   assert.equal(idleRotationAt(25, 0), 25);
   assert.equal(idleRotationAt(25, 14_000), 205);
   assert.equal(idleRotationAt(25, 28_000), 385);
+});
+
+test("recovered spin music resumes at the looping playback offset", () => {
+  assert.equal(loopingPlaybackOffset(67, 20), 7);
+  assert.equal(loopingPlaybackOffset(12, 20), 12);
+  assert.equal(loopingPlaybackOffset(12, 0), 0);
 });

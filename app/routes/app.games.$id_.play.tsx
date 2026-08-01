@@ -12,6 +12,7 @@ import {
 } from "react-router";
 
 import { AsylumBrand } from "../components/asylum/AsylumBrand";
+import { SpinMusicControls } from "../components/audio/SpinMusicControls";
 import { GameIdentityCard } from "../components/asylum/GameIdentityCard";
 import { GameCompletionCard } from "../components/results/GameCompletionCard";
 import { GameResultsSummary } from "../components/results/GameResultsSummary";
@@ -431,7 +432,7 @@ export default function GameModePage() {
     },
     toggleSound: () => {
       toggleMuted();
-      return { triggered: true, message: muted ? "Wheel sound enabled." : "Wheel sound muted." };
+      return { triggered: true, message: muted ? "Wheel effects enabled." : "Wheel effects muted." };
     },
     showMessage: setOperatorMessage,
   }), [muted, navigateWheel, runActiveAction, toggleFullscreen, toggleMuted]);
@@ -540,6 +541,7 @@ export default function GameModePage() {
             });
           }}
         />
+        <SpinMusicControls />
 
         <GameIdentityCard
           title={game.title}

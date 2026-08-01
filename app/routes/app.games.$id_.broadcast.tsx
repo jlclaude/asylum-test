@@ -2,6 +2,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { useLoaderData } from "react-router";
 
 import { BroadcastCompletion } from "../components/broadcast/BroadcastCompletion";
+import { SpinMusicControls } from "../components/audio/SpinMusicControls";
 import { BroadcastGameHeader } from "../components/broadcast/BroadcastGameHeader";
 import { BroadcastResultAcceptance } from "../components/broadcast/BroadcastResultAcceptance";
 import { BroadcastWheelRail } from "../components/broadcast/BroadcastWheelRail";
@@ -85,7 +86,7 @@ export default function BroadcastModePage() {
     toggleFullscreen: toggleBroadcastFullscreen,
     toggleSound: () => {
       toggleMuted();
-      return { triggered: true, message: muted ? "Wheel sound enabled." : "Wheel sound muted." };
+      return { triggered: true, message: muted ? "Wheel effects enabled." : "Wheel effects muted." };
     },
     showMessage: setMessage,
   }), [muted, navigateWheel, runAction, toggleBroadcastFullscreen, toggleMuted]);
@@ -123,6 +124,7 @@ export default function BroadcastModePage() {
           onToggleMuted={toggleMuted}
           onToggleFullscreen={() => { void toggleBroadcastFullscreen(); }}
         />
+        <SpinMusicControls />
 
         {activeWheel ? (
           <section className="broadcast-stage" aria-label={`Active wheel: ${activeWheel.label}`}>

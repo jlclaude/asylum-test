@@ -25,6 +25,7 @@ import {
 import { wheelActionBlockReason, wheelScrollBehavior } from "../../lib/game-mode-operator";
 import { shouldAnimateBroadcastCountdown } from "../../lib/broadcast-countdown";
 import { SPIN_DURATION_RANGE_LABEL } from "../../lib/spin-duration";
+import { useSpinMusic } from "../../hooks/useSpinMusic";
 import { WheelCanvas } from "./WheelCanvas";
 import { WheelConsole } from "./WheelConsole";
 import { ContainmentReveal } from "./ContainmentReveal";
@@ -73,6 +74,7 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
 }, operatorRef) {
   const sectionRef = useRef<HTMLElement>(null);
   const fetcher = useFetcher<WheelActionData>();
+  const { startSpin: startMusic, stop: stopMusic } = useSpinMusic();
   const lastSpinToken = useRef<string | null>(null);
   const completionSent = useRef(false);
   const animationController =
@@ -104,13 +106,14 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
     return () => {
       animationController.current?.cancel();
       idleController.current?.cancel();
+      stopMusic(wheel.id);
 
       if (revealDismissTimer.current !== null) {
         window.clearTimeout(revealDismissTimer.current);
       }
       timers.current.forEach((timer) => window.clearTimeout(timer));
     };
-  }, []);
+  }, [stopMusic, wheel.id]);
 
   useEffect(() => {
     const media = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -249,6 +252,7 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
 
   useEffect(() => {
     if (wheel.status === "COMPLETED" && !revealActive.current) {
+      stopMusic(wheel.id);
       setResult(
         wheel.winnerDisplayName ??
           wheel.winnerValue,
@@ -256,6 +260,8 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
       setSpinning(false);
     }
   }, [
+    stopMusic,
+    wheel.id,
     wheel.status,
     wheel.winnerDisplayName,
     wheel.winnerValue,
@@ -299,6 +305,7 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
     }
 
     const completeRecoveredSpin = () => {
+      stopMusic(wheel.id);
       setSpinning(false);
       revealActive.current = true;
       setRevealResult(finalResult);
@@ -331,6 +338,11 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
       return;
     }
 
+    void startMusic(
+      wheel.id,
+      wheel.spinDurationSeconds - remainingSeconds,
+    );
+
     animationController.current = animateWheelSpin({
       startRotation: rotationRef.current,
       entryCount: wheel.entries.length,
@@ -349,7 +361,9 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
   }, [
     fetcher,
     onCompleted,
+    startMusic,
     stopIdle,
+    stopMusic,
     wheel.entries.length,
     wheel.id,
     wheel.spinDurationSeconds,
@@ -389,6 +403,7 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
 
     stopIdle();
     animationController.current?.cancel();
+    void startMusic(wheel.id, 0);
 
     animationController.current = animateWheelSpin({
       startRotation: rotationRef.current,
@@ -403,6 +418,7 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
         setPointerTick((tick) => tick + 1);
       },
       onComplete: () => {
+        stopMusic(wheel.id);
         setSpinning(false);
         revealActive.current = true;
         setRevealResult(finalResult);
@@ -433,7 +449,9 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
     wheel.id,
     wheel.type,
     onCompleted,
+    startMusic,
     stopIdle,
+    stopMusic,
   ]);
 
   const visibleStatus = spinning

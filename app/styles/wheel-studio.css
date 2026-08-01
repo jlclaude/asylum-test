@@ -157,6 +157,15 @@ body {
 .studio-operator-toolbar dl div { min-width:0;padding:9px 11px;border:1px solid var(--theme-border);background:#151517 }
 .studio-operator-toolbar dt { color:var(--theme-muted);font-size:8px;font-weight:900;letter-spacing:.1em;text-transform:uppercase }
 .studio-operator-toolbar dd { overflow:hidden;margin:5px 0 0;font-size:12px;font-weight:900;text-overflow:ellipsis;white-space:nowrap }
+.studio-music-controls { display:grid;grid-template-columns:minmax(190px,1.4fr) minmax(150px,1fr) minmax(110px,.6fr) minmax(180px,1fr) repeat(3,auto);align-items:end;gap:8px;padding:10px 18px;border-bottom:1px solid var(--theme-border);background:#0d0d0f }
+.studio-music-controls label,.studio-music-controls>div { display:grid;gap:5px;min-width:0;color:var(--theme-muted);font-size:10px;font-weight:850;letter-spacing:.08em;text-transform:uppercase }
+.studio-music-controls select,.studio-music-controls input,.studio-music-controls button { min-height:38px;border:1px solid #4c4d52;color:var(--theme-text);background:#19191c;font:inherit }
+.studio-music-controls select { width:100%;padding:0 9px }
+.studio-music-controls input { width:100% }
+.studio-music-controls button { padding:7px 10px;font-weight:850;cursor:pointer }
+.studio-music-controls button:disabled { cursor:not-allowed;opacity:.5 }
+.studio-music-controls strong { overflow:hidden;color:var(--theme-text);font-size:12px;text-overflow:ellipsis;white-space:nowrap }
+.studio-music-controls p { grid-column:1/-1;margin:0;color:#ff9aa5;font-size:11px;font-weight:800 }
 .studio-operator-toolbar>div { display:grid;grid-template-columns:repeat(2,minmax(125px,1fr));gap:7px }
 .studio-operator-toolbar button { border:1px solid var(--theme-primary);color:var(--theme-text);background:linear-gradient(180deg,var(--theme-primary),var(--theme-primary-dark));cursor:pointer;font:inherit;font-size:11px;font-weight:900 }
 
@@ -1180,6 +1189,7 @@ body {
 }
 
 @media (max-width: 900px) {
+  .studio-music-controls { grid-template-columns:repeat(2,minmax(0,1fr)) }
   .studio-wheel-section {
     min-height: auto;
   }
