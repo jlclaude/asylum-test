@@ -274,7 +274,9 @@ body {
 .studio-wheel-machine {
   position: relative;
   width: min(82vh, 980px, 100%);
-  aspect-ratio: 1;
+  height: auto;
+  aspect-ratio: 1 / 1;
+  flex: 0 0 auto;
   padding: 39px;
   border: 9px solid #303033;
   border-radius: 50%;
@@ -334,7 +336,8 @@ body {
   z-index: 2;
   display: block;
   width: 100%;
-  height: 100%;
+  height: auto;
+  aspect-ratio: 1 / 1;
   border: 5px solid #151517;
   border-radius: 50%;
   background:
