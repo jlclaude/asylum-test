@@ -12,6 +12,39 @@ import {
 } from "../app/lib/wheel-music.ts";
 import { broadcastCountdownLabels, shouldAnimateBroadcastCountdown } from "../app/lib/broadcast-countdown.ts";
 import { normalizeDashboardGameCounts } from "../app/lib/dashboard-game-counts.ts";
+import {
+  gameSetupTemplateInput,
+  validateGameTemplate,
+} from "../app/lib/game-template-validation.ts";
+
+test("template validation accepts new-game limits and rejects invalid statuses", () => {
+  const valid = validateGameTemplate({ name: "Friday", description: "", defaultGameTitle: "Friday Game", defaultGameDescription: "Prize", totalSpots: "100", pricePerSpot: "5.25", wheelCount: "2", initialStatus: "OPEN", isDefault: true });
+  assert.deepEqual(valid.errors, {});
+  assert.equal(valid.input?.pricePerSpot, "5.25");
+
+  const invalid = validateGameTemplate({ name: "", description: "", defaultGameTitle: "", defaultGameDescription: "", totalSpots: "0", pricePerSpot: "-1", wheelCount: "21", initialStatus: "READY", isDefault: false });
+  assert.equal(Boolean(invalid.errors.name), true);
+  assert.equal(Boolean(invalid.errors.totalSpots), true);
+  assert.equal(Boolean(invalid.errors.pricePerSpot), true);
+  assert.equal(Boolean(invalid.errors.wheelCount), true);
+  assert.equal(Boolean(invalid.errors.initialStatus), true);
+});
+
+test("saving a game setup copies configuration only", () => {
+  const source = {
+    title: "Friday Draw",
+    description: "Prize details",
+    totalSpots: 100,
+    pricePerSpot: { toString: () => "5" },
+    wheelCount: 2,
+    claims: [{ id: "private-claim" }],
+    run: { winner: "private-winner" },
+  };
+  const input = gameSetupTemplateInput("Reusable", source);
+  assert.deepEqual(Object.keys(input).sort(), ["defaultGameDescription", "defaultGameTitle", "initialStatus", "isDefault", "name", "pricePerSpot", "totalSpots", "wheelCount"]);
+  assert.equal(JSON.stringify(input).includes("private-claim"), false);
+  assert.equal(JSON.stringify(input).includes("private-winner"), false);
+});
 
 test("dashboard game counts preserve every status and normalize missing groups", () => {
   assert.deepEqual(

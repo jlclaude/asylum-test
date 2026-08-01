@@ -46,6 +46,26 @@ model Game {
   @@index([shop, status])
 }
 
+model GameTemplate {
+  id                     String     @id @default(cuid())
+  shop                   String
+  name                   String
+  description            String?
+  defaultGameTitle       String?
+  defaultGameDescription String?
+  totalSpots             Int
+  pricePerSpot           Decimal
+  wheelCount             Int        @default(2)
+  initialStatus          GameStatus @default(OPEN)
+  isDefault              Boolean    @default(false)
+  createdAt              DateTime   @default(now())
+  updatedAt              DateTime   @updatedAt
+
+  @@unique([shop, name])
+  @@index([shop])
+  @@index([shop, updatedAt])
+}
+
 model Claim {
   id              String      @id @default(cuid())
   gameId          String

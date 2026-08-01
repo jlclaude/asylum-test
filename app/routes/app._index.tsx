@@ -4,17 +4,20 @@ import {
   getDashboardGameCountsForShop,
   getGamesForShop,
 } from "../models/game.server";
+import { getGameTemplateSummaryForShop } from "../models/game-template.server";
 import { authenticate } from "../shopify.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const { session } = await authenticate.admin(request);
-  const [games, counts] = await Promise.all([
+  const [games, counts, templateSummary] = await Promise.all([
     getGamesForShop(session.shop),
     getDashboardGameCountsForShop(session.shop),
+    getGameTemplateSummaryForShop(session.shop),
   ]);
 
   return {
     counts,
+    templateSummary,
     games: games.map((game) => ({
       id: game.id,
       title: game.title,
@@ -200,6 +203,23 @@ const styles = `
     transition:
       transform 150ms ease,
       filter 150ms ease;
+  }
+
+  .asylum-hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .asylum-secondary-button {
+    padding: 12px 17px;
+    border: 1px solid #46464c;
+    border-radius: 11px;
+    color: #ededf0;
+    background: #222226;
+    cursor: pointer;
+    font: inherit;
+    font-weight: 750;
   }
 
   .asylum-primary-button:hover {
@@ -491,7 +511,7 @@ const styles = `
 
 export default function AppIndex() {
   const navigate = useNavigate();
-  const { counts, games } = useLoaderData<typeof loader>();
+  const { counts, games, templateSummary } = useLoaderData<typeof loader>();
 
   const stats = [
     {
@@ -500,9 +520,11 @@ export default function AppIndex() {
       note: "Games currently accepting claims",
     },
     {
-      label: "Pending claims",
-      value: "0",
-      note: "Payments waiting for confirmation",
+      label: "Templates",
+      value: String(templateSummary.count),
+      note: templateSummary.defaultTemplate
+        ? `Default: ${templateSummary.defaultTemplate.name}`
+        : "No default template selected",
     },
     {
       label: "Completed games",
@@ -547,13 +569,10 @@ export default function AppIndex() {
               </p>
             </div>
 
-            <button
-              className="asylum-primary-button"
-              type="button"
-              onClick={() => navigate("/app/games/new")}
-            >
-              + Create Game
-            </button>
+            <div className="asylum-hero-actions">
+              <button className="asylum-secondary-button" type="button" onClick={() => navigate("/app/templates")}>Manage Templates</button>
+              <button className="asylum-primary-button" type="button" onClick={() => navigate("/app/games/new")}>+ Create Game</button>
+            </div>
           </section>
 
           <section

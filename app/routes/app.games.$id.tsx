@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Prisma } from "@prisma/client";
 import type {
   ActionFunctionArgs,
   LoaderFunctionArgs,
@@ -21,6 +22,8 @@ import {
   getGameForShop,
   updateGameStatus,
 } from "../models/game.server";
+import { createGameTemplate } from "../models/game-template.server";
+import { gameSetupTemplateInput, validateGameTemplate } from "../lib/game-template-validation";
 import { getGameResults } from "../models/game-results.server";
 import { GameResultsSummary } from "../components/results/GameResultsSummary";
 import { authenticate } from "../shopify.server";
@@ -100,6 +103,27 @@ export async function action({
   const intent = String(formData.get("intent") ?? "");
 
   try {
+    if (intent === "save-game-template") {
+      const templateName = String(formData.get("templateName") ?? "").trim();
+      const setupInput = gameSetupTemplateInput(templateName, game);
+      const validation = validateGameTemplate({
+        name: setupInput.name,
+        description: "",
+        defaultGameTitle: setupInput.defaultGameTitle ?? "",
+        defaultGameDescription: setupInput.defaultGameDescription ?? "",
+        totalSpots: String(setupInput.totalSpots),
+        pricePerSpot: setupInput.pricePerSpot,
+        wheelCount: String(setupInput.wheelCount),
+        initialStatus: setupInput.initialStatus,
+        isDefault: setupInput.isDefault,
+      });
+      if (!validation.input) {
+        return { error: validation.errors.name ?? "The game setup is not valid.", intent };
+      }
+      await createGameTemplate(session.shop, validation.input);
+      return { success: `Saved “${templateName}” as a reusable template.`, intent };
+    }
+
     if (intent === "create-claim") {
       if (game.status !== "OPEN") {
         return { error: "This game is not accepting new claims.", intent };
@@ -208,7 +232,9 @@ export async function action({
   } catch (error) {
     console.error("Game action failed:", error);
     return {
-      error: error instanceof Error ? error.message : "The action could not be completed.",
+      error: error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002"
+        ? "A template with this name already exists for this shop."
+        : error instanceof Error ? error.message : "The action could not be completed.",
       intent,
     };
   }
@@ -451,6 +477,11 @@ export default function GameControlCenter() {
                 <button className="control-button control-button-primary control-button-full" type="button" onClick={() => navigate(`/app/games/${game.id}/play`)}>{wheelButtonLabel}</button>
                 {results ? <button className="control-button control-button-full" type="button" onClick={() => navigate(`/app/games/${game.id}/broadcast`)}>OPEN BROADCAST MODE</button> : null}
                 <button className="control-button control-button-secondary control-button-full" type="button" onClick={copyPublicLink}>Copy public claim link</button>
+                <fetcher.Form className="control-form" method="post">
+                  <input type="hidden" name="intent" value="save-game-template" />
+                  <div className="control-field"><label htmlFor="setupTemplateName">Template name</label><input className="control-input" id="setupTemplateName" name="templateName" maxLength={100} required placeholder="Reusable setup name" /></div>
+                  <button className="control-button control-button-secondary control-button-full" type="submit" disabled={isSubmitting}>Save Game Setup as Template</button>
+                </fetcher.Form>
 
                 {game.status === "OPEN" ? (
                   <fetcher.Form method="post"><input type="hidden" name="intent" value="close-game" /><button className="control-button control-button-warning control-button-full" type="submit" disabled={isSubmitting}>Close game</button></fetcher.Form>

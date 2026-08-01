@@ -2,23 +2,41 @@ import type {
   ActionFunctionArgs,
   LoaderFunctionArgs,
 } from "react-router";
+import { Prisma } from "@prisma/client";
 import {
   Form,
   useActionData,
+  useLoaderData,
   useNavigate,
   useNavigation,
 } from "react-router";
+import { useState } from "react";
 import { SPIN_DURATION_RANGE_LABEL } from "../lib/spin-duration";
+import { validateGameTemplate } from "../lib/game-template-validation";
 
+import { createGameTemplate, getGameTemplatesForShop } from "../models/game-template.server";
 import { createGame } from "../models/game.server";
 import { authenticate } from "../shopify.server";
 
 export async function loader({
   request,
 }: LoaderFunctionArgs) {
-  await authenticate.admin(request);
+  const { session } = await authenticate.admin(request);
+  const templates = await getGameTemplatesForShop(session.shop);
 
-  return null;
+  return {
+    templates: templates.map((template) => ({
+      id: template.id,
+      name: template.name,
+      defaultGameTitle: template.defaultGameTitle,
+      defaultGameDescription: template.defaultGameDescription,
+      totalSpots: template.totalSpots,
+      pricePerSpot: template.pricePerSpot.toString(),
+      wheelCount: template.wheelCount,
+      initialStatus: template.initialStatus,
+      isDefault: template.isDefault,
+    })),
+  };
 }
 
 type ActionData = {
@@ -28,6 +46,7 @@ type ActionData = {
     pricePerSpot?: string;
     wheelCount?: string;
     status?: string;
+    templateName?: string;
     form?: string;
   };
   values?: {
@@ -38,6 +57,7 @@ type ActionData = {
     wheelCount: string;
     status: string;
   };
+  success?: string;
 };
 
 export async function action({
@@ -69,6 +89,8 @@ export async function action({
   const statusValue = String(
     formData.get("status") ?? "OPEN",
   );
+  const intent = String(formData.get("intent") ?? "create-game");
+  const templateName = String(formData.get("templateName") ?? "").trim();
 
   const totalSpots = Number(totalSpotsValue);
   const pricePerSpot = Number(pricePerSpotValue);
@@ -133,6 +155,32 @@ export async function action({
   }
 
   try {
+    if (intent === "save-template") {
+      const templateValidation = validateGameTemplate({
+        name: templateName,
+        description: "",
+        defaultGameTitle: title,
+        defaultGameDescription: description,
+        totalSpots: totalSpotsValue,
+        pricePerSpot: pricePerSpotValue,
+        wheelCount: wheelCountValue,
+        initialStatus: statusValue,
+        isDefault: false,
+      });
+      if (!templateValidation.input) {
+        return {
+          errors: {
+            ...errors,
+            templateName: templateValidation.errors.name,
+            form: templateValidation.errors.form,
+          },
+          values,
+        };
+      }
+      await createGameTemplate(session.shop, templateValidation.input);
+      return { success: `Saved template “${templateName}”.`, values };
+    }
+
     await createGame({
       shop: session.shop,
       title,
@@ -144,11 +192,17 @@ export async function action({
     });
   } catch (error) {
     console.error("Failed to create game:", error);
+    const duplicateTemplate = intent === "save-template" &&
+      error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
 
     return {
       errors: {
-        form:
-          error instanceof Error
+        ...(duplicateTemplate
+          ? { templateName: "A template with this name already exists for this shop." }
+          : {}),
+        form: duplicateTemplate
+          ? undefined
+          : error instanceof Error
             ? error.message
             : "The game could not be saved.",
       },
@@ -255,6 +309,25 @@ const styles = `
     display: grid;
     gap: 24px;
     padding: 30px;
+  }
+
+  .game-template-panel {
+    display: grid;
+    gap: 12px;
+    padding: 18px;
+    border: 1px solid #40363a;
+    border-radius: 14px;
+    background: rgba(79, 29, 38, 0.16);
+  }
+
+  .game-template-actions {
+    display: flex;
+    align-items: end;
+    gap: 12px;
+  }
+
+  .game-template-actions .game-field {
+    flex: 1;
   }
 
   .game-field {
@@ -452,17 +525,48 @@ const styles = `
 
 export default function NewGamePage() {
   const navigate = useNavigate();
+  const { templates } = useLoaderData<typeof loader>();
   const actionData = useActionData<ActionData>();
   const navigation = useNavigation();
 
   const isSubmitting =
     navigation.state === "submitting";
 
+  const defaultTemplate = templates.find((template) => template.isDefault);
   const values = actionData?.values;
+  const [selectedTemplateId, setSelectedTemplateId] = useState(
+    actionData ? "" : defaultTemplate?.id ?? "",
+  );
+  const initialTemplate = actionData ? undefined : defaultTemplate;
+  const [title, setTitle] = useState(values?.title ?? initialTemplate?.defaultGameTitle ?? "");
+  const [description, setDescription] = useState(values?.description ?? initialTemplate?.defaultGameDescription ?? "");
+  const [totalSpots, setTotalSpots] = useState(values?.totalSpots ?? (initialTemplate ? String(initialTemplate.totalSpots) : ""));
+  const [pricePerSpot, setPricePerSpot] = useState(values?.pricePerSpot ?? initialTemplate?.pricePerSpot ?? "");
+  const [wheelCountValue, setWheelCountValue] = useState(values?.wheelCount ?? (initialTemplate ? String(initialTemplate.wheelCount) : "2"));
+  const [status, setStatus] = useState(values?.status ?? initialTemplate?.initialStatus ?? "OPEN");
 
   const wheelCount = Number(
-    values?.wheelCount ?? "2",
+    wheelCountValue,
   );
+
+  function applyTemplate(templateId: string) {
+    const template = templates.find((candidate) => candidate.id === templateId);
+    if (!template) {
+      setTitle("");
+      setDescription("");
+      setTotalSpots("");
+      setPricePerSpot("");
+      setWheelCountValue("2");
+      setStatus("OPEN");
+      return;
+    }
+    setTitle(template.defaultGameTitle ?? "");
+    setDescription(template.defaultGameDescription ?? "");
+    setTotalSpots(String(template.totalSpots));
+    setPricePerSpot(template.pricePerSpot);
+    setWheelCountValue(String(template.wheelCount));
+    setStatus(template.initialStatus);
+  }
 
   return (
     <>
@@ -496,6 +600,18 @@ export default function NewGamePage() {
             method="post"
           >
             <div className="game-form-body">
+              <section className="game-template-panel" aria-labelledby="game-template-heading">
+                <div className="game-field">
+                  <label className="game-label" id="game-template-heading" htmlFor="gameTemplate">Start from a template</label>
+                  <select className="game-select" id="gameTemplate" value={selectedTemplateId} onChange={(event) => setSelectedTemplateId(event.target.value)}>
+                    <option value="">Start without a template</option>
+                    {templates.map((template) => <option key={template.id} value={template.id}>{template.name}{template.isDefault ? " — Default" : ""}</option>)}
+                  </select>
+                  <button className="game-button game-button-secondary" type="button" onClick={() => applyTemplate(selectedTemplateId)}>{selectedTemplateId ? "Use template" : "Start without a template"}</button>
+                  <p className="game-help">Using a template only prefills this form. Review and edit every value before creating the game.</p>
+                </div>
+              </section>
+
               {actionData?.errors?.form ? (
                 <div className="game-form-error">
                   {actionData.errors.form}
@@ -519,7 +635,8 @@ export default function NewGamePage() {
                   name="title"
                   type="text"
                   maxLength={150}
-                  defaultValue={values?.title}
+                  value={title}
+                  onChange={(event) => setTitle(event.target.value)}
                   placeholder="Example: Friday Night Mystery Box"
                   required
                   autoComplete="off"
@@ -557,7 +674,8 @@ export default function NewGamePage() {
                     min="1"
                     max="100000"
                     step="1"
-                    defaultValue={values?.totalSpots}
+                    value={totalSpots}
+                    onChange={(event) => setTotalSpots(event.target.value)}
                     placeholder="100"
                     required
                   />
@@ -588,7 +706,8 @@ export default function NewGamePage() {
                     min="0"
                     max="1000000"
                     step="0.01"
-                    defaultValue={values?.pricePerSpot}
+                    value={pricePerSpot}
+                    onChange={(event) => setPricePerSpot(event.target.value)}
                     placeholder="5.00"
                     required
                   />
@@ -619,7 +738,8 @@ export default function NewGamePage() {
                     min="1"
                     max="20"
                     step="1"
-                    defaultValue={values?.wheelCount ?? "2"}
+                    value={wheelCountValue}
+                    onChange={(event) => setWheelCountValue(event.target.value)}
                     required
                   />
 
@@ -672,7 +792,8 @@ export default function NewGamePage() {
                   className="game-textarea"
                   id="description"
                   name="description"
-                  defaultValue={values?.description}
+                  value={description}
+                  onChange={(event) => setDescription(event.target.value)}
                   placeholder="Describe the prize, rules, or information members should know."
                 />
 
@@ -694,7 +815,8 @@ export default function NewGamePage() {
                   className="game-select"
                   id="status"
                   name="status"
-                  defaultValue={values?.status ?? "OPEN"}
+                  value={status}
+                  onChange={(event) => setStatus(event.target.value)}
                 >
                   <option value="OPEN">
                     Open — accept claims
@@ -711,6 +833,18 @@ export default function NewGamePage() {
                   </p>
                 ) : null}
               </div>
+
+              <section className="game-template-panel" aria-labelledby="save-template-heading">
+                <div className="game-template-actions">
+                  <div className="game-field">
+                    <label className="game-label" id="save-template-heading" htmlFor="templateName">Save current settings as template</label>
+                    <input className="game-input" id="templateName" name="templateName" maxLength={100} placeholder="Template name" />
+                    {actionData?.errors?.templateName ? <p className="game-error">{actionData.errors.templateName}</p> : null}
+                    {actionData?.success ? <p className="game-help" role="status">{actionData.success}</p> : null}
+                  </div>
+                  <button className="game-button game-button-secondary" type="submit" name="intent" value="save-template" disabled={isSubmitting}>Save settings as template</button>
+                </div>
+              </section>
             </div>
 
             <footer className="game-form-footer">
@@ -732,6 +866,8 @@ export default function NewGamePage() {
                   "game-button-primary",
                 ].join(" ")}
                 type="submit"
+                name="intent"
+                value="create-game"
                 disabled={isSubmitting}
               >
                 {isSubmitting
