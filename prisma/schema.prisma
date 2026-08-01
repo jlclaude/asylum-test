@@ -1,0 +1,158 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:dev.sqlite"
+}
+
+model Session {
+  id                  String    @id
+  shop                String
+  state               String
+  isOnline            Boolean   @default(false)
+  scope               String?
+  expires             DateTime?
+  accessToken         String
+  userId              BigInt?
+  firstName           String?
+  lastName            String?
+  email               String?
+  accountOwner        Boolean   @default(false)
+  locale              String?
+  collaborator        Boolean?  @default(false)
+  emailVerified       Boolean?  @default(false)
+  refreshToken        String?
+  refreshTokenExpires DateTime?
+}
+
+model Game {
+  id           String     @id @default(cuid())
+  shop         String
+  title        String
+  description  String?
+  totalSpots   Int
+  pricePerSpot Decimal
+  wheelCount   Int        @default(2)
+  status       GameStatus @default(OPEN)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  claims Claim[]
+  run    GameRun?
+
+  @@index([shop])
+  @@index([shop, status])
+}
+
+model Claim {
+  id              String      @id @default(cuid())
+  gameId          String
+  displayName     String
+  facebookHandle  String?
+  quantity        Int
+  comment         String?
+  status          ClaimStatus @default(PENDING)
+  externalPayment Boolean     @default(false)
+  expiresAt       DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  game          Game        @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  winningWheels GameWheel[] @relation("WinningClaim")
+
+  @@index([gameId])
+  @@index([gameId, status])
+}
+
+model GameRun {
+  id          String    @id @default(cuid())
+  gameId      String    @unique
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  game   Game        @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  rounds GameRound[]
+
+  @@index([startedAt])
+}
+
+model GameRound {
+  id          String      @id @default(cuid())
+  gameRunId   String
+  position    Int
+  title       String?
+  status      RoundStatus @default(READY)
+  startedAt   DateTime    @default(now())
+  completedAt DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  gameRun GameRun     @relation(fields: [gameRunId], references: [id], onDelete: Cascade)
+  wheels  GameWheel[]
+
+  @@unique([gameRunId, position])
+  @@index([gameRunId, status])
+}
+
+model GameWheel {
+  id                  String      @id @default(cuid())
+  gameRoundId         String
+  position            Int
+  type                WheelType
+  status              WheelStatus @default(READY)
+  label               String
+  originalEntriesJson String
+  shuffledEntriesJson String
+  spinDurationSeconds Int?
+  winnerEntryIndex    Int?
+  winnerClaimId       String?
+  winnerDisplayName   String?
+  winnerValue         String?
+  shuffledAt          DateTime?
+  spunAt              DateTime?
+  completedAt         DateTime?
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+
+  gameRound    GameRound @relation(fields: [gameRoundId], references: [id], onDelete: Cascade)
+  winningClaim Claim?    @relation("WinningClaim", fields: [winnerClaimId], references: [id], onDelete: SetNull)
+
+  @@unique([gameRoundId, position])
+  @@index([gameRoundId, type])
+  @@index([gameRoundId, status])
+  @@index([winnerClaimId])
+}
+
+enum GameStatus {
+  OPEN
+  CLOSED
+  READY
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum ClaimStatus {
+  PENDING
+  CONFIRMED
+  CANCELED
+  EXPIRED
+}
+
+enum RoundStatus {
+  READY
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum WheelType {
+  NAME
+  VALUE
+}
+
+enum WheelStatus {
+  READY
+  SPINNING
+  COMPLETED
+}

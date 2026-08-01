@@ -1,0 +1,491 @@
+import { useMemo, useState } from "react";
+import type {
+  ActionFunctionArgs,
+  LoaderFunctionArgs,
+} from "react-router";
+import {
+  isRouteErrorResponse,
+  useFetcher,
+  useLoaderData,
+  useNavigate,
+  useRouteError,
+} from "react-router";
+
+import {
+  createClaim,
+  getClaimsForGame,
+  getClaimTotals,
+  updateClaim,
+} from "../models/claim.server";
+import {
+  getGameForShop,
+  updateGameStatus,
+} from "../models/game.server";
+import { authenticate } from "../shopify.server";
+
+export async function loader({
+  request,
+  params,
+}: LoaderFunctionArgs) {
+  const { session } = await authenticate.admin(request);
+
+  if (!params.id) {
+    throw new Response("Game ID is required.", { status: 400 });
+  }
+
+  const game = await getGameForShop(params.id, session.shop);
+
+  if (!game) {
+    throw new Response("Game not found.", { status: 404 });
+  }
+
+  const [claims, totals] = await Promise.all([
+    getClaimsForGame(game.id),
+    getClaimTotals(game.id),
+  ]);
+
+  const requestUrl = new URL(request.url);
+
+  return {
+    game: {
+      id: game.id,
+      title: game.title,
+      description: game.description,
+      totalSpots: game.totalSpots,
+      pricePerSpot: game.pricePerSpot.toString(),
+      wheelCount: game.wheelCount,
+      status: game.status,
+      createdAt: game.createdAt.toISOString(),
+      updatedAt: game.updatedAt.toISOString(),
+    },
+    claims: claims.map((claim) => ({
+      id: claim.id,
+      displayName: claim.displayName,
+      facebookHandle: claim.facebookHandle,
+      quantity: claim.quantity,
+      comment: claim.comment,
+      status: claim.status,
+      externalPayment: claim.externalPayment,
+      createdAt: claim.createdAt.toISOString(),
+    })),
+    totals,
+    publicUrl: `${requestUrl.origin}/games/${game.id}`,
+  };
+}
+
+type ActionData = {
+  error?: string;
+  success?: string;
+  intent?: string;
+};
+
+export async function action({
+  request,
+  params,
+}: ActionFunctionArgs): Promise<ActionData> {
+  const { session } = await authenticate.admin(request);
+
+  if (!params.id) return { error: "Game ID is missing." };
+
+  const game = await getGameForShop(params.id, session.shop);
+  if (!game) return { error: "Game not found." };
+
+  const formData = await request.formData();
+  const intent = String(formData.get("intent") ?? "");
+
+  try {
+    if (intent === "create-claim") {
+      if (game.status !== "OPEN") {
+        return { error: "This game is not accepting new claims.", intent };
+      }
+
+      const displayName = String(formData.get("displayName") ?? "").trim();
+      const facebookHandle = String(formData.get("facebookHandle") ?? "").trim();
+      const comment = String(formData.get("comment") ?? "").trim();
+      const quantity = Number(formData.get("quantity"));
+
+      if (!displayName) {
+        return { error: "Enter the member's Facebook display name.", intent };
+      }
+
+      if (!Number.isInteger(quantity) || quantity < 1) {
+        return { error: "Quantity must be a whole number of at least 1.", intent };
+      }
+
+      const totals = await getClaimTotals(game.id);
+      const remaining = game.totalSpots - totals.reservedQuantity;
+
+      if (quantity > remaining) {
+        return {
+          error: remaining > 0 ? `Only ${remaining} spots remain.` : "This game is full.",
+          intent,
+        };
+      }
+
+      await createClaim({
+        gameId: game.id,
+        displayName,
+        facebookHandle,
+        quantity,
+        comment,
+      });
+
+      return {
+        success: `${quantity} ${quantity === 1 ? "spot was" : "spots were"} added for ${displayName}.`,
+        intent,
+      };
+    }
+
+    if (intent === "close-game") {
+      if (game.status !== "OPEN") {
+        return { error: "Only an open game can be closed.", intent };
+      }
+
+      const result = await updateGameStatus(game.id, session.shop, "CLOSED");
+      if (result.count === 0) return { error: "The game could not be closed.", intent };
+
+      return { success: "Game closed. New public claims are disabled.", intent };
+    }
+
+    if (intent === "reopen-game") {
+      if (game.status !== "CLOSED") {
+        return { error: "Only a closed game can be reopened.", intent };
+      }
+
+      const totals = await getClaimTotals(game.id);
+      const remaining = game.totalSpots - totals.reservedQuantity;
+      if (remaining <= 0) return { error: "This game is full and cannot be reopened.", intent };
+
+      const result = await updateGameStatus(game.id, session.shop, "OPEN");
+      if (result.count === 0) return { error: "The game could not be reopened.", intent };
+
+      return { success: "Game reopened. Public claims are enabled.", intent };
+    }
+
+    if (["READY", "IN_PROGRESS", "COMPLETED"].includes(game.status)) {
+      return {
+        error: "Claims are locked because Game Mode has already begun.",
+        intent,
+      };
+    }
+
+    const claimId = String(formData.get("claimId") ?? "").trim();
+    if (!claimId) return { error: "Claim ID is missing.", intent };
+
+    if (intent === "confirm-claim") {
+      const result = await updateClaim(claimId, game.id, {
+        status: "CONFIRMED",
+        externalPayment: true,
+      });
+
+      if (result.count === 0) {
+        return { error: "The claim could not be found or updated.", intent };
+      }
+
+      return { success: "Payment confirmed and claim approved.", intent };
+    }
+
+    if (intent === "cancel-claim") {
+      const result = await updateClaim(claimId, game.id, {
+        status: "CANCELED",
+        externalPayment: false,
+      });
+
+      if (result.count === 0) {
+        return { error: "The claim could not be found or updated.", intent };
+      }
+
+      return { success: "Claim canceled and spots released.", intent };
+    }
+
+    return { error: "Unknown action.", intent };
+  } catch (error) {
+    console.error("Game action failed:", error);
+    return {
+      error: error instanceof Error ? error.message : "The action could not be completed.",
+      intent,
+    };
+  }
+}
+
+function formatCurrency(value: string | number) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+  }).format(Number(value));
+}
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
+const styles = `
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  .control-page { min-height:100%; padding:28px; color:#f5f5f5; background:radial-gradient(circle at top right,rgba(155,22,34,.18),transparent 35%),linear-gradient(145deg,#0d0d0f 0%,#171719 52%,#101012 100%); font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+  .control-shell { width:min(1220px,100%); margin:0 auto; }
+  .control-back { margin-bottom:22px; padding:0; border:0; color:#9a9ba1; background:transparent; cursor:pointer; font:inherit; font-size:14px; font-weight:750; }
+  .control-header { display:flex; align-items:flex-end; justify-content:space-between; gap:24px; margin-bottom:22px; }
+  .control-eyebrow { margin:0 0 8px; color:#e44e5e; font-size:12px; font-weight:850; letter-spacing:.15em; text-transform:uppercase; }
+  .control-header h1 { margin:0; font-size:clamp(30px,5vw,46px); line-height:1.08; }
+  .control-description { max-width:720px; margin:13px 0 0; color:#999aa0; line-height:1.6; }
+  .control-status { flex:0 0 auto; padding:8px 12px; border-radius:999px; font-size:12px; font-weight:850; letter-spacing:.06em; }
+  .control-status-open { border:1px solid #305c40; color:#97e3b0; background:rgba(29,92,51,.25); }
+  .control-status-closed { border:1px solid #66562c; color:#e5cc82; background:rgba(105,82,20,.22); }
+  .control-status-ready { border:1px solid #5d3b68; color:#dcb4ea; background:rgba(81,40,95,.25); }
+  .control-status-in_progress { border:1px solid #6b3540; color:#f5a3ad; background:rgba(108,36,49,.28); }
+  .control-status-completed { border:1px solid #45464c; color:#b7b8bd; background:rgba(69,70,76,.22); }
+  .control-stats { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:12px; margin-bottom:18px; }
+  .control-stat,.control-card { border:1px solid #2b2b2f; border-radius:15px; background:rgba(28,28,31,.94); box-shadow:0 15px 42px rgba(0,0,0,.18); }
+  .control-stat { padding:18px; }
+  .control-stat-label { margin:0; color:#87888e; font-size:10px; font-weight:850; letter-spacing:.06em; text-transform:uppercase; }
+  .control-stat-value { margin:11px 0 5px; font-size:25px; font-weight:850; line-height:1; }
+  .control-stat-note { margin:0; color:#66676d; font-size:11px; }
+  .control-progress { margin-bottom:18px; padding:17px 19px; border:1px solid #2b2b2f; border-radius:14px; background:rgba(28,28,31,.94); }
+  .control-progress-head { display:flex; justify-content:space-between; gap:15px; margin-bottom:10px; font-size:12px; font-weight:750; }
+  .control-progress-track { height:10px; overflow:hidden; border-radius:999px; background:#111113; }
+  .control-progress-fill { height:100%; border-radius:999px; background:linear-gradient(90deg,#942532,#df4859); }
+  .control-message { margin-bottom:18px; padding:13px 15px; border-radius:10px; font-size:13px; }
+  .control-message-error { border:1px solid #73313a; color:#ffabb3; background:rgba(106,28,39,.3); }
+  .control-message-success { border:1px solid #305c40; color:#a7e8ba; background:rgba(29,92,51,.25); }
+  .control-grid { display:grid; grid-template-columns:minmax(0,1.55fr) minmax(300px,.7fr); gap:18px; }
+  .control-card { padding:22px; }
+  .control-section-head { margin-bottom:18px; }
+  .control-section-head h2 { margin:0 0 5px; font-size:19px; }
+  .control-section-head p { margin:0; color:#77787e; font-size:13px; }
+  .control-toolbar { display:flex; gap:11px; margin-bottom:17px; }
+  .control-search { flex:1 1 auto; height:43px; padding:0 13px; border:1px solid #39393e; border-radius:10px; outline:none; color:white; background:#111113; font:inherit; }
+  .control-search:focus { border-color:#d94b5b; box-shadow:0 0 0 3px rgba(217,75,91,.14); }
+  .control-filters { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:18px; }
+  .control-filter { padding:8px 11px; border:1px solid #38383d; border-radius:999px; color:#a8a9ae; background:#202023; cursor:pointer; font:inherit; font-size:12px; font-weight:750; }
+  .control-filter-active { border-color:#be3b4a; color:#fff; background:#7f202c; }
+  .control-list { display:grid; gap:11px; }
+  .control-claim { padding:16px; border:1px solid #35353a; border-radius:12px; background:rgba(12,12,14,.46); }
+  .control-claim-top { display:flex; align-items:flex-start; justify-content:space-between; gap:15px; }
+  .control-claim-order { display:flex; align-items:flex-start; gap:12px; }
+  .control-claim-number { display:grid; place-items:center; min-width:35px; height:35px; border:1px solid #4b2a2f; border-radius:9px; color:#ee7180; background:#27171a; font-size:11px; font-weight:850; }
+  .control-claim h3 { margin:0 0 5px; font-size:14px; }
+  .control-claim-meta { display:flex; flex-wrap:wrap; gap:5px 12px; margin:0; color:#77787e; font-size:12px; }
+  .control-claim-comment { margin:12px 0 0 47px; color:#a5a6ab; font-size:12px; line-height:1.5; }
+  .control-badge { padding:5px 8px; border-radius:999px; font-size:10px; font-weight:850; }
+  .control-badge-pending { border:1px solid #66562c; color:#e5cc82; background:rgba(105,82,20,.22); }
+  .control-badge-confirmed { border:1px solid #305c40; color:#97e3b0; background:rgba(29,92,51,.25); }
+  .control-badge-canceled,.control-badge-expired { border:1px solid #5e3035; color:#df8b94; background:rgba(91,37,44,.25); }
+  .control-claim-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:13px; }
+  .control-button { padding:10px 13px; border-radius:9px; cursor:pointer; font:inherit; font-size:12px; font-weight:850; }
+  .control-button:disabled { cursor:wait; opacity:.55; }
+  .control-button-primary { border:1px solid #ee5464; color:white; background:linear-gradient(180deg,#d94051,#9d2432); }
+  .control-button-secondary { border:1px solid #3c3c41; color:#d7d7da; background:#222225; }
+  .control-button-warning { border:1px solid #765122; color:#f1cd83; background:#392a16; }
+  .control-button-full { width:100%; }
+  .control-empty { padding:48px 20px; border:1px dashed #3a3a3f; border-radius:12px; color:#77787e; text-align:center; }
+  .control-actions { display:grid; gap:10px; }
+  .control-copy-status { min-height:19px; margin:11px 0 0; color:#84d49d; font-size:12px; text-align:center; }
+  .control-divider { height:1px; margin:21px 0; background:#303034; }
+  .control-form { display:grid; gap:13px; }
+  .control-field { display:grid; gap:6px; }
+  .control-field label { font-size:12px; font-weight:750; }
+  .control-input,.control-textarea { width:100%; border:1px solid #39393e; border-radius:9px; outline:none; color:white; background:#111113; font:inherit; }
+  .control-input { height:42px; padding:0 11px; }
+  .control-textarea { min-height:78px; padding:11px; resize:vertical; }
+  .control-input:focus,.control-textarea:focus { border-color:#d94b5b; box-shadow:0 0 0 3px rgba(217,75,91,.14); }
+  .control-lock-note { padding:13px; border:1px solid #4f4055; border-radius:10px; color:#cbb5d2; background:rgba(64,40,72,.22); font-size:12px; line-height:1.5; }
+  @media (max-width:1000px) { .control-stats{grid-template-columns:repeat(3,minmax(0,1fr));}.control-grid{grid-template-columns:1fr;} }
+  @media (max-width:700px) { .control-page{padding:18px;}.control-header{align-items:flex-start;flex-direction:column;}.control-stats{grid-template-columns:repeat(2,minmax(0,1fr));}.control-toolbar{flex-direction:column;} }
+  @media (max-width:460px) { .control-page{padding:13px;}.control-card{padding:18px;}.control-stats{grid-template-columns:1fr;}.control-claim-top{flex-direction:column;}.control-claim-comment{margin-left:0;} }
+`;
+
+type FilterValue = "ALL" | "PENDING" | "CONFIRMED" | "CANCELED";
+
+export default function GameControlCenter() {
+  const navigate = useNavigate();
+  const fetcher = useFetcher<ActionData>();
+  const { game, claims, totals, publicUrl } = useLoaderData<typeof loader>();
+
+  const [filter, setFilter] = useState<FilterValue>("ALL");
+  const [search, setSearch] = useState("");
+  const [copied, setCopied] = useState(false);
+
+  const isSubmitting = fetcher.state !== "idle";
+  const claimsLocked = ["READY", "IN_PROGRESS", "COMPLETED"].includes(game.status);
+  const remaining = Math.max(game.totalSpots - totals.reservedQuantity, 0);
+  const claimed = totals.reservedQuantity;
+  const percentage = game.totalSpots > 0 ? Math.min(Math.round((claimed / game.totalSpots) * 100), 100) : 0;
+  const confirmedRevenue = totals.confirmedQuantity * Number(game.pricePerSpot);
+
+  const chronologicalClaims = useMemo(
+    () => [...claims].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
+    [claims],
+  );
+
+  const claimNumbers = useMemo(() => {
+    const numbers = new Map<string, number>();
+    chronologicalClaims.forEach((claim, index) => numbers.set(claim.id, index + 1));
+    return numbers;
+  }, [chronologicalClaims]);
+
+  const filteredClaims = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return claims.filter((claim) => {
+      const matchesFilter = filter === "ALL" || claim.status === filter;
+      const matchesSearch = !term || claim.displayName.toLowerCase().includes(term) || claim.facebookHandle?.toLowerCase().includes(term);
+      return matchesFilter && matchesSearch;
+    });
+  }, [claims, filter, search]);
+
+  async function copyPublicLink() {
+    try {
+      await navigator.clipboard.writeText(publicUrl);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2500);
+    } catch {
+      window.prompt("Copy this public claim link:", publicUrl);
+    }
+  }
+
+  const wheelButtonLabel =
+    game.status === "COMPLETED"
+      ? "View Wheel Results"
+      : game.status === "IN_PROGRESS"
+        ? "Return to Live Wheels"
+        : game.status === "READY"
+          ? "Open Game Wheels"
+          : "Begin Game / Open Wheels";
+
+  return (
+    <>
+      <style dangerouslySetInnerHTML={{ __html: styles }} />
+      <main className="control-page">
+        <div className="control-shell">
+          <button className="control-back" type="button" onClick={() => navigate("/app")}>← Back to dashboard</button>
+
+          <header className="control-header">
+            <div>
+              <p className="control-eyebrow">Game control center</p>
+              <h1>{game.title}</h1>
+              <p className="control-description">{game.description || "Manage claims, payments, availability, and public access."}</p>
+            </div>
+            <span className={["control-status", `control-status-${game.status.toLowerCase()}`].join(" ")}>{game.status.replace("_", " ")}</span>
+          </header>
+
+          <section className="control-stats">
+            <article className="control-stat"><p className="control-stat-label">Total spots</p><p className="control-stat-value">{game.totalSpots}</p><p className="control-stat-note">{formatCurrency(game.pricePerSpot)} each</p></article>
+            <article className="control-stat"><p className="control-stat-label">Claimed</p><p className="control-stat-value">{claimed}</p><p className="control-stat-note">Pending and paid</p></article>
+            <article className="control-stat"><p className="control-stat-label">Remaining</p><p className="control-stat-value">{remaining}</p><p className="control-stat-note">Available spots</p></article>
+            <article className="control-stat"><p className="control-stat-label">Pending</p><p className="control-stat-value">{totals.pendingQuantity}</p><p className="control-stat-note">{totals.pendingClaims} claims</p></article>
+            <article className="control-stat"><p className="control-stat-label">Confirmed</p><p className="control-stat-value">{totals.confirmedQuantity}</p><p className="control-stat-note">{formatCurrency(confirmedRevenue)} received</p></article>
+            <article className="control-stat"><p className="control-stat-label">Wheels</p><p className="control-stat-value">{game.wheelCount + 1}</p><p className="control-stat-note">{game.wheelCount} name + 1 value</p></article>
+          </section>
+
+          <section className="control-progress">
+            <div className="control-progress-head"><span>Game progress</span><span>{claimed} / {game.totalSpots} · {percentage}%</span></div>
+            <div className="control-progress-track"><div className="control-progress-fill" style={{ width: `${percentage}%` }} /></div>
+          </section>
+
+          {fetcher.data?.error ? <div className="control-message control-message-error">{fetcher.data.error}</div> : null}
+          {fetcher.data?.success ? <div className="control-message control-message-success">{fetcher.data.success}</div> : null}
+
+          <section className="control-grid">
+            <article className="control-card">
+              <div className="control-section-head"><h2>Claim queue</h2><p>Claims remain ordered by submission time.</p></div>
+              <div className="control-toolbar"><input className="control-search" type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by name or Facebook username" /></div>
+              <div className="control-filters">
+                {[["ALL", "All"], ["PENDING", "Pending"], ["CONFIRMED", "Paid"], ["CANCELED", "Canceled"]].map(([value, label]) => (
+                  <button className={["control-filter", filter === value ? "control-filter-active" : ""].join(" ")} key={value} type="button" onClick={() => setFilter(value as FilterValue)}>{label}</button>
+                ))}
+              </div>
+
+              {claimsLocked ? <div className="control-lock-note">Claims are locked because the wheel snapshot has already been created. The wheel entries will not change.</div> : null}
+              <div style={{ height: 14 }} />
+
+              {filteredClaims.length === 0 ? <div className="control-empty">No claims match this view.</div> : (
+                <div className="control-list">
+                  {filteredClaims.map((claim) => (
+                    <div className="control-claim" key={claim.id}>
+                      <div className="control-claim-top">
+                        <div className="control-claim-order">
+                          <span className="control-claim-number">#{claimNumbers.get(claim.id)}</span>
+                          <div>
+                            <h3>{claim.displayName}</h3>
+                            <p className="control-claim-meta">
+                              <span>{claim.quantity} {claim.quantity === 1 ? "spot" : "spots"}</span>
+                              {claim.facebookHandle ? <span>{claim.facebookHandle}</span> : null}
+                              <span>{formatDate(claim.createdAt)}</span>
+                            </p>
+                          </div>
+                        </div>
+                        <span className={["control-badge", `control-badge-${claim.status.toLowerCase()}`].join(" ")}>{claim.status === "CONFIRMED" ? "PAID" : claim.status}</span>
+                      </div>
+
+                      {claim.comment ? <p className="control-claim-comment">{claim.comment}</p> : null}
+
+                      {claim.status === "PENDING" && !claimsLocked ? (
+                        <div className="control-claim-actions">
+                          <fetcher.Form method="post"><input type="hidden" name="intent" value="cancel-claim" /><input type="hidden" name="claimId" value={claim.id} /><button className="control-button control-button-secondary" type="submit" disabled={isSubmitting}>Cancel</button></fetcher.Form>
+                          <fetcher.Form method="post"><input type="hidden" name="intent" value="confirm-claim" /><input type="hidden" name="claimId" value={claim.id} /><button className="control-button control-button-primary" type="submit" disabled={isSubmitting}>Confirm payment</button></fetcher.Form>
+                        </div>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </article>
+
+            <aside className="control-card">
+              <div className="control-section-head"><h2>Quick actions</h2><p>Manage the public game and wheel session.</p></div>
+              <div className="control-actions">
+                <button className="control-button control-button-primary control-button-full" type="button" onClick={() => navigate(`/app/games/${game.id}/play`)}>{wheelButtonLabel}</button>
+                <button className="control-button control-button-secondary control-button-full" type="button" onClick={copyPublicLink}>Copy public claim link</button>
+
+                {game.status === "OPEN" ? (
+                  <fetcher.Form method="post"><input type="hidden" name="intent" value="close-game" /><button className="control-button control-button-warning control-button-full" type="submit" disabled={isSubmitting}>Close game</button></fetcher.Form>
+                ) : game.status === "CLOSED" ? (
+                  <fetcher.Form method="post"><input type="hidden" name="intent" value="reopen-game" /><button className="control-button control-button-secondary control-button-full" type="submit" disabled={isSubmitting}>Reopen game</button></fetcher.Form>
+                ) : null}
+              </div>
+
+              <p className="control-copy-status">{copied ? "Public link copied." : ""}</p>
+              <div className="control-divider" />
+              <div className="control-section-head"><h2>Add Facebook claim</h2><p>Enter claims submitted directly in your group.</p></div>
+
+              {claimsLocked ? <div className="control-lock-note">New claims are disabled after Game Mode begins.</div> : (
+                <fetcher.Form className="control-form" method="post">
+                  <input type="hidden" name="intent" value="create-claim" />
+                  <div className="control-field"><label htmlFor="displayName">Facebook display name</label><input className="control-input" id="displayName" name="displayName" type="text" required disabled={isSubmitting || game.status !== "OPEN" || remaining === 0} /></div>
+                  <div className="control-field"><label htmlFor="facebookHandle">Facebook username</label><input className="control-input" id="facebookHandle" name="facebookHandle" type="text" placeholder="@username" disabled={isSubmitting || game.status !== "OPEN" || remaining === 0} /></div>
+                  <div className="control-field"><label htmlFor="quantity">Number of spots</label><input className="control-input" id="quantity" name="quantity" type="number" min="1" max={remaining} required disabled={isSubmitting || game.status !== "OPEN" || remaining === 0} /></div>
+                  <div className="control-field"><label htmlFor="comment">Member comment</label><textarea className="control-textarea" id="comment" name="comment" disabled={isSubmitting || game.status !== "OPEN" || remaining === 0} /></div>
+                  <button className="control-button control-button-primary control-button-full" type="submit" disabled={isSubmitting || game.status !== "OPEN" || remaining === 0}>{isSubmitting ? "Saving…" : game.status !== "OPEN" ? "Game closed" : remaining === 0 ? "Game full" : "Add pending claim"}</button>
+                </fetcher.Form>
+              )}
+            </aside>
+          </section>
+        </div>
+      </main>
+    </>
+  );
+}
+
+export function ErrorBoundary() {
+  const error = useRouteError();
+  let message = "The game could not be loaded.";
+
+  if (isRouteErrorResponse(error)) {
+    message = error.status === 404 ? "This game could not be found." : `${error.status}: ${error.statusText}`;
+  } else if (error instanceof Error) {
+    message = error.message;
+  }
+
+  return (
+    <main style={{ minHeight: "100vh", padding: 32, color: "#ffffff", background: "#101012" }}>
+      <h1>Game error</h1>
+      <p>{message}</p>
+      <a href="/app">Return to dashboard</a>
+    </main>
+  );
+}
