@@ -7,6 +7,36 @@ import { formatPublicName } from "../app/lib/public-name.ts";
 import { idleRotationAt, remainingSpinSeconds, wheelPositionAt, wheelSpinTotalDegrees } from "../app/lib/wheel-effects.client.ts";
 import { loopingPlaybackOffset } from "../app/lib/wheel-music.client.ts";
 import { broadcastCountdownLabels, shouldAnimateBroadcastCountdown } from "../app/lib/broadcast-countdown.ts";
+import { normalizeDashboardGameCounts } from "../app/lib/dashboard-game-counts.ts";
+
+test("dashboard game counts preserve every status and normalize missing groups", () => {
+  assert.deepEqual(
+    normalizeDashboardGameCounts(11, [
+      { status: "OPEN", count: 3 },
+      { status: "CLOSED", count: 2 },
+      { status: "READY", count: 1 },
+      { status: "IN_PROGRESS", count: 1 },
+      { status: "COMPLETED", count: 4 },
+    ]),
+    {
+      total: 11,
+      open: 3,
+      closed: 2,
+      ready: 1,
+      inProgress: 1,
+      completed: 4,
+    },
+  );
+
+  assert.deepEqual(normalizeDashboardGameCounts(1, [{ status: "OPEN", count: 1 }]), {
+    total: 1,
+    open: 1,
+    closed: 0,
+    ready: 0,
+    inProgress: 0,
+    completed: 0,
+  });
+});
 
 test("public names use the existing privacy convention", () => {
   assert.equal(formatPublicName("John Quincy Smith"), "John S.");

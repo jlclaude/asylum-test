@@ -1,13 +1,20 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { useLoaderData, useNavigate } from "react-router";
-import { getGamesForShop } from "../models/game.server";
+import {
+  getDashboardGameCountsForShop,
+  getGamesForShop,
+} from "../models/game.server";
 import { authenticate } from "../shopify.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const { session } = await authenticate.admin(request);
-  const games = await getGamesForShop(session.shop);
+  const [games, counts] = await Promise.all([
+    getGamesForShop(session.shop),
+    getDashboardGameCountsForShop(session.shop),
+  ]);
 
   return {
+    counts,
     games: games.map((game) => ({
       id: game.id,
       title: game.title,
@@ -484,20 +491,12 @@ const styles = `
 
 export default function AppIndex() {
   const navigate = useNavigate();
-  const { games } = useLoaderData<typeof loader>();
-
-  const activeGames = games.filter(
-    (game) => game.status === "OPEN",
-  ).length;
-
-  const completedGames = games.filter(
-    (game) => game.status === "COMPLETED",
-  ).length;
+  const { counts, games } = useLoaderData<typeof loader>();
 
   const stats = [
     {
-      label: "Active games",
-      value: String(activeGames),
+      label: "Open games",
+      value: String(counts.open),
       note: "Games currently accepting claims",
     },
     {
@@ -507,7 +506,7 @@ export default function AppIndex() {
     },
     {
       label: "Completed games",
-      value: String(completedGames),
+      value: String(counts.completed),
       note: "Finished draws and winners",
     },
   ];

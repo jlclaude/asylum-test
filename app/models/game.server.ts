@@ -1,5 +1,6 @@
 import type { GameStatus } from "@prisma/client";
 import db from "../db.server";
+import { normalizeDashboardGameCounts } from "../lib/dashboard-game-counts";
 
 export type CreateGameInput = {
   shop: string;
@@ -34,6 +35,27 @@ export async function getGamesForShop(shop: string) {
       createdAt: "desc",
     },
   });
+}
+
+export async function getDashboardGameCountsForShop(shop: string) {
+  const [total, statusGroups] = await Promise.all([
+    db.game.count({
+      where: { shop },
+    }),
+    db.game.groupBy({
+      by: ["status"],
+      where: { shop },
+      _count: { _all: true },
+    }),
+  ]);
+
+  return normalizeDashboardGameCounts(
+    total,
+    statusGroups.map((group) => ({
+      status: group.status,
+      count: group._count._all,
+    })),
+  );
 }
 
 export async function getGameForShop(id: string, shop: string) {
