@@ -318,16 +318,11 @@ export default function GameControlCenter() {
   const percentage = game.totalSpots > 0 ? Math.min(Math.round((claimed / game.totalSpots) * 100), 100) : 0;
   const confirmedRevenue = totals.confirmedQuantity * Number(game.pricePerSpot);
 
-  const chronologicalClaims = useMemo(
-    () => [...claims].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
-    [claims],
-  );
-
   const claimNumbers = useMemo(() => {
     const numbers = new Map<string, number>();
-    chronologicalClaims.forEach((claim, index) => numbers.set(claim.id, index + 1));
+    claims.forEach((claim, index) => numbers.set(claim.id, index + 1));
     return numbers;
-  }, [chronologicalClaims]);
+  }, [claims]);
 
   const filteredClaims = useMemo(() => {
     const term = search.trim().toLowerCase();

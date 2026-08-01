@@ -101,6 +101,83 @@ export function WheelSection({
   ]);
 
   useEffect(() => {
+    if (
+      wheel.status !== "SPINNING" ||
+      !wheel.spunAt ||
+      wheel.winnerEntryIndex === null ||
+      !wheel.spinDurationSeconds ||
+      lastSpinToken.current === wheel.spunAt
+    ) {
+      return;
+    }
+
+    lastSpinToken.current = wheel.spunAt;
+    completionSent.current = false;
+
+    const finalResult =
+      wheel.winnerDisplayName ??
+      wheel.winnerValue ??
+      "Result";
+
+    const elapsedSeconds = Math.max(
+      0,
+      (Date.now() - new Date(wheel.spunAt).getTime()) / 1000,
+    );
+    const remainingSeconds = Math.max(
+      wheel.spinDurationSeconds - elapsedSeconds,
+      0,
+    );
+
+    const completeRecoveredSpin = () => {
+      setResult(finalResult);
+      setSpinning(false);
+
+      if (!completionSent.current) {
+        completionSent.current = true;
+        fetcher.submit(
+          {
+            intent: "complete-wheel",
+            wheelId: wheel.id,
+          },
+          { method: "post" },
+        );
+      }
+    };
+
+    setResult(null);
+    setSpinning(true);
+
+    if (remainingSeconds === 0) {
+      completeRecoveredSpin();
+      return;
+    }
+
+    animationController.current?.cancel();
+    animationController.current = animateWheelSpin({
+      startRotation: 0,
+      entryCount: wheel.entries.length,
+      winnerEntryIndex: wheel.winnerEntryIndex,
+      durationSeconds: remainingSeconds,
+      onFrame: setRotation,
+      onComplete: completeRecoveredSpin,
+    });
+
+    return () => {
+      animationController.current?.cancel();
+    };
+  }, [
+    fetcher,
+    wheel.entries.length,
+    wheel.id,
+    wheel.spinDurationSeconds,
+    wheel.spunAt,
+    wheel.status,
+    wheel.winnerDisplayName,
+    wheel.winnerEntryIndex,
+    wheel.winnerValue,
+  ]);
+
+  useEffect(() => {
     const data = fetcher.data;
 
     if (

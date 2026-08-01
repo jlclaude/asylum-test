@@ -4,7 +4,6 @@ import type {
 } from "react-router";
 import {
   Form,
-  redirect,
   useActionData,
   useNavigate,
   useNavigation,
@@ -43,7 +42,7 @@ type ActionData = {
 export async function action({
   request,
 }: ActionFunctionArgs): Promise<Response | ActionData> {
-  const { session } = await authenticate.admin(request);
+  const { session, redirect } = await authenticate.admin(request);
   const formData = await request.formData();
 
   const title = String(

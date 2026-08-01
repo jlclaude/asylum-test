@@ -95,13 +95,13 @@ export async function getClaimsForGame(gameId: string) {
       gameId,
     },
     orderBy: {
-      createdAt: "desc",
+      createdAt: "asc",
     },
   });
 }
 
 export async function getPublicClaimsForGame(gameId: string) {
-  return db.claim.findMany({
+  const claims = await db.claim.findMany({
     where: {
       gameId,
       status: {
@@ -121,6 +121,8 @@ export async function getPublicClaimsForGame(gameId: string) {
     },
     take: 20,
   });
+
+  return claims.reverse();
 }
 
 export async function getClaimForGame(
@@ -141,7 +143,6 @@ export async function updateClaim(
   data: {
     status?: ClaimStatus;
     externalPayment?: boolean;
-    hostNotes?: string | null;
     expiresAt?: Date | null;
   },
 ) {

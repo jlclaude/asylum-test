@@ -21,6 +21,24 @@ CREATE TABLE "GameRound" (
     CONSTRAINT "GameRound_gameRunId_fkey" FOREIGN KEY ("gameRunId") REFERENCES "GameRun" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
+-- Preserve runs created before rounds existed. Deterministic IDs make the
+-- migration safe to retry while giving every legacy wheel a parent round.
+INSERT INTO "GameRound" (
+    "id", "gameRunId", "position", "title", "status",
+    "startedAt", "completedAt", "createdAt", "updatedAt"
+)
+SELECT
+    "id" || '-round-1',
+    "id",
+    1,
+    'Round 1',
+    CASE WHEN "completedAt" IS NULL THEN 'READY' ELSE 'COMPLETED' END,
+    "startedAt",
+    "completedAt",
+    "startedAt",
+    COALESCE("completedAt", CURRENT_TIMESTAMP)
+FROM "GameRun";
+
 -- RedefineTables
 PRAGMA defer_foreign_keys=ON;
 PRAGMA foreign_keys=OFF;
@@ -65,7 +83,7 @@ CREATE TABLE "new_GameWheel" (
     CONSTRAINT "GameWheel_gameRoundId_fkey" FOREIGN KEY ("gameRoundId") REFERENCES "GameRound" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT "GameWheel_winnerClaimId_fkey" FOREIGN KEY ("winnerClaimId") REFERENCES "Claim" ("id") ON DELETE SET NULL ON UPDATE CASCADE
 );
-INSERT INTO "new_GameWheel" ("completedAt", "createdAt", "id", "originalEntriesJson", "position", "shuffledAt", "shuffledEntriesJson", "spinDurationSeconds", "spunAt", "status", "type", "updatedAt", "winnerClaimId", "winnerDisplayName", "winnerEntryIndex", "winnerValue") SELECT "completedAt", "createdAt", "id", "originalEntriesJson", "position", "shuffledAt", "shuffledEntriesJson", "spinDurationSeconds", "spunAt", "status", "type", "updatedAt", "winnerClaimId", "winnerDisplayName", "winnerEntryIndex", "winnerValue" FROM "GameWheel";
+INSERT INTO "new_GameWheel" ("completedAt", "createdAt", "gameRoundId", "id", "label", "originalEntriesJson", "position", "shuffledAt", "shuffledEntriesJson", "spinDurationSeconds", "spunAt", "status", "type", "updatedAt", "winnerClaimId", "winnerDisplayName", "winnerEntryIndex", "winnerValue") SELECT "completedAt", "createdAt", "gameRunId" || '-round-1', "id", CASE WHEN "type" = 'VALUE' THEN 'Value Wheel' ELSE 'Name Wheel ' || "position" END, "originalEntriesJson", "position", "shuffledAt", "shuffledEntriesJson", "spinDurationSeconds", "spunAt", "status", "type", "updatedAt", "winnerClaimId", "winnerDisplayName", "winnerEntryIndex", "winnerValue" FROM "GameWheel";
 DROP TABLE "GameWheel";
 ALTER TABLE "new_GameWheel" RENAME TO "GameWheel";
 CREATE INDEX "GameWheel_gameRoundId_type_idx" ON "GameWheel"("gameRoundId", "type");

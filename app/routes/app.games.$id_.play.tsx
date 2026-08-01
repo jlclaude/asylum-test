@@ -117,6 +117,9 @@ export async function loader({
 
                   winnerValue:
                     wheel.winnerValue,
+
+                  spunAt:
+                    wheel.spunAt?.toISOString() ?? null,
                 }),
               ),
             }),
