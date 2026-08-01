@@ -547,25 +547,6 @@ body {
   border-radius: 50%;
 }
 
-.studio-wheel-bearing i {
-  position: absolute;
-  top: 4%;
-  left: calc(50% - 4px);
-  width: 8px;
-  height: 8px;
-  transform-origin: 4px calc(1150% + 4px);
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #ddd, #555 52%, #171719 72%);
-}
-
-.studio-wheel-bearing i:nth-child(2) { transform: rotate(45deg); }
-.studio-wheel-bearing i:nth-child(3) { transform: rotate(90deg); }
-.studio-wheel-bearing i:nth-child(4) { transform: rotate(135deg); }
-.studio-wheel-bearing i:nth-child(5) { transform: rotate(180deg); }
-.studio-wheel-bearing i:nth-child(6) { transform: rotate(225deg); }
-.studio-wheel-bearing i:nth-child(7) { transform: rotate(270deg); }
-.studio-wheel-bearing i:nth-child(8) { transform: rotate(315deg); }
-
 .studio-wheel-machine-spinning .studio-wheel-bearing {
   animation: studio-bearing-turn 3.2s linear infinite;
 }

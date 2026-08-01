@@ -208,11 +208,7 @@ export function WheelCanvas({
       />
 
       <div className="studio-wheel-hub">
-        <div className="studio-wheel-bearing" aria-hidden="true">
-          {Array.from({ length: 8 }, (_, index) => (
-            <i key={index} />
-          ))}
-        </div>
+        <div className="studio-wheel-bearing" aria-hidden="true" />
 
         <div className="studio-wheel-hub-ring">
           <strong>A</strong>

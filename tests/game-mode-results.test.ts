@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { toPublicGameResults } from "../app/lib/game-results.ts";
-import { adjacentWheelId, broadcastWheelStatus, defaultActiveWheelId, fullscreenIsActive, nextUnfinishedWheelId, savedSoundIsMuted, shortcutTargetIsEditable, unfinishedWheelIds, wheelActionBlockReason, wheelScrollBehavior } from "../app/lib/game-mode-operator.ts";
+import { adjacentWheelId, broadcastWheelStatus, defaultActiveWheelId, defaultBroadcastActiveWheelId, fullscreenIsActive, nextUnfinishedWheelId, savedSoundIsMuted, shortcutTargetIsEditable, unfinishedWheelIds, wheelActionBlockReason, wheelScrollBehavior } from "../app/lib/game-mode-operator.ts";
 import { formatPublicName } from "../app/lib/public-name.ts";
 import { remainingSpinSeconds } from "../app/lib/wheel-effects.client.ts";
 import { broadcastCountdownLabels, shouldAnimateBroadcastCountdown } from "../app/lib/broadcast-countdown.ts";
@@ -86,6 +86,7 @@ test("broadcast defaults to and advances through unfinished wheels", () => {
     { id: "three", status: "READY" as const },
   ];
   assert.equal(defaultActiveWheelId(wheels), "two");
+  assert.equal(defaultBroadcastActiveWheelId(wheels), "one");
   assert.equal(nextUnfinishedWheelId(wheels, "two"), "three");
   assert.equal(defaultActiveWheelId(wheels.map((wheel) => ({ ...wheel, status: "COMPLETED" as const }))), "one");
 });

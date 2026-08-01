@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useLoaderData } from "react-router";
 
 import { BroadcastCompletion } from "../components/broadcast/BroadcastCompletion";
 import { BroadcastGameHeader } from "../components/broadcast/BroadcastGameHeader";
+import { BroadcastResultAcceptance } from "../components/broadcast/BroadcastResultAcceptance";
 import { BroadcastWheelRail } from "../components/broadcast/BroadcastWheelRail";
 import { GameModeShortcuts } from "../components/wheel/GameModeShortcuts";
 import { GameModeToolbar } from "../components/wheel/GameModeToolbar";
@@ -12,7 +13,7 @@ import { useFullscreen } from "../hooks/useFullscreen";
 import { useGameModeShortcuts } from "../hooks/useGameModeShortcuts";
 import { useSoundPreference } from "../hooks/useSoundPreference";
 import { ASYLUM_THEMES, type AsylumThemeKey } from "../lib/asylum-themes";
-import { adjacentWheelId, defaultActiveWheelId, nextUnfinishedWheelId } from "../lib/game-mode-operator";
+import { adjacentWheelId, defaultBroadcastActiveWheelId, nextUnfinishedWheelId } from "../lib/game-mode-operator";
 import { action as gameModeAction, loader as gameModeLoader } from "./app.games.$id_.play";
 
 import "../styles/asylum-brand.css";
@@ -31,20 +32,29 @@ export default function BroadcastModePage() {
   const [themeKey, setThemeKey] = useState<AsylumThemeKey>("classic");
   const [message, setMessage] = useState<string | null>(null);
   const [operatorState, setOperatorState] = useState<WheelOperatorState | null>(null);
-  const [awaitingCompletionId, setAwaitingCompletionId] = useState<string | null>(null);
+  const [acceptedIds, setAcceptedIds] = useState<Set<string>>(() => new Set());
+  const acceptedIdsRef = useRef(new Set<string>());
+  const [finalResultAccepted, setFinalResultAccepted] = useState(false);
   const wheels = useMemo(() => (run?.rounds.flatMap((round) => round.wheels) ?? []) as WheelData[], [run]);
-  const [activeId, setActiveId] = useState<string | null>(() => defaultActiveWheelId(wheels));
+  const [activeId, setActiveId] = useState<string | null>(() => defaultBroadcastActiveWheelId(wheels));
   const activeWheel = wheels.find((wheel) => wheel.id === activeId) ?? wheels[0] ?? null;
   const { muted, toggleMuted } = useSoundPreference();
   const { isFullscreen, toggleFullscreen } = useFullscreen(fullscreenTarget);
 
-  useEffect(() => {
-    if (!awaitingCompletionId) return;
-    const completedWheel = wheels.find((wheel) => wheel.id === awaitingCompletionId);
-    if (completedWheel?.status !== "COMPLETED") return;
-    setActiveId(nextUnfinishedWheelId(wheels, awaitingCompletionId) ?? awaitingCompletionId);
-    setAwaitingCompletionId(null);
-  }, [awaitingCompletionId, wheels]);
+  const acceptResult = useCallback((wheelId: string) => {
+    if (acceptedIdsRef.current.has(wheelId)) return;
+    acceptedIdsRef.current.add(wheelId);
+    setAcceptedIds((current) => new Set(current).add(wheelId));
+    const nextId = nextUnfinishedWheelId(wheels, wheelId);
+    if (nextId) {
+      setOperatorState(null);
+      setActiveId(nextId);
+      setMessage(`${wheels.find((wheel) => wheel.id === nextId)?.label ?? "Next wheel"} selected.`);
+    } else {
+      setFinalResultAccepted(true);
+      setMessage("All persisted results accepted.");
+    }
+  }, [wheels]);
 
   const runAction = useCallback((operatorAction: WheelOperatorAction): WheelOperatorResult => (
     wheelRef.current?.runAction(operatorAction) ?? { triggered: false, message: "Active wheel controls are unavailable." }
@@ -129,15 +139,25 @@ export default function BroadcastModePage() {
               systemMessage={message}
               onSelect={setActiveId}
               onOperatorStateChange={setOperatorState}
-              onCompleted={setAwaitingCompletionId}
+              onCompleted={() => setMessage("Result persisted. Operator acceptance required.")}
             />
           </section>
         ) : (
           <section className="broadcast-empty"><h2>Broadcast unavailable</h2><p>Begin Game Mode to build the containment wheels.</p></section>
         )}
 
+        {activeWheel?.status === "COMPLETED" && (activeWheel.winnerDisplayName ?? activeWheel.winnerValue) ? (
+          <BroadcastResultAcceptance
+            key={activeWheel.id}
+            type={activeWheel.type}
+            result={(activeWheel.winnerDisplayName ?? activeWheel.winnerValue) as string}
+            accepted={acceptedIds.has(activeWheel.id)}
+            onAccept={() => acceptResult(activeWheel.id)}
+          />
+        ) : null}
+
         <BroadcastWheelRail wheels={wheels} activeId={activeWheel?.id ?? null} onSelect={setActiveId} />
-        {results?.completedAt ? <BroadcastCompletion gameId={game.id} gameTitle={game.title} results={results} /> : null}
+        {results?.completedAt && finalResultAccepted ? <BroadcastCompletion gameId={game.id} gameTitle={game.title} results={results} /> : null}
         <GameModeShortcuts message={message} />
 
         <footer className="studio-statusbar broadcast-statusbar">
