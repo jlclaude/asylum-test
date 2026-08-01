@@ -8,6 +8,7 @@ import {
   useNavigate,
   useNavigation,
 } from "react-router";
+import { SPIN_DURATION_RANGE_LABEL } from "../lib/spin-duration";
 
 import { createGame } from "../models/game.server";
 import { authenticate } from "../shopify.server";
@@ -655,7 +656,7 @@ export default function NewGamePage() {
                   plus the required{" "}
                   <strong>value wheel</strong>. Each wheel
                   shuffles and spins independently with its own
-                  random duration between 30 and 120 seconds.
+                  random duration between {SPIN_DURATION_RANGE_LABEL}.
                 </p>
               </div>
 

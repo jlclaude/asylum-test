@@ -24,6 +24,7 @@ import {
 } from "../../lib/asylum-themes";
 import { wheelActionBlockReason, wheelScrollBehavior } from "../../lib/game-mode-operator";
 import { shouldAnimateBroadcastCountdown } from "../../lib/broadcast-countdown";
+import { SPIN_DURATION_RANGE_LABEL } from "../../lib/spin-duration";
 import { WheelCanvas } from "./WheelCanvas";
 import { WheelConsole } from "./WheelConsole";
 import { ContainmentReveal } from "./ContainmentReveal";
@@ -611,7 +612,7 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
               >
                 <span aria-hidden="true">◷</span>
                 <strong>RANDOM TIME</strong>
-                <small>Select 30–120 seconds</small>
+                <small>Select {SPIN_DURATION_RANGE_LABEL}</small>
               </button>
             </fetcher.Form>
 

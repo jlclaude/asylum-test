@@ -1,5 +1,6 @@
 import { randomInt } from "node:crypto";
 import db from "../db.server";
+import { MAX_SPIN_DURATION_SECONDS, MIN_SPIN_DURATION_SECONDS } from "../lib/spin-duration";
 
 export type NameWheelEntry = {
   claimId: string;
@@ -241,7 +242,10 @@ export async function selectGameWheelDuration(
       throw new Error("Spin time can only be selected for a ready wheel.");
     }
 
-    const spinDurationSeconds = randomInt(30, 121);
+    const spinDurationSeconds = randomInt(
+      MIN_SPIN_DURATION_SECONDS,
+      MAX_SPIN_DURATION_SECONDS + 1,
+    );
 
     await transaction.gameWheel.update({
       where: { id: wheel.id },

@@ -124,8 +124,8 @@ test("wheel position and velocity remain continuous at phase boundaries", () => 
   assert.equal(Math.abs(wheelPositionAt(1) - 1) < 1e-12, true);
 });
 
-test("30 and 120 second trajectories land on the saved segment center", () => {
-  for (const duration of [30, 120]) {
+test("25 and 75 second trajectories land on the saved segment center", () => {
+  for (const duration of [25, 75]) {
     const entries = 19;
     const winner = 7;
     const finalRotation = wheelSpinTotalDegrees(0, entries, winner, duration) * wheelPositionAt(1);
