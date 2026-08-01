@@ -26,10 +26,62 @@ type AnimateWheelSpinOptions = {
   entryCount: number;
   winnerEntryIndex: number;
   durationSeconds: number;
+  elapsedSeconds?: number;
   onFrame: (rotation: number) => void;
   onTick?: (intensity: number) => void;
   onComplete: () => void;
 };
+
+const ACCELERATION_END = 0.1;
+const DECELERATION_START = 0.8;
+const CRUISE_DURATION = DECELERATION_START - ACCELERATION_END;
+const DECELERATION_DURATION = 1 - DECELERATION_START;
+const PROFILE_DISTANCE =
+  ACCELERATION_END * (2 / 3) +
+  CRUISE_DURATION +
+  DECELERATION_DURATION * (1 / 3);
+const CRUISE_VELOCITY = 1 / PROFILE_DISTANCE;
+
+export function wheelPositionAt(progress: number) {
+  const clamped = Math.min(Math.max(progress, 0), 1);
+
+  if (clamped <= ACCELERATION_END) {
+    const local = clamped / ACCELERATION_END;
+    return CRUISE_VELOCITY * ACCELERATION_END *
+      (local * local - (local * local * local) / 3);
+  }
+
+  const accelerationDistance =
+    CRUISE_VELOCITY * ACCELERATION_END * (2 / 3);
+
+  if (clamped <= DECELERATION_START) {
+    return accelerationDistance +
+      CRUISE_VELOCITY * (clamped - ACCELERATION_END);
+  }
+
+  const cruiseDistance = CRUISE_VELOCITY * CRUISE_DURATION;
+  const local = (clamped - DECELERATION_START) / DECELERATION_DURATION;
+  const decelerationDistance =
+    CRUISE_VELOCITY * DECELERATION_DURATION *
+    (local - local * local + (local * local * local) / 3);
+
+  return accelerationDistance + cruiseDistance + decelerationDistance;
+}
+
+export function wheelSpinTotalDegrees(
+  startRotation: number,
+  entryCount: number,
+  winnerEntryIndex: number,
+  durationSeconds: number,
+) {
+  const segmentDegrees = 360 / entryCount;
+  const targetCenter = (winnerEntryIndex + 0.5) * segmentDegrees;
+  const turns = 14 + Math.ceil(durationSeconds / 4.5);
+  const currentNormalized = ((startRotation % 360) + 360) % 360;
+  const targetNormalized = ((360 - targetCenter) % 360 + 360) % 360;
+  const correction = (targetNormalized - currentNormalized + 360) % 360;
+  return turns * 360 + correction;
+}
 
 let sharedAudioContext: AudioContext | null = null;
 let wheelAudioMuted = false;
@@ -148,22 +200,6 @@ export function playContainmentLock() {
   }
 }
 
-function easeWheel(progress: number) {
-  if (progress < 0.16) {
-    const local = progress / 0.16;
-    return 0.14 * local * local * local;
-  }
-
-  if (progress < 0.72) {
-    const local = (progress - 0.16) / 0.56;
-    return 0.14 + local * 0.61;
-  }
-
-  const local = (progress - 0.72) / 0.28;
-  const eased = 1 - Math.pow(1 - local, 4);
-  return 0.75 + eased * 0.25;
-}
-
 export function animateWheelSpin(
   options: AnimateWheelSpinOptions,
 ): WheelAnimationController {
@@ -172,6 +208,7 @@ export function animateWheelSpin(
     entryCount,
     winnerEntryIndex,
     durationSeconds,
+    elapsedSeconds = 0,
     onFrame,
     onTick,
     onComplete,
@@ -189,34 +226,42 @@ export function animateWheelSpin(
     winnerEntryIndex < 0 ||
     winnerEntryIndex >= entryCount ||
     !Number.isFinite(durationSeconds) ||
-    durationSeconds <= 0
+    durationSeconds <= 0 ||
+    !Number.isFinite(elapsedSeconds) ||
+    elapsedSeconds < 0 ||
+    elapsedSeconds >= durationSeconds
   ) {
     return { cancel: () => undefined };
   }
 
   let canceled = false;
   let frameId = 0;
-  let previousSegment = Math.floor(
-    ((startRotation % 360) + 360) % 360 / (360 / entryCount),
-  );
 
   const segmentDegrees = 360 / entryCount;
-  const targetCenter = (winnerEntryIndex + 0.5) * segmentDegrees;
-  const turns = 14 + Math.ceil(durationSeconds / 4.5);
-  const currentNormalized = ((startRotation % 360) + 360) % 360;
-  const targetNormalized = ((360 - targetCenter) % 360 + 360) % 360;
-  const correction =
-    (targetNormalized - currentNormalized + 360) % 360;
-  const totalDegrees = turns * 360 + correction;
+  const totalDegrees = wheelSpinTotalDegrees(
+    startRotation,
+    entryCount,
+    winnerEntryIndex,
+    durationSeconds,
+  );
+  const resumedRotation = startRotation + totalDegrees *
+    wheelPositionAt(elapsedSeconds / durationSeconds);
+  let previousSegment = Math.floor(
+    ((resumedRotation % 360) + 360) % 360 / segmentDegrees,
+  );
 
   const startedAt = performance.now();
   const durationMs = durationSeconds * 1000;
+  const elapsedMs = elapsedSeconds * 1000;
 
   function frame(now: number) {
     if (canceled) return;
 
-    const rawProgress = Math.min((now - startedAt) / durationMs, 1);
-    const easedProgress = easeWheel(rawProgress);
+    const rawProgress = Math.min(
+      (elapsedMs + now - startedAt) / durationMs,
+      1,
+    );
+    const easedProgress = wheelPositionAt(rawProgress);
     const rotation = startRotation + totalDegrees * easedProgress;
 
     onFrame(rotation);

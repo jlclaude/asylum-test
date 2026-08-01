@@ -4,7 +4,7 @@ import test from "node:test";
 import { toPublicGameResults } from "../app/lib/game-results.ts";
 import { adjacentWheelId, broadcastWheelStatus, defaultActiveWheelId, defaultBroadcastActiveWheelId, fullscreenIsActive, nextUnfinishedWheelId, savedSoundIsMuted, shortcutTargetIsEditable, unfinishedWheelIds, wheelActionBlockReason, wheelScrollBehavior } from "../app/lib/game-mode-operator.ts";
 import { formatPublicName } from "../app/lib/public-name.ts";
-import { remainingSpinSeconds } from "../app/lib/wheel-effects.client.ts";
+import { remainingSpinSeconds, wheelPositionAt, wheelSpinTotalDegrees } from "../app/lib/wheel-effects.client.ts";
 import { broadcastCountdownLabels, shouldAnimateBroadcastCountdown } from "../app/lib/broadcast-countdown.ts";
 
 test("public names use the existing privacy convention", () => {
@@ -100,4 +100,43 @@ test("broadcast countdown is one three-step sequence and respects reduced motion
   assert.deepEqual(broadcastCountdownLabels(), ["3", "2", "1"]);
   assert.equal(shouldAnimateBroadcastCountdown(false), true);
   assert.equal(shouldAnimateBroadcastCountdown(true), false);
+});
+
+function profileVelocity(progress: number, step = 0.0001) {
+  return (wheelPositionAt(progress + step) - wheelPositionAt(progress - step)) / (2 * step);
+}
+
+test("wheel velocity accelerates once, cruises steadily, then decelerates", () => {
+  const acceleration = [0.01, 0.03, 0.05, 0.07, 0.09].map((point) => profileVelocity(point));
+  const cruise = [0.2, 0.4, 0.6, 0.75].map((point) => profileVelocity(point));
+  const deceleration = [0.82, 0.86, 0.9, 0.94, 0.98].map((point) => profileVelocity(point));
+
+  assert.equal(acceleration.every((velocity, index) => index === 0 || velocity > acceleration[index - 1]), true);
+  assert.equal(Math.max(...cruise) - Math.min(...cruise) < 0.00001, true);
+  assert.equal(deceleration.every((velocity, index) => index === 0 || velocity < deceleration[index - 1]), true);
+});
+
+test("wheel position and velocity remain continuous at phase boundaries", () => {
+  for (const boundary of [0.1, 0.8]) {
+    assert.equal(Math.abs(wheelPositionAt(boundary - 0.000001) - wheelPositionAt(boundary + 0.000001)) < 0.00001, true);
+    assert.equal(Math.abs(profileVelocity(boundary - 0.0002) - profileVelocity(boundary + 0.0002)) < 0.01, true);
+  }
+  assert.equal(Math.abs(wheelPositionAt(1) - 1) < 1e-12, true);
+});
+
+test("30 and 120 second trajectories land on the saved segment center", () => {
+  for (const duration of [30, 120]) {
+    const entries = 19;
+    const winner = 7;
+    const finalRotation = wheelSpinTotalDegrees(0, entries, winner, duration) * wheelPositionAt(1);
+    const expected = (360 - (winner + 0.5) * (360 / entries) + 360) % 360;
+    assert.equal(Math.abs(((finalRotation % 360) + 360) % 360 - expected) < 1e-9, true);
+  }
+});
+
+test("reload progress resumes the original acceleration, cruise, or deceleration phase", () => {
+  assert.equal(profileVelocity(0.05) < profileVelocity(0.1), true);
+  assert.equal(Math.abs(profileVelocity(0.5) - profileVelocity(0.7)) < 0.00001, true);
+  assert.equal(profileVelocity(0.9) > profileVelocity(0.95), true);
+  assert.equal(profileVelocity(0.95) > profileVelocity(0.99), true);
 });

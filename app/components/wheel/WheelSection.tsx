@@ -291,7 +291,8 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
       startRotation: rotationRef.current,
       entryCount: wheel.entries.length,
       winnerEntryIndex: wheel.winnerEntryIndex,
-      durationSeconds: remainingSeconds,
+      durationSeconds: wheel.spinDurationSeconds,
+      elapsedSeconds: wheel.spinDurationSeconds - remainingSeconds,
       onFrame: (nextRotation) => {
         rotationRef.current = nextRotation;
         setRotation(nextRotation);
