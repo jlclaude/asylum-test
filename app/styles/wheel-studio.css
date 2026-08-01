@@ -204,7 +204,7 @@ body {
 
 .studio-wheel-section {
   min-height: calc(100vh - 70px);
-  padding: 18px;
+  padding: 10px;
   border: 2px solid var(--theme-border);
   background:
     radial-gradient(
@@ -229,7 +229,7 @@ body {
 
 .studio-wheel-section[data-operator-locked="false"]:not([aria-current="true"]) { cursor:pointer }
 .studio-wheel-section-active { border-color:var(--theme-primary);box-shadow:inset 0 0 0 3px color-mix(in srgb,var(--theme-primary) 22%,transparent),inset 0 0 60px rgba(0,0,0,.48),0 0 34px color-mix(in srgb,var(--theme-primary) 38%,transparent),0 20px 52px rgba(0,0,0,.42) }
-.studio-wheel-section-active::before { display:block;width:max-content;margin:-18px auto 10px;padding:5px 14px;border:1px solid var(--theme-primary);color:var(--theme-text);background:var(--theme-primary-dark);content:"ACTIVE OPERATOR TARGET";font-size:9px;font-weight:950;letter-spacing:.16em }
+.studio-wheel-section-active::before { display:block;width:max-content;margin:-10px auto 7px;padding:5px 14px;border:1px solid var(--theme-primary);color:var(--theme-text);background:var(--theme-primary-dark);content:"ACTIVE OPERATOR TARGET";font-size:9px;font-weight:950;letter-spacing:.16em }
 
 .studio-wheel-section-value {
   --theme-primary:
@@ -275,12 +275,12 @@ body {
 .studio-wheel-layout {
   display: grid;
   grid-template-columns:
-    minmax(0, 1fr)
-    minmax(320px, 390px);
+    minmax(0, 3fr)
+    minmax(280px, 1fr);
   align-items: center;
-  gap: 32px;
+  gap: 18px;
   min-height: calc(100vh - 180px);
-  padding-top: 17px;
+  padding-top: 10px;
 }
 
 .studio-wheel-display {
@@ -292,11 +292,11 @@ body {
 
 .studio-wheel-machine {
   position: relative;
-  width: min(82vh, 980px, 100%);
+  width: min(110vh, 1280px, 100%);
   height: auto;
   aspect-ratio: 1 / 1;
   flex: 0 0 auto;
-  padding: 39px;
+  padding: 32px;
   isolation: isolate;
   border: 10px solid #303033;
   border-radius: 50%;
@@ -1187,12 +1187,12 @@ body {
 
   .studio-wheel-layout {
     grid-template-columns:
-      minmax(0, 1fr)
-      minmax(290px, 340px);
+      minmax(0, 2.4fr)
+      minmax(270px, 1fr);
   }
 
   .studio-wheel-machine {
-    width: min(72vh, 760px, 100%);
+    width: min(96vh, 900px, 100%);
   }
 }
 
@@ -1207,7 +1207,7 @@ body {
   }
 
   .studio-wheel-machine {
-    width: min(78vh, 760px, 94vw);
+    width: min(90vh, 900px, 96vw);
   }
 
   .studio-console {
@@ -1263,11 +1263,11 @@ body {
   }
 
   .studio-wheel-section {
-    padding: 12px;
+    padding: 8px;
   }
 
   .studio-wheel-machine {
-    padding: 27px;
+    padding: 24px;
   }
 
   .studio-wheel-pointer {

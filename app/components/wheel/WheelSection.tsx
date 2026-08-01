@@ -10,6 +10,7 @@ import {
 import { useFetcher } from "react-router";
 
 import {
+  animateWheelIdle,
   animateWheelSpin,
   createConfettiBurst,
   playContainmentLock,
@@ -75,6 +76,7 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
   const completionSent = useRef(false);
   const animationController =
     useRef<WheelAnimationController | null>(null);
+  const idleController = useRef<WheelAnimationController | null>(null);
   const revealActive = useRef(false);
   const revealDismissTimer = useRef<number | null>(null);
   const countdownTimers = useRef<number[]>([]);
@@ -88,6 +90,7 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
   const [spinning, setSpinning] = useState(
     wheel.status === "SPINNING",
   );
+  const [idleMotionAllowed, setIdleMotionAllowed] = useState(false);
 
   const [result, setResult] = useState<string | null>(
     wheel.status === "COMPLETED"
@@ -99,12 +102,21 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
     const timers = countdownTimers;
     return () => {
       animationController.current?.cancel();
+      idleController.current?.cancel();
 
       if (revealDismissTimer.current !== null) {
         window.clearTimeout(revealDismissTimer.current);
       }
       timers.current.forEach((timer) => window.clearTimeout(timer));
     };
+  }, []);
+
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const update = () => setIdleMotionAllowed(!media.matches);
+    update();
+    media.addEventListener?.("change", update);
+    return () => media.removeEventListener?.("change", update);
   }, []);
 
   const selectedDuration =
@@ -116,6 +128,34 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
   const busy = fetcher.state !== "idle" || spinning || countdownLabel !== null;
   const ready = wheel.status === "READY" && !spinning;
 
+  const stopIdle = useCallback(() => {
+    idleController.current?.cancel();
+    idleController.current = null;
+  }, []);
+
+  useEffect(() => {
+    stopIdle();
+    if (
+      !idleMotionAllowed ||
+      wheel.status !== "READY" ||
+      spinning ||
+      fetcher.state !== "idle" ||
+      countdownLabel !== null
+    ) {
+      return;
+    }
+
+    idleController.current = animateWheelIdle({
+      startRotation: rotationRef.current,
+      onFrame: (nextRotation) => {
+        rotationRef.current = nextRotation;
+        setRotation(nextRotation);
+      },
+    });
+
+    return stopIdle;
+  }, [countdownLabel, fetcher.state, idleMotionAllowed, spinning, stopIdle, wheel.status]);
+
   const submitSpin = useCallback(() => {
     const blocked = wheelActionBlockReason("spin-wheel", {
       status: wheel.status,
@@ -124,6 +164,7 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
       selectedDuration,
     });
     if (blocked) return { triggered: false, message: blocked };
+    stopIdle();
 
     const submit = () => fetcher.submit(
       { intent: "spin-wheel", wheelId: wheel.id },
@@ -154,7 +195,7 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
       window.setTimeout(() => setCountdownLabel(null), 3800),
     );
     return { triggered: true, message: `${wheel.label}: countdown started.` };
-  }, [broadcastCountdown, countdownLabel, fetcher, selectedDuration, spinning, wheel.id, wheel.label, wheel.status]);
+  }, [broadcastCountdown, countdownLabel, fetcher, selectedDuration, spinning, stopIdle, wheel.id, wheel.label, wheel.status]);
 
   useImperativeHandle(operatorRef, () => ({
     runAction: (action: WheelOperatorAction) => {
@@ -162,6 +203,7 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
       const blocked = wheelActionBlockReason(action, { status: wheel.status, spinning, busy: fetcher.state !== "idle", selectedDuration });
       if (blocked) return { triggered: false, message: blocked };
 
+      stopIdle();
       fetcher.submit({ intent: action, wheelId: wheel.id }, { method: "post" });
       return { triggered: true, message: `${wheel.label}: command submitted.` };
     },
@@ -171,7 +213,7 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
         block: "start",
       });
     },
-  }), [fetcher, selectedDuration, spinning, submitSpin, wheel.id, wheel.label, wheel.status]);
+  }), [fetcher, selectedDuration, spinning, stopIdle, submitSpin, wheel.id, wheel.label, wheel.status]);
 
   useEffect(() => {
     onOperatorStateChange({
@@ -280,6 +322,7 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
     setRevealResult(null);
     revealActive.current = false;
     setSpinning(true);
+    stopIdle();
     animationController.current?.cancel();
 
     if (remainingSeconds === 0) {
@@ -305,6 +348,7 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
   }, [
     fetcher,
     onCompleted,
+    stopIdle,
     wheel.entries.length,
     wheel.id,
     wheel.spinDurationSeconds,
@@ -342,6 +386,7 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
     revealActive.current = false;
     setSpinning(true);
 
+    stopIdle();
     animationController.current?.cancel();
 
     animationController.current = animateWheelSpin({
@@ -387,6 +432,7 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
     wheel.id,
     wheel.type,
     onCompleted,
+    stopIdle,
   ]);
 
   const visibleStatus = spinning
@@ -519,7 +565,7 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
           </div>
 
           <div className="studio-console-controls">
-            <fetcher.Form method="post">
+            <fetcher.Form method="post" onSubmit={stopIdle}>
               <input
                 type="hidden"
                 name="intent"
@@ -546,7 +592,7 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
               </button>
             </fetcher.Form>
 
-            <fetcher.Form method="post">
+            <fetcher.Form method="post" onSubmit={stopIdle}>
               <input
                 type="hidden"
                 name="intent"

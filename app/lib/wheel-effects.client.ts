@@ -2,6 +2,57 @@ export type WheelAnimationController = {
   cancel: () => void;
 };
 
+type AnimateWheelIdleOptions = {
+  startRotation: number;
+  onFrame: (rotation: number) => void;
+  secondsPerTurn?: number;
+};
+
+export function idleRotationAt(
+  startRotation: number,
+  elapsedMilliseconds: number,
+  secondsPerTurn = 28,
+) {
+  return startRotation + elapsedMilliseconds * (360 / (secondsPerTurn * 1000));
+}
+
+export function animateWheelIdle({
+  startRotation,
+  onFrame,
+  secondsPerTurn = 28,
+}: AnimateWheelIdleOptions): WheelAnimationController {
+  if (
+    typeof window === "undefined" ||
+    typeof performance === "undefined" ||
+    typeof requestAnimationFrame === "undefined" ||
+    typeof cancelAnimationFrame === "undefined" ||
+    !Number.isFinite(startRotation) ||
+    !Number.isFinite(secondsPerTurn) ||
+    secondsPerTurn <= 0
+  ) {
+    return { cancel: () => undefined };
+  }
+
+  let canceled = false;
+  let frameId = 0;
+  const startedAt = performance.now();
+
+  const frame = (now: number) => {
+    if (canceled) return;
+    onFrame(idleRotationAt(startRotation, now - startedAt, secondsPerTurn));
+    frameId = requestAnimationFrame(frame);
+  };
+
+  frameId = requestAnimationFrame(frame);
+
+  return {
+    cancel: () => {
+      canceled = true;
+      cancelAnimationFrame(frameId);
+    },
+  };
+}
+
 export function remainingSpinSeconds(
   spunAt: string,
   durationSeconds: number,
