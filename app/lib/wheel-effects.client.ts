@@ -125,11 +125,15 @@ export function wheelSpinTotalDegrees(
   winnerEntryIndex: number,
   durationSeconds: number,
 ) {
+  const pointerAngle = 0;
+  const segmentStartAngle = -90;
   const segmentDegrees = 360 / entryCount;
   const targetCenter = (winnerEntryIndex + 0.5) * segmentDegrees;
   const turns = 14 + Math.ceil(durationSeconds / 4.5);
   const currentNormalized = ((startRotation % 360) + 360) % 360;
-  const targetNormalized = ((360 - targetCenter) % 360 + 360) % 360;
+  const targetNormalized = (
+    (pointerAngle - (segmentStartAngle + targetCenter)) % 360 + 360
+  ) % 360;
   const correction = (targetNormalized - currentNormalized + 360) % 360;
   return turns * 360 + correction;
 }
@@ -297,9 +301,10 @@ export function animateWheelSpin(
   );
   const resumedRotation = startRotation + totalDegrees *
     wheelPositionAt(elapsedSeconds / durationSeconds);
-  let previousSegment = Math.floor(
-    ((resumedRotation % 360) + 360) % 360 / segmentDegrees,
+  const segmentAtPointer = (rotation: number) => Math.floor(
+    (((90 - rotation) % 360) + 360) % 360 / segmentDegrees,
   );
+  let previousSegment = segmentAtPointer(resumedRotation);
 
   const startedAt = performance.now();
   const durationMs = durationSeconds * 1000;
@@ -317,8 +322,7 @@ export function animateWheelSpin(
 
     onFrame(rotation);
 
-    const normalized = ((rotation % 360) + 360) % 360;
-    const currentSegment = Math.floor(normalized / segmentDegrees);
+    const currentSegment = segmentAtPointer(rotation);
 
     if (currentSegment !== previousSegment) {
       const intensity = Math.max(0.15, 1 - rawProgress);

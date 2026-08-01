@@ -129,8 +129,10 @@ test("30 and 120 second trajectories land on the saved segment center", () => {
     const entries = 19;
     const winner = 7;
     const finalRotation = wheelSpinTotalDegrees(0, entries, winner, duration) * wheelPositionAt(1);
-    const expected = (360 - (winner + 0.5) * (360 / entries) + 360) % 360;
+    const expected = (90 - (winner + 0.5) * (360 / entries) + 360) % 360;
     assert.equal(Math.abs(((finalRotation % 360) + 360) % 360 - expected) < 1e-9, true);
+    const renderedWinnerAngle = -90 + (winner + 0.5) * (360 / entries) + finalRotation;
+    assert.equal(Math.abs(((renderedWinnerAngle % 360) + 360) % 360) < 1e-9, true);
   }
 });
 
