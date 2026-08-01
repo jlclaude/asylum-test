@@ -369,16 +369,15 @@ body {
   inset: 0;
   border-radius: 50%;
   pointer-events: none;
+  transform-origin: 50% 50%;
+  will-change: transform;
 }
 
 .studio-wheel-rivets i {
   position: absolute;
-  top: 50%;
-  left: calc(50% - 8px);
   width: 16px;
   height: 16px;
-  transform-origin:
-    8px calc(-50% + 8px);
+  transform: translate(-50%, -50%);
   border: 2px solid #111113;
   border-radius: 50%;
   background:

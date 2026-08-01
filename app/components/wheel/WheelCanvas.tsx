@@ -19,6 +19,20 @@ function entryLabel(entry: WheelEntry) {
   return "displayName" in entry ? entry.displayName : entry.value;
 }
 
+function segmentCenterPosition(index: number, segmentCount: number) {
+  const segmentAngle = (Math.PI * 2) / segmentCount;
+  const startAngle = index * segmentAngle - Math.PI / 2;
+  const centerAngle = startAngle + segmentAngle / 2;
+  const centerX = 50;
+  const centerY = 50;
+  const dotRadius = 46;
+
+  return {
+    x: centerX + Math.cos(centerAngle) * dotRadius,
+    y: centerY + Math.sin(centerAngle) * dotRadius,
+  };
+}
+
 function drawWheel(
   canvas: HTMLCanvasElement,
   entries: WheelEntry[],
@@ -165,15 +179,24 @@ export function WheelCanvas({
         <span />
       </div>
 
-      <div className="studio-wheel-rivets" aria-hidden="true">
-        {Array.from({ length: 32 }, (_, index) => (
-          <i
-            key={index}
-            style={{
-              transform: `rotate(${index * 11.25}deg) translateY(-50%)`,
-            }}
-          />
-        ))}
+      <div
+        className="studio-wheel-rivets"
+        aria-hidden="true"
+        style={{ transform: `rotate(${rotation}deg)` }}
+      >
+        {entries.map((_, index) => {
+          const position = segmentCenterPosition(index, entries.length);
+
+          return (
+            <i
+              key={index}
+              style={{
+                left: `${position.x}%`,
+                top: `${position.y}%`,
+              }}
+            />
+          );
+        })}
       </div>
 
       <canvas
