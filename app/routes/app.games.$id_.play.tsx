@@ -492,16 +492,19 @@ export default function GameModePage() {
         </header>
 
         <div className="studio-toolbar">
-          <button
-            type="button"
-            onClick={() =>
-              navigate(
-                `/app/games/${game.id}`,
-              )
-            }
-          >
-            ← Return to Game Control
-          </button>
+          <div>
+            <button
+              type="button"
+              onClick={() => navigate(`/app/games/${game.id}`)}
+            >
+              ← Return to Game Control
+            </button>
+            {run ? (
+              <button type="button" onClick={() => navigate(`/app/games/${game.id}/broadcast`)}>
+                OPEN BROADCAST MODE
+              </button>
+            ) : null}
+          </div>
 
           <select
             value={themeKey}

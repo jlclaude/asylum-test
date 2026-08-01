@@ -129,6 +129,12 @@ body {
   background: rgba(0,0,0,.22);
 }
 
+.studio-toolbar > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .studio-toolbar button,
 .studio-toolbar select {
   height: 40px;

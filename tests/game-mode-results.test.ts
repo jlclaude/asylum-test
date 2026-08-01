@@ -2,9 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { toPublicGameResults } from "../app/lib/game-results.ts";
-import { adjacentWheelId, fullscreenIsActive, savedSoundIsMuted, shortcutTargetIsEditable, unfinishedWheelIds, wheelActionBlockReason, wheelScrollBehavior } from "../app/lib/game-mode-operator.ts";
+import { adjacentWheelId, broadcastWheelStatus, defaultActiveWheelId, fullscreenIsActive, nextUnfinishedWheelId, savedSoundIsMuted, shortcutTargetIsEditable, unfinishedWheelIds, wheelActionBlockReason, wheelScrollBehavior } from "../app/lib/game-mode-operator.ts";
 import { formatPublicName } from "../app/lib/public-name.ts";
 import { remainingSpinSeconds } from "../app/lib/wheel-effects.client.ts";
+import { broadcastCountdownLabels, shouldAnimateBroadcastCountdown } from "../app/lib/broadcast-countdown.ts";
 
 test("public names use the existing privacy convention", () => {
   assert.equal(formatPublicName("John Quincy Smith"), "John S.");
@@ -76,4 +77,26 @@ test("saved spin recovery rejects invalid timing values", () => {
   assert.equal(remainingSpinSeconds("not-a-date", 60), null);
   assert.equal(remainingSpinSeconds("2026-01-01T00:00:00.000Z", 0), null);
   assert.equal(remainingSpinSeconds("2026-01-01T00:00:00.000Z", Number.NaN), null);
+});
+
+test("broadcast defaults to and advances through unfinished wheels", () => {
+  const wheels = [
+    { id: "one", status: "COMPLETED" as const },
+    { id: "two", status: "READY" as const },
+    { id: "three", status: "READY" as const },
+  ];
+  assert.equal(defaultActiveWheelId(wheels), "two");
+  assert.equal(nextUnfinishedWheelId(wheels, "two"), "three");
+  assert.equal(defaultActiveWheelId(wheels.map((wheel) => ({ ...wheel, status: "COMPLETED" as const }))), "one");
+});
+
+test("broadcast cards distinguish selected time and persisted completion", () => {
+  assert.equal(broadcastWheelStatus({ status: "READY", spinDurationSeconds: 45 }), "TIME SELECTED");
+  assert.equal(broadcastWheelStatus({ status: "COMPLETED", spinDurationSeconds: 45 }), "COMPLETED");
+});
+
+test("broadcast countdown is one three-step sequence and respects reduced motion", () => {
+  assert.deepEqual(broadcastCountdownLabels(), ["3", "2", "1"]);
+  assert.equal(shouldAnimateBroadcastCountdown(false), true);
+  assert.equal(shouldAnimateBroadcastCountdown(true), false);
 });

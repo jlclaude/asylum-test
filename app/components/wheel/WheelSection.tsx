@@ -1,5 +1,6 @@
 import {
   forwardRef,
+  useCallback,
   useEffect,
   useImperativeHandle,
   useMemo,
@@ -21,6 +22,7 @@ import {
   type AsylumThemeKey,
 } from "../../lib/asylum-themes";
 import { wheelActionBlockReason, wheelScrollBehavior } from "../../lib/game-mode-operator";
+import { shouldAnimateBroadcastCountdown } from "../../lib/broadcast-countdown";
 import { WheelCanvas } from "./WheelCanvas";
 import { WheelConsole } from "./WheelConsole";
 import { ContainmentReveal } from "./ContainmentReveal";
@@ -41,6 +43,9 @@ type WheelSectionProps = {
   onSelect: (wheelId: string) => void;
   onCompleted: (wheelId: string) => void;
   onOperatorStateChange: (state: WheelOperatorState) => void;
+  broadcastCountdown?: boolean;
+  allowLockedSelection?: boolean;
+  systemMessage?: string | null;
 };
 
 function entryLabel(
@@ -60,6 +65,9 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
   onSelect,
   onCompleted,
   onOperatorStateChange,
+  broadcastCountdown = false,
+  allowLockedSelection = false,
+  systemMessage = null,
 }, operatorRef) {
   const sectionRef = useRef<HTMLElement>(null);
   const fetcher = useFetcher<WheelActionData>();
@@ -69,12 +77,14 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
     useRef<WheelAnimationController | null>(null);
   const revealActive = useRef(false);
   const revealDismissTimer = useRef<number | null>(null);
+  const countdownTimers = useRef<number[]>([]);
 
   const [rotation, setRotation] = useState(0);
   const rotationRef = useRef(rotation);
   const [pointerTick, setPointerTick] = useState(0);
   const [revealResult, setRevealResult] = useState<string | null>(null);
   const [recoveryError, setRecoveryError] = useState<string | null>(null);
+  const [countdownLabel, setCountdownLabel] = useState<string | null>(null);
   const [spinning, setSpinning] = useState(
     wheel.status === "SPINNING",
   );
@@ -86,12 +96,14 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
   );
 
   useEffect(() => {
+    const timers = countdownTimers;
     return () => {
       animationController.current?.cancel();
 
       if (revealDismissTimer.current !== null) {
         window.clearTimeout(revealDismissTimer.current);
       }
+      timers.current.forEach((timer) => window.clearTimeout(timer));
     };
   }, []);
 
@@ -101,11 +113,52 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
       ? fetcher.data.spinDurationSeconds
       : wheel.spinDurationSeconds;
 
-  const busy = fetcher.state !== "idle" || spinning;
+  const busy = fetcher.state !== "idle" || spinning || countdownLabel !== null;
   const ready = wheel.status === "READY" && !spinning;
+
+  const submitSpin = useCallback(() => {
+    const blocked = wheelActionBlockReason("spin-wheel", {
+      status: wheel.status,
+      spinning,
+      busy: fetcher.state !== "idle" || countdownLabel !== null,
+      selectedDuration,
+    });
+    if (blocked) return { triggered: false, message: blocked };
+
+    const submit = () => fetcher.submit(
+      { intent: "spin-wheel", wheelId: wheel.id },
+      { method: "post" },
+    );
+
+    if (!broadcastCountdown) {
+      submit();
+      return { triggered: true, message: `${wheel.label}: command submitted.` };
+    }
+
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (!shouldAnimateBroadcastCountdown(reducedMotion)) {
+      setCountdownLabel("CONTAINMENT ENGAGED");
+      submit();
+      countdownTimers.current.push(window.setTimeout(() => setCountdownLabel(null), 700));
+      return { triggered: true, message: `${wheel.label}: containment engaged.` };
+    }
+
+    setCountdownLabel("3");
+    countdownTimers.current.push(
+      window.setTimeout(() => setCountdownLabel("2"), 1000),
+      window.setTimeout(() => setCountdownLabel("1"), 2000),
+      window.setTimeout(() => {
+        setCountdownLabel("CONTAINMENT ENGAGED");
+        submit();
+      }, 3000),
+      window.setTimeout(() => setCountdownLabel(null), 3800),
+    );
+    return { triggered: true, message: `${wheel.label}: countdown started.` };
+  }, [broadcastCountdown, countdownLabel, fetcher, selectedDuration, spinning, wheel.id, wheel.label, wheel.status]);
 
   useImperativeHandle(operatorRef, () => ({
     runAction: (action: WheelOperatorAction) => {
+      if (action === "spin-wheel") return submitSpin();
       const blocked = wheelActionBlockReason(action, { status: wheel.status, spinning, busy: fetcher.state !== "idle", selectedDuration });
       if (blocked) return { triggered: false, message: blocked };
 
@@ -118,7 +171,7 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
         block: "start",
       });
     },
-  }), [fetcher, selectedDuration, spinning, wheel.id, wheel.label, wheel.status]);
+  }), [fetcher, selectedDuration, spinning, submitSpin, wheel.id, wheel.label, wheel.status]);
 
   useEffect(() => {
     onOperatorStateChange({
@@ -359,7 +412,7 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
       data-wheel-id={wheel.id}
       data-operator-locked={isOperatorLocked ? "true" : "false"}
       onPointerDown={() => {
-        if (!isOperatorLocked) onSelect(wheel.id);
+        if (!isOperatorLocked || allowLockedSelection) onSelect(wheel.id);
       }}
     >
       <div className="studio-wheel-heading">
@@ -396,6 +449,12 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
             duration={selectedDuration}
             pointerTick={pointerTick}
           />
+
+          {countdownLabel ? (
+            <div className="studio-broadcast-countdown" role="status" aria-live="assertive">
+              <strong>{countdownLabel}</strong>
+            </div>
+          ) : null}
 
           {revealResult ? (
             <ContainmentReveal
@@ -509,7 +568,11 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
               </button>
             </fetcher.Form>
 
-            <fetcher.Form method="post">
+            <fetcher.Form method="post" onSubmit={(event) => {
+              if (!broadcastCountdown) return;
+              event.preventDefault();
+              submitSpin();
+            }}>
               <input
                 type="hidden"
                 name="intent"
@@ -567,6 +630,12 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
           actionMessage.intent !== "spin-wheel" ? (
             <div className="studio-console-message studio-console-message-success">
               {actionMessage.success}
+            </div>
+          ) : null}
+
+          {systemMessage ? (
+            <div className="studio-console-message studio-console-message-success" role="status">
+              {systemMessage}
             </div>
           ) : null}
 

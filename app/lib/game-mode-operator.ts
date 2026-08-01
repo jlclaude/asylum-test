@@ -6,6 +6,22 @@ export function unfinishedWheelIds(wheels: WheelTarget[], completedLocally: Read
   return wheels.filter((wheel) => wheel.status !== "COMPLETED" && !completedLocally.has(wheel.id)).map((wheel) => wheel.id);
 }
 
+export function defaultActiveWheelId(wheels: WheelTarget[]) {
+  return wheels.find((wheel) => wheel.status !== "COMPLETED")?.id ?? wheels[0]?.id ?? null;
+}
+
+export function nextUnfinishedWheelId(wheels: WheelTarget[], completedId: string) {
+  const currentIndex = wheels.findIndex((wheel) => wheel.id === completedId);
+  const ordered = currentIndex < 0
+    ? wheels
+    : [...wheels.slice(currentIndex + 1), ...wheels.slice(0, currentIndex)];
+  return ordered.find((wheel) => wheel.id !== completedId && wheel.status !== "COMPLETED")?.id ?? null;
+}
+
+export function broadcastWheelStatus(wheel: { status: WheelTarget["status"]; spinDurationSeconds: number | null }) {
+  return wheel.status === "READY" && wheel.spinDurationSeconds ? "TIME SELECTED" : wheel.status;
+}
+
 export function adjacentWheelId(ids: string[], activeId: string | null, direction: 1 | -1) {
   if (ids.length === 0) return null;
   const currentIndex = ids.indexOf(activeId ?? "");

@@ -449,6 +449,7 @@ export default function GameControlCenter() {
               <div className="control-section-head"><h2>Quick actions</h2><p>Manage the public game and wheel session.</p></div>
               <div className="control-actions">
                 <button className="control-button control-button-primary control-button-full" type="button" onClick={() => navigate(`/app/games/${game.id}/play`)}>{wheelButtonLabel}</button>
+                {results ? <button className="control-button control-button-full" type="button" onClick={() => navigate(`/app/games/${game.id}/broadcast`)}>OPEN BROADCAST MODE</button> : null}
                 <button className="control-button control-button-secondary control-button-full" type="button" onClick={copyPublicLink}>Copy public claim link</button>
 
                 {game.status === "OPEN" ? (
