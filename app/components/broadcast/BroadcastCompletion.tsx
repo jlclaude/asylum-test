@@ -1,3 +1,4 @@
+import { Link } from "react-router";
 import { GameCompletionCard } from "../results/GameCompletionCard";
 import type { GameResults } from "../results/types";
 
@@ -15,7 +16,7 @@ export function BroadcastCompletion({ gameId, gameTitle, results, secondChance }
   return (
     <div className="broadcast-completion">
       <GameCompletionCard gameId={gameId} gameTitle={gameTitle} results={results} secondChance={secondChance} />
-      <a className="game-results-action" href={`/app/games/${gameId}/play#game-results`}>View completed results</a>
+      <Link className="game-results-action" to={`/app/games/${gameId}#game-results`}>View completed results</Link>
     </div>
   );
 }
