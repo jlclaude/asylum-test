@@ -315,6 +315,8 @@ const styles = `
     margin: 15px 0 0;
     color: #a2a3a8;
     font-size: 15px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
     line-height: 1.65;
   }
 

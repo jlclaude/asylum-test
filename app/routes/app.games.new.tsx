@@ -76,7 +76,7 @@ export async function action({
 
   const description = String(
     formData.get("description") ?? "",
-  ).trim();
+  );
 
   const totalSpotsValue = String(
     formData.get("totalSpots") ?? "",

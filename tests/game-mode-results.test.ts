@@ -13,9 +13,26 @@ import {
 import { broadcastCountdownLabels, shouldAnimateBroadcastCountdown } from "../app/lib/broadcast-countdown.ts";
 import { normalizeDashboardGameCounts } from "../app/lib/dashboard-game-counts.ts";
 import {
+  gameTemplateValues,
   gameSetupTemplateInput,
   validateGameTemplate,
 } from "../app/lib/game-template-validation.ts";
+
+test("template default game descriptions preserve exact plain-text spacing", () => {
+  const description = "  Welcome!\n\nHow to play:\n1. Claim.\n2. Pay.\n\n  Indented note\n";
+  const formData = new FormData();
+  formData.set("name", "Formatted template");
+  formData.set("defaultGameDescription", description);
+  formData.set("totalSpots", "25");
+  formData.set("pricePerSpot", "5");
+  formData.set("wheelCount", "2");
+  formData.set("initialStatus", "OPEN");
+
+  const values = gameTemplateValues(formData);
+  const validation = validateGameTemplate(values);
+  assert.equal(values.defaultGameDescription, description);
+  assert.equal(validation.input?.defaultGameDescription, description);
+});
 import {
   PAYMENT_INSTRUCTIONS_MAX_LENGTH,
   publicPaymentInstructionsPayload,

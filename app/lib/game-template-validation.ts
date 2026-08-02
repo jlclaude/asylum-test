@@ -65,7 +65,7 @@ export function gameTemplateValues(formData: FormData): GameTemplateFormValues {
     name: String(formData.get("name") ?? "").trim(),
     description: String(formData.get("description") ?? "").trim(),
     defaultGameTitle: String(formData.get("defaultGameTitle") ?? "").trim(),
-    defaultGameDescription: String(formData.get("defaultGameDescription") ?? "").trim(),
+    defaultGameDescription: String(formData.get("defaultGameDescription") ?? ""),
     totalSpots: String(formData.get("totalSpots") ?? ""),
     pricePerSpot: String(formData.get("pricePerSpot") ?? ""),
     wheelCount: String(formData.get("wheelCount") ?? "2"),

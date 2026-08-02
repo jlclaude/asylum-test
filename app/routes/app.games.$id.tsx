@@ -268,7 +268,7 @@ const styles = `
   .control-header { display:flex; align-items:flex-end; justify-content:space-between; gap:24px; margin-bottom:22px; }
   .control-eyebrow { margin:0 0 8px; color:#e44e5e; font-size:12px; font-weight:850; letter-spacing:.15em; text-transform:uppercase; }
   .control-header h1 { margin:0; font-size:clamp(30px,5vw,46px); line-height:1.08; }
-  .control-description { max-width:720px; margin:13px 0 0; color:#999aa0; line-height:1.6; }
+  .control-description { max-width:720px; margin:13px 0 0; color:#999aa0; white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.6; }
   .control-status { flex:0 0 auto; padding:8px 12px; border-radius:999px; font-size:12px; font-weight:850; letter-spacing:.06em; }
   .control-status-open { border:1px solid #305c40; color:#97e3b0; background:rgba(29,92,51,.25); }
   .control-status-closed { border:1px solid #66562c; color:#e5cc82; background:rgba(105,82,20,.22); }
