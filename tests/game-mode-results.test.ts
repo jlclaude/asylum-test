@@ -23,10 +23,11 @@ import {
   validateGameTemplate,
 } from "../app/lib/game-template-validation.ts";
 import { renderGameInstructionVariables } from "../app/lib/game-instruction-variables.ts";
-import { selectSecondChanceEntries, toPublicSecondChanceResult } from "../app/lib/second-chance.ts";
+import { formatOrdinal } from "../app/lib/ordinal.ts";
+import { secondChanceResultForWheel, selectSecondChanceEntries, toPublicSecondChanceResult } from "../app/lib/second-chance.ts";
 
 test("template default game descriptions preserve spacing and raw variables", () => {
-  const description = "  Welcome!\n\nHow to play:\n1. Claim.\n2. Pay.\n\nOffset: {{SECOND_CHANCE_NUMBER}}\n  Indented note\n";
+  const description = "  Welcome!\n\nHow to play:\n1. Claim.\n2. Pay.\n\nOffset: {{SECOND_CHANCE_NUMBER}} / {{SECOND_CHANCE_ORDINAL}}\n  Indented note\n";
   const formData = new FormData();
   formData.set("name", "Formatted template");
   formData.set("defaultGameDescription", description);
@@ -186,11 +187,26 @@ test("repeated Second Chance selection is deterministic", () => {
 });
 
 test("game instruction variables replace only the supported token", () => {
-  const raw = "<script>alert(1)</script>\n\nOffset {{SECOND_CHANCE_NUMBER}} and {{OTHER}}";
+  const raw = "<script>alert(1)</script>\n\nOffset {{SECOND_CHANCE_NUMBER}}, {{SECOND_CHANCE_ORDINAL}}, and {{OTHER}}";
   assert.equal(
     renderGameInstructionVariables(raw, { secondChanceNumber: 7 }),
-    "<script>alert(1)</script>\n\nOffset 7 and {{OTHER}}",
+    "<script>alert(1)</script>\n\nOffset 7, 7th, and {{OTHER}}",
   );
+});
+
+test("ordinal formatting handles standard and teen suffixes", () => {
+  assert.deepEqual(
+    [2, 3, 4, 8, 9, 10, 11, 12, 13, 21, 22, 23].map(formatOrdinal),
+    ["2nd", "3rd", "4th", "8th", "9th", "10th", "11th", "12th", "13th", "21st", "22nd", "23rd"],
+  );
+});
+
+test("persisted Second Chance results attach only to their source name wheel", () => {
+  const result = { sourceWheelId: "name-1", offset: 4 };
+  assert.equal(secondChanceResultForWheel(result, { id: "name-1", type: "NAME" }), result);
+  assert.equal(secondChanceResultForWheel(result, { id: "name-2", type: "NAME" }), null);
+  assert.equal(secondChanceResultForWheel(result, { id: "name-1", type: "VALUE" }), null);
+  assert.equal(secondChanceResultForWheel(null, { id: "name-1", type: "NAME" }), null);
 });
 
 test("public Second Chance payload shortens names and omits internal fields", () => {

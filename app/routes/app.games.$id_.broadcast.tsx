@@ -15,6 +15,7 @@ import { useGameModeShortcuts } from "../hooks/useGameModeShortcuts";
 import { useSoundPreference } from "../hooks/useSoundPreference";
 import { ASYLUM_THEMES, type AsylumThemeKey } from "../lib/asylum-themes";
 import { adjacentWheelId, defaultBroadcastActiveWheelId, nextUnfinishedWheelId } from "../lib/game-mode-operator";
+import { secondChanceResultForWheel } from "../lib/second-chance";
 import { action as gameModeAction, loader as gameModeLoader } from "./app.games.$id_.play";
 
 import "../styles/asylum-brand.css";
@@ -27,7 +28,7 @@ export const action = gameModeAction;
 export { ErrorBoundary } from "./app.games.$id_.play";
 
 export default function BroadcastModePage() {
-  const { game, run, results } = useLoaderData<typeof loader>();
+  const { game, run, results, secondChance } = useLoaderData<typeof loader>();
   const fullscreenTarget = useRef<HTMLElement>(null);
   const wheelRef = useRef<WheelOperatorHandle>(null);
   const [themeKey, setThemeKey] = useState<AsylumThemeKey>("classic");
@@ -139,6 +140,7 @@ export default function BroadcastModePage() {
               allowLockedSelection
               broadcastCountdown
               systemMessage={message}
+              secondChanceResult={secondChanceResultForWheel(secondChance, activeWheel)}
               onSelect={setActiveId}
               onOperatorStateChange={setOperatorState}
               onCompleted={() => setMessage("Result persisted. Operator acceptance required.")}

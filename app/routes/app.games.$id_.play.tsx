@@ -17,8 +17,8 @@ import { SpinMusicControls } from "../components/audio/SpinMusicControls";
 import { GameIdentityCard } from "../components/asylum/GameIdentityCard";
 import { GameCompletionCard } from "../components/results/GameCompletionCard";
 import { GameResultsSummary } from "../components/results/GameResultsSummary";
-import { SecondChanceResult } from "../components/second-chance/SecondChanceResult";
 import { getSecondChanceResult } from "../models/second-chance.server";
+import { secondChanceResultForWheel } from "../lib/second-chance";
 import { WheelSection } from "../components/wheel/WheelSection";
 import { GameModeShortcuts } from "../components/wheel/GameModeShortcuts";
 import { GameModeToolbar } from "../components/wheel/GameModeToolbar";
@@ -650,6 +650,7 @@ export default function GameModePage() {
                       onSelect={selectWheel}
                       onCompleted={handleWheelCompleted}
                       onOperatorStateChange={updateOperatorState}
+                      secondChanceResult={secondChanceResultForWheel(secondChance, wheel)}
                     />
                   ),
                 )}
@@ -657,7 +658,6 @@ export default function GameModePage() {
             </section>
           ))}
 
-          {secondChance ? <SecondChanceResult result={secondChance} /> : null}
           {results ? <GameResultsSummary results={results} heading="Live wheel record" /> : null}
 
           {game.status === "COMPLETED" && results?.completedAt ? (

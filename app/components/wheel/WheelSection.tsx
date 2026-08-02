@@ -29,6 +29,7 @@ import { useSpinMusic } from "../../hooks/useSpinMusic";
 import { WheelCanvas } from "./WheelCanvas";
 import { WheelConsole } from "./WheelConsole";
 import { ContainmentReveal } from "./ContainmentReveal";
+import { SecondChanceResult } from "../second-chance/SecondChanceResult";
 import type {
   WheelActionData,
   WheelData,
@@ -49,6 +50,11 @@ type WheelSectionProps = {
   broadcastCountdown?: boolean;
   allowLockedSelection?: boolean;
   systemMessage?: string | null;
+  secondChanceResult?: {
+    offset: number;
+    beforeDisplayName: string | null;
+    afterDisplayName: string | null;
+  } | null;
 };
 
 function entryLabel(
@@ -71,6 +77,7 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
   broadcastCountdown = false,
   allowLockedSelection = false,
   systemMessage = null,
+  secondChanceResult = null,
 }, operatorRef) {
   const sectionRef = useRef<HTMLElement>(null);
   const fetcher = useFetcher<WheelActionData>();
@@ -672,7 +679,9 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
 
           <div className="studio-console-result">
             <span>
-              {wheel.type === "NAME"
+              {secondChanceResult
+                ? "MAIN WINNER"
+                : wheel.type === "NAME"
                 ? "Winner"
                 : "Selected value"}
             </span>
@@ -685,6 +694,12 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
                 : "Result will be displayed here"}
             </small>
           </div>
+
+          {secondChanceResult ? (
+            <div className="studio-wheel-second-chance" aria-live="polite">
+              <SecondChanceResult result={secondChanceResult} />
+            </div>
+          ) : null}
 
           {actionMessage?.error ? (
             <div className="studio-console-message studio-console-message-error">

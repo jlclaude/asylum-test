@@ -26,6 +26,15 @@ export function toPublicSecondChanceResult(result: {
   };
 }
 
+export function secondChanceResultForWheel<T extends { sourceWheelId: string }>(
+  result: T | null,
+  wheel: { id: string; type: "NAME" | "VALUE" },
+): T | null {
+  return result && wheel.type === "NAME" && result.sourceWheelId === wheel.id
+    ? result
+    : null;
+}
+
 function normalizedName(value: string) {
   return value.trim().toLowerCase();
 }

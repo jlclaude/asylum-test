@@ -24,7 +24,7 @@ export function TemplateFormFields({ values, errors, idPrefix }: TemplateFormFie
 
       <label htmlFor={fieldId("defaultGameDescription")}>Default game description</label>
       <textarea id={fieldId("defaultGameDescription")} name="defaultGameDescription" maxLength={2000} defaultValue={values?.defaultGameDescription} />
-      <small>Supported variable: {"{{SECOND_CHANCE_NUMBER}}"}. It remains saved in the template and resolves for each created game.</small>
+      <small>Variables: {"{{SECOND_CHANCE_NUMBER}}"} — plain number, such as 7; {"{{SECOND_CHANCE_ORDINAL}}"} — ordinal number, such as 7th. They remain raw in the template.</small>
       {errors?.defaultGameDescription ? <p className="template-error">{errors.defaultGameDescription}</p> : null}
 
       <div className="template-field-row">
