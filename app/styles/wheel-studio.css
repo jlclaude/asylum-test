@@ -948,6 +948,25 @@ body {
   color: var(--theme-muted);
 }
 
+.studio-accept-result {
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid var(--theme-primary);
+  border-radius: 6px;
+  color: #fff;
+  background: var(--theme-primary-dark);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 950;
+  letter-spacing: .1em;
+}
+
+.studio-accept-result:disabled {
+  cursor: default;
+  opacity: .65;
+}
+
 .studio-console-message {
   padding: 10px;
   border-radius: 6px;

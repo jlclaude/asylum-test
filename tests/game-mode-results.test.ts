@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { toPublicGameResults } from "../app/lib/game-results.ts";
-import { adjacentWheelId, broadcastWheelStatus, defaultActiveWheelId, defaultBroadcastActiveWheelId, fullscreenIsActive, nextUnfinishedWheelId, savedSoundIsMuted, shortcutTargetIsEditable, unfinishedWheelIds, wheelActionBlockReason, wheelScrollBehavior } from "../app/lib/game-mode-operator.ts";
+import { adjacentWheelId, broadcastWheelStatus, defaultActiveWheelId, defaultBroadcastActiveWheelId, defaultGameModeActiveWheelId, fullscreenIsActive, nextUnfinishedWheelId, savedSoundIsMuted, shortcutTargetIsEditable, unfinishedWheelIds, wheelActionBlockReason, wheelScrollBehavior } from "../app/lib/game-mode-operator.ts";
 import { formatPublicName } from "../app/lib/public-name.ts";
 import { idleRotationAt, remainingSpinSeconds, wheelPositionAt, wheelSpinTotalDegrees } from "../app/lib/wheel-effects.client.ts";
 import {
@@ -256,6 +256,16 @@ test("partial games retain only unfinished active targets", () => {
   assert.deepEqual(unfinishedWheelIds(wheels), ["two", "three"]);
   assert.equal(adjacentWheelId(["two", "three"], "two", 1), "three");
   assert.equal(adjacentWheelId(["two", "three"], "two", -1), "three");
+});
+
+test("Game Mode reload keeps the latest completed wheel selected for acceptance", () => {
+  const wheels = [
+    { id: "one", status: "COMPLETED" as const },
+    { id: "two", status: "READY" as const },
+    { id: "three", status: "READY" as const },
+  ];
+  assert.equal(defaultGameModeActiveWheelId(wheels), "one");
+  assert.equal(nextUnfinishedWheelId(wheels, "one"), "two");
 });
 
 test("shortcut safety blocks form targets and spin without duration", () => {

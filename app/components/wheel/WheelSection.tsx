@@ -55,6 +55,8 @@ type WheelSectionProps = {
     beforeDisplayName: string | null;
     afterDisplayName: string | null;
   } | null;
+  resultAccepted?: boolean;
+  onAcceptResult?: (wheelId: string) => void;
 };
 
 function entryLabel(
@@ -78,6 +80,8 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
   allowLockedSelection = false,
   systemMessage = null,
   secondChanceResult = null,
+  resultAccepted = false,
+  onAcceptResult,
 }, operatorRef) {
   const sectionRef = useRef<HTMLElement>(null);
   const fetcher = useFetcher<WheelActionData>();
@@ -699,6 +703,21 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
             <div className="studio-wheel-second-chance" aria-live="polite">
               <SecondChanceResult result={secondChanceResult} />
             </div>
+          ) : null}
+
+          {onAcceptResult && result && (
+            wheel.status === "COMPLETED" ||
+            (fetcher.data?.intent === "complete-wheel" && fetcher.data.wheelId === wheel.id && Boolean(fetcher.data.success))
+          ) ? (
+            <button
+              className="studio-accept-result"
+              type="button"
+              disabled={resultAccepted}
+              onClick={() => onAcceptResult(wheel.id)}
+              aria-label={`Accept saved ${wheel.type === "VALUE" ? "value" : "winner"} ${result}`}
+            >
+              {resultAccepted ? "RESULT ACCEPTED" : "ACCEPT RESULT"}
+            </button>
           ) : null}
 
           {actionMessage?.error ? (

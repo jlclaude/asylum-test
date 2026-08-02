@@ -33,7 +33,7 @@ import type {
 import { useFullscreen } from "../hooks/useFullscreen";
 import { useGameModeShortcuts } from "../hooks/useGameModeShortcuts";
 import { useSoundPreference } from "../hooks/useSoundPreference";
-import { adjacentWheelId, unfinishedWheelIds } from "../lib/game-mode-operator";
+import { adjacentWheelId, defaultGameModeActiveWheelId, nextUnfinishedWheelId, unfinishedWheelIds } from "../lib/game-mode-operator";
 import {
   ASYLUM_THEMES,
   type AsylumThemeKey,
@@ -307,9 +307,6 @@ export default function GameModePage() {
   const navigate = useNavigate();
   const fullscreenTarget = useRef<HTMLElement>(null);
   const wheelRefs = useRef(new Map<string, WheelOperatorHandle>());
-  const operatorStatesRef = useRef<Record<string, WheelOperatorState>>({});
-  const completionAdvance = useRef(false);
-  const firstScroll = useRef(true);
 
   const beginFetcher =
     useFetcher<WheelActionData>();
@@ -322,6 +319,7 @@ export default function GameModePage() {
   const [operatorStates, setOperatorStates] = useState<Record<string, WheelOperatorState>>({});
   const [operatorMessage, setOperatorMessage] = useState<string | null>(null);
   const [completedLocally, setCompletedLocally] = useState<Set<string>>(() => new Set());
+  const [acceptedIds, setAcceptedIds] = useState<Set<string>>(() => new Set());
   const [focusReleased, setFocusReleased] = useState(false);
 
   const orderedWheels = useMemo(
@@ -336,16 +334,16 @@ export default function GameModePage() {
     [completedLocally, orderedWheels],
   );
   const [activeWheelId, setActiveWheelId] = useState<string | null>(
-    () => unfinishedWheels[0]?.id ?? null,
+    () => defaultGameModeActiveWheelId(orderedWheels),
   );
   const { muted, toggleMuted } = useSoundPreference();
   const { isFullscreen, toggleFullscreen } = useFullscreen(fullscreenTarget);
 
   useEffect(() => {
     if (focusReleased && activeWheelId === null) return;
-    if (activeWheelId && unfinishedWheels.some((wheel) => wheel.id === activeWheelId)) return;
-    setActiveWheelId(unfinishedWheels[0]?.id ?? null);
-  }, [activeWheelId, focusReleased, unfinishedWheels]);
+    if (activeWheelId && orderedWheels.some((wheel) => wheel.id === activeWheelId)) return;
+    setActiveWheelId(defaultGameModeActiveWheelId(orderedWheels));
+  }, [activeWheelId, focusReleased, orderedWheels]);
 
   useEffect(() => {
     if (!operatorMessage) return;
@@ -353,23 +351,7 @@ export default function GameModePage() {
     return () => window.clearTimeout(timer);
   }, [operatorMessage]);
 
-  useEffect(() => {
-    if (!activeWheelId) return;
-    if (firstScroll.current) {
-      firstScroll.current = false;
-      return;
-    }
-
-    const anySpinning = Object.values(operatorStatesRef.current).some((state) => state.spinning);
-    if (anySpinning && !completionAdvance.current) return;
-
-    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    wheelRefs.current.get(activeWheelId)?.scrollIntoView(reducedMotion);
-    completionAdvance.current = false;
-  }, [activeWheelId]);
-
   const updateOperatorState = useCallback((state: WheelOperatorState) => {
-    operatorStatesRef.current = { ...operatorStatesRef.current, [state.id]: state };
     setOperatorStates((current) => {
       const previous = current[state.id];
       if (previous && previous.label === state.label && previous.status === state.status && previous.selectedDuration === state.selectedDuration && previous.spinning === state.spinning) return current;
@@ -385,18 +367,29 @@ export default function GameModePage() {
   const handleWheelCompleted = useCallback((wheelId: string) => {
     setCompletedLocally((current) => new Set(current).add(wheelId));
     setFocusReleased(false);
-    setActiveWheelId((current) => {
-      if (current !== wheelId) return current;
-      const currentIndex = orderedWheels.findIndex((wheel) => wheel.id === wheelId);
-      const candidates = [
-        ...orderedWheels.slice(currentIndex + 1),
-        ...orderedWheels.slice(0, currentIndex),
-      ];
-      const next = candidates.find((wheel) => wheel.id !== wheelId && wheel.status !== "COMPLETED");
-      completionAdvance.current = true;
-      return next?.id ?? null;
+    setActiveWheelId(wheelId);
+  }, []);
+
+  const acceptResult = useCallback((wheelId: string) => {
+    setAcceptedIds((current) => new Set(current).add(wheelId));
+    const nextId = nextUnfinishedWheelId(
+      orderedWheels.map((wheel) => completedLocally.has(wheel.id)
+        ? { ...wheel, status: "COMPLETED" as const }
+        : wheel),
+      wheelId,
+    );
+    if (!nextId) {
+      setOperatorMessage("All persisted results accepted.");
+      return;
+    }
+    setFocusReleased(false);
+    setActiveWheelId(nextId);
+    setOperatorMessage(`${orderedWheels.find((wheel) => wheel.id === nextId)?.label ?? "Next wheel"} selected.`);
+    window.requestAnimationFrame(() => {
+      const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      wheelRefs.current.get(nextId)?.scrollIntoView(reducedMotion);
     });
-  }, [orderedWheels]);
+  }, [completedLocally, orderedWheels]);
 
   const activeWheel = activeWheelId
     ? operatorStates[activeWheelId] ?? (() => {
@@ -651,6 +644,8 @@ export default function GameModePage() {
                       onCompleted={handleWheelCompleted}
                       onOperatorStateChange={updateOperatorState}
                       secondChanceResult={secondChanceResultForWheel(secondChance, wheel)}
+                      resultAccepted={acceptedIds.has(wheel.id)}
+                      onAcceptResult={acceptResult}
                     />
                   ),
                 )}
@@ -660,7 +655,7 @@ export default function GameModePage() {
 
           {results ? <GameResultsSummary results={results} heading="Live wheel record" /> : null}
 
-          {game.status === "COMPLETED" && results?.completedAt ? (
+          {game.status === "COMPLETED" && results?.completedAt && activeWheelId && acceptedIds.has(activeWheelId) ? (
             <GameCompletionCard
               gameId={game.id}
               gameTitle={game.title}

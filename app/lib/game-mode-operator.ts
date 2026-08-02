@@ -10,6 +10,11 @@ export function defaultActiveWheelId(wheels: WheelTarget[]) {
   return wheels.find((wheel) => wheel.status !== "COMPLETED")?.id ?? wheels[0]?.id ?? null;
 }
 
+export function defaultGameModeActiveWheelId(wheels: WheelTarget[]) {
+  const completed = wheels.filter((wheel) => wheel.status === "COMPLETED");
+  return completed.at(-1)?.id ?? defaultActiveWheelId(wheels);
+}
+
 export function defaultBroadcastActiveWheelId(wheels: WheelTarget[]) {
   const completed = wheels.filter((wheel) => wheel.status === "COMPLETED");
   return completed.at(-1)?.id ?? defaultActiveWheelId(wheels);
