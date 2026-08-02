@@ -660,6 +660,7 @@ export default function GameModePage() {
               gameId={game.id}
               gameTitle={game.title}
               results={results}
+              secondChance={secondChance}
             />
           ) : null}
           </>
