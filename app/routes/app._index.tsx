@@ -1,5 +1,6 @@
 import type { LoaderFunctionArgs } from "react-router";
-import { useLoaderData, useNavigate } from "react-router";
+import type { GameStatus } from "@prisma/client";
+import { Form, useLoaderData, useNavigate } from "react-router";
 import {
   getDashboardGameCountsForShop,
   getGamesForShop,
@@ -9,14 +10,22 @@ import { authenticate } from "../shopify.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const { session } = await authenticate.admin(request);
+  const url = new URL(request.url);
+  const search = url.searchParams.get("search")?.trim() ?? "";
+  const requestedStatus = url.searchParams.get("status") ?? "ALL";
+  const status: GameStatus | "ALL" = ["OPEN", "CLOSED", "READY", "IN_PROGRESS", "COMPLETED"].includes(requestedStatus)
+    ? requestedStatus as GameStatus
+    : "ALL";
+  const sort = url.searchParams.get("sort") === "oldest" ? "oldest" : "newest";
   const [games, counts, templateSummary] = await Promise.all([
-    getGamesForShop(session.shop),
+    getGamesForShop(session.shop, { search, status, sort }),
     getDashboardGameCountsForShop(session.shop),
     getGameTemplateSummaryForShop(session.shop),
   ]);
 
   return {
     counts,
+    filters: { search, status, sort },
     templateSummary,
     games: games.map((game) => ({
       id: game.id,
@@ -462,6 +471,25 @@ const styles = `
     font-size: 18px;
   }
 
+  .asylum-game-filters {
+    display: grid;
+    grid-template-columns: minmax(180px, 1fr) auto auto auto;
+    gap: 9px;
+    margin: 16px 0;
+  }
+
+  .asylum-game-filters input,
+  .asylum-game-filters select,
+  .asylum-game-filters button {
+    min-height: 40px;
+    padding: 0 10px;
+    border: 1px solid #3d3d42;
+    border-radius: 8px;
+    color: #ffffff;
+    background: #151517;
+    font: inherit;
+  }
+
   @media (max-width: 820px) {
     .asylum-dashboard {
       padding: 20px;
@@ -475,6 +503,10 @@ const styles = `
 
     .asylum-stats,
     .asylum-content-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .asylum-game-filters {
       grid-template-columns: 1fr;
     }
 
@@ -511,7 +543,7 @@ const styles = `
 
 export default function AppIndex() {
   const navigate = useNavigate();
-  const { counts, games, templateSummary } = useLoaderData<typeof loader>();
+  const { counts, filters, games, templateSummary } = useLoaderData<typeof loader>();
 
   const stats = [
     {
@@ -530,6 +562,11 @@ export default function AppIndex() {
       label: "Completed games",
       value: String(counts.completed),
       note: "Finished draws and winners",
+    },
+    {
+      label: "Archived games",
+      value: String(counts.archived),
+      note: "Preserved outside the active list",
     },
   ];
 
@@ -570,6 +607,7 @@ export default function AppIndex() {
             </div>
 
             <div className="asylum-hero-actions">
+              <button className="asylum-secondary-button" type="button" onClick={() => navigate("/app/games/archived")}>Archived Games</button>
               <button className="asylum-secondary-button" type="button" onClick={() => navigate("/app/templates")}>Manage Templates</button>
               <button className="asylum-primary-button" type="button" onClick={() => navigate("/app/games/new")}>+ Create Game</button>
             </div>
@@ -601,6 +639,13 @@ export default function AppIndex() {
                       }`}
                 </span>
               </div>
+
+              <Form className="asylum-game-filters" method="get">
+                <input type="search" name="search" defaultValue={filters.search} placeholder="Search games by title" aria-label="Search games by title" />
+                <select name="status" defaultValue={filters.status} aria-label="Filter by gameplay status"><option value="ALL">All statuses</option><option value="OPEN">Open</option><option value="CLOSED">Closed</option><option value="READY">Ready</option><option value="IN_PROGRESS">In progress</option><option value="COMPLETED">Completed</option></select>
+                <select name="sort" defaultValue={filters.sort} aria-label="Sort games by created date"><option value="newest">Newest created</option><option value="oldest">Oldest created</option></select>
+                <button type="submit">Apply</button>
+              </Form>
 
               {games.length === 0 ? (
                 <div className="asylum-empty-state">

@@ -13,6 +13,11 @@ import {
 import { broadcastCountdownLabels, shouldAnimateBroadcastCountdown } from "../app/lib/broadcast-countdown.ts";
 import { normalizeDashboardGameCounts } from "../app/lib/dashboard-game-counts.ts";
 import {
+  archiveBlockReason,
+  deleteConfirmationMatches,
+  duplicateGameTitle,
+} from "../app/lib/game-administration.ts";
+import {
   gameTemplateValues,
   gameSetupTemplateInput,
   validateGameTemplate,
@@ -91,7 +96,7 @@ test("dashboard game counts preserve every status and normalize missing groups",
       { status: "READY", count: 1 },
       { status: "IN_PROGRESS", count: 1 },
       { status: "COMPLETED", count: 4 },
-    ]),
+    ], 2),
     {
       total: 11,
       open: 3,
@@ -99,6 +104,7 @@ test("dashboard game counts preserve every status and normalize missing groups",
       ready: 1,
       inProgress: 1,
       completed: 4,
+      archived: 2,
     },
   );
 
@@ -109,7 +115,23 @@ test("dashboard game counts preserve every status and normalize missing groups",
     ready: 0,
     inProgress: 0,
     completed: 0,
+    archived: 0,
   });
+});
+
+test("game administration enforces archive and deletion safety", () => {
+  assert.equal(archiveBlockReason("OPEN", false), null);
+  assert.match(archiveBlockReason("IN_PROGRESS", false) ?? "", /in-progress/i);
+  assert.match(archiveBlockReason("READY", true) ?? "", /spinning/i);
+  assert.equal(deleteConfirmationMatches("DELETE", "Friday Game"), true);
+  assert.equal(deleteConfirmationMatches("Friday Game", "Friday Game"), true);
+  assert.equal(deleteConfirmationMatches("friday game", "Friday Game"), false);
+});
+
+test("duplicated games receive a bounded copy title", () => {
+  assert.equal(duplicateGameTitle("Friday Game"), "Friday Game Copy");
+  assert.equal(duplicateGameTitle("x".repeat(150)).length, 150);
+  assert.match(duplicateGameTitle("x".repeat(150)), / Copy$/);
 });
 
 test("public names use the existing privacy convention", () => {

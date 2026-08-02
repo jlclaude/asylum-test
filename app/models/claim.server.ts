@@ -38,6 +38,13 @@ export async function createPublicClaim(input: CreateClaimInput) {
       };
     }
 
+    if (game.archivedAt) {
+      return {
+        success: false as const,
+        error: "This game is no longer active.",
+      };
+    }
+
     if (game.status !== "OPEN") {
       return {
         success: false as const,

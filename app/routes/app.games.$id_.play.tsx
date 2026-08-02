@@ -93,6 +93,7 @@ export async function loader({
       title: game.title,
       description: game.description,
       status: game.status,
+      archivedAt: game.archivedAt?.toISOString() ?? null,
       wheelCount: game.wheelCount,
       totalSpots: game.totalSpots,
       pricePerSpot:
@@ -528,6 +529,8 @@ export default function GameModePage() {
           </select>
         </div>
 
+        {game.archivedAt ? <div className="studio-begin-error">This game is archived. Results remain readable, but gameplay controls are disabled until it is restored.</div> : null}
+
         <GameModeToolbar
           activeWheel={activeWheel}
           muted={muted}
@@ -588,9 +591,12 @@ export default function GameModePage() {
                   beginFetcher.state !==
                     "idle" ||
                   game.status !== "CLOSED"
+                  || Boolean(game.archivedAt)
                 }
               >
-                {game.status !== "CLOSED"
+                {game.archivedAt
+                  ? "GAME ARCHIVED"
+                  : game.status !== "CLOSED"
                   ? "CLOSE GAME FIRST"
                   : beginFetcher.state !==
                         "idle"
@@ -634,7 +640,7 @@ export default function GameModePage() {
                         index + 1
                       }
                       isActive={activeWheelId === wheel.id}
-                      isOperatorLocked={wheel.status === "COMPLETED" || completedLocally.has(wheel.id)}
+                      isOperatorLocked={Boolean(game.archivedAt) || wheel.status === "COMPLETED" || completedLocally.has(wheel.id)}
                       onSelect={selectWheel}
                       onCompleted={handleWheelCompleted}
                       onOperatorStateChange={updateOperatorState}

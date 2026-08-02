@@ -6,6 +6,7 @@ import type {
 } from "react-router";
 import {
   isRouteErrorResponse,
+  useActionData,
   useFetcher,
   useLoaderData,
   useNavigate,
@@ -19,7 +20,11 @@ import {
   updateClaim,
 } from "../models/claim.server";
 import {
+  archiveGame,
+  duplicateGameSetup,
   getGameForShop,
+  permanentlyDeleteGame,
+  restoreGame,
   updateGameStatus,
 } from "../models/game.server";
 import { createGameTemplate } from "../models/game-template.server";
@@ -27,6 +32,7 @@ import { gameSetupTemplateInput, validateGameTemplate } from "../lib/game-templa
 import { getGameResults } from "../models/game-results.server";
 import { getShopSettings } from "../models/shop-settings.server";
 import { GameResultsSummary } from "../components/results/GameResultsSummary";
+import { GameAdministration } from "../components/games/GameAdministration";
 import { authenticate } from "../shopify.server";
 
 import "../styles/game-results.css";
@@ -65,6 +71,7 @@ export async function loader({
       pricePerSpot: game.pricePerSpot.toString(),
       wheelCount: game.wheelCount,
       status: game.status,
+      archivedAt: game.archivedAt?.toISOString() ?? null,
       createdAt: game.createdAt.toISOString(),
       updatedAt: game.updatedAt.toISOString(),
     },
@@ -82,6 +89,7 @@ export async function loader({
     results,
     paymentInstructionsConfigured: Boolean(shopSettings?.paymentInstructions),
     publicUrl: `${requestUrl.origin}/games/${game.id}`,
+    duplicated: requestUrl.searchParams.get("duplicated") === "1",
   };
 }
 
@@ -94,8 +102,8 @@ type ActionData = {
 export async function action({
   request,
   params,
-}: ActionFunctionArgs): Promise<ActionData> {
-  const { session } = await authenticate.admin(request);
+}: ActionFunctionArgs): Promise<Response | ActionData> {
+  const { session, redirect } = await authenticate.admin(request);
 
   if (!params.id) return { error: "Game ID is missing." };
 
@@ -106,6 +114,36 @@ export async function action({
   const intent = String(formData.get("intent") ?? "");
 
   try {
+    if (intent === "duplicate-game") {
+      const duplicate = await duplicateGameSetup(game.id, session.shop);
+      return redirect(`/app/games/${duplicate.id}?duplicated=1`);
+    }
+
+    if (intent === "archive-game") {
+      await archiveGame(game.id, session.shop);
+      return { success: "Game archived. All claims and results were preserved.", intent };
+    }
+
+    if (intent === "restore-game") {
+      const result = await restoreGame(game.id, session.shop);
+      return result.count
+        ? { success: "Game restored with its original gameplay status.", intent }
+        : { error: "Only an archived game can be restored.", intent };
+    }
+
+    if (intent === "delete-game") {
+      await permanentlyDeleteGame(
+        game.id,
+        session.shop,
+        String(formData.get("deleteConfirmation") ?? ""),
+      );
+      return redirect("/app/games/archived?deleted=1");
+    }
+
+    if (game.archivedAt) {
+      return { error: "This game is archived. Restore it before making changes.", intent };
+    }
+
     if (intent === "save-game-template") {
       const templateName = String(formData.get("templateName") ?? "").trim();
       const setupInput = gameSetupTemplateInput(templateName, game);
@@ -317,6 +355,7 @@ const styles = `
   .control-button-primary { border:1px solid #ee5464; color:white; background:linear-gradient(180deg,#d94051,#9d2432); }
   .control-button-secondary { border:1px solid #3c3c41; color:#d7d7da; background:#222225; }
   .control-button-warning { border:1px solid #765122; color:#f1cd83; background:#392a16; }
+  .control-button-danger { border:1px solid #b53c4b; color:#fff; background:#721f2a; }
   .control-button-full { width:100%; }
   .control-empty { padding:48px 20px; border:1px dashed #3a3a3f; border-radius:12px; color:#77787e; text-align:center; }
   .control-actions { display:grid; gap:10px; }
@@ -333,6 +372,11 @@ const styles = `
   .control-textarea { min-height:78px; padding:11px; resize:vertical; }
   .control-input:focus,.control-textarea:focus { border-color:#d94b5b; box-shadow:0 0 0 3px rgba(217,75,91,.14); }
   .control-lock-note { padding:13px; border:1px solid #4f4055; border-radius:10px; color:#cbb5d2; background:rgba(64,40,72,.22); font-size:12px; line-height:1.5; }
+  .game-administration { margin-top:18px; }
+  .game-danger-zone { margin-top:22px; padding:18px; border:2px solid #7a2833; border-radius:12px; background:rgba(90,25,35,.2); }
+  .game-danger-zone h3 { margin:0 0 7px; color:#ff929e; }
+  .game-danger-zone p { color:#c29ba0; line-height:1.55; }
+  .game-danger-zone summary { margin-bottom:14px; cursor:pointer; font-weight:850; }
   @media (max-width:1000px) { .control-stats{grid-template-columns:repeat(3,minmax(0,1fr));}.control-grid{grid-template-columns:1fr;} }
   @media (max-width:700px) { .control-page{padding:18px;}.control-header{align-items:flex-start;flex-direction:column;}.control-stats{grid-template-columns:repeat(2,minmax(0,1fr));}.control-toolbar{flex-direction:column;} }
   @media (max-width:460px) { .control-page{padding:13px;}.control-card{padding:18px;}.control-stats{grid-template-columns:1fr;}.control-claim-top{flex-direction:column;}.control-claim-comment{margin-left:0;} }
@@ -341,9 +385,10 @@ const styles = `
 type FilterValue = "ALL" | "PENDING" | "CONFIRMED" | "CANCELED";
 
 export default function GameControlCenter() {
+  const actionData = useActionData<ActionData>();
   const navigate = useNavigate();
   const fetcher = useFetcher<ActionData>();
-  const { game, claims, totals, publicUrl, results, paymentInstructionsConfigured } = useLoaderData<typeof loader>();
+  const { game, claims, totals, publicUrl, results, paymentInstructionsConfigured, duplicated } = useLoaderData<typeof loader>();
 
   const [filter, setFilter] = useState<FilterValue>("ALL");
   const [search, setSearch] = useState("");
@@ -419,6 +464,11 @@ export default function GameControlCenter() {
             <div className="control-progress-head"><span>Game progress</span><span>{claimed} / {game.totalSpots} · {percentage}%</span></div>
             <div className="control-progress-track"><div className="control-progress-fill" style={{ width: `${percentage}%` }} /></div>
           </section>
+
+          {game.archivedAt ? <div className="control-message control-message-error">Archived {formatDate(game.archivedAt)}. Gameplay and claim changes are disabled until restored.</div> : null}
+          {duplicated ? <div className="control-message control-message-success">Game duplicated. This new copy is OPEN and contains setup only.</div> : null}
+          {actionData?.error ? <div className="control-message control-message-error">{actionData.error}</div> : null}
+          {actionData?.success ? <div className="control-message control-message-success">{actionData.success}</div> : null}
 
           {results ? (
             <GameResultsSummary
@@ -513,6 +563,7 @@ export default function GameControlCenter() {
               )}
             </aside>
           </section>
+          <GameAdministration game={game} />
         </div>
       </main>
     </>

@@ -58,6 +58,7 @@ export async function loader({
       totalSpots: game.totalSpots,
       pricePerSpot: game.pricePerSpot.toString(),
       status: game.status,
+      archived: game.archivedAt !== null,
     },
     totals,
     results,
@@ -713,7 +714,7 @@ export default function PublicGamePage() {
       : 0;
 
   const claimsOpen =
-    game.status === "OPEN" && remaining > 0;
+    !game.archived && game.status === "OPEN" && remaining > 0;
 
   return (
     <>
@@ -752,12 +753,12 @@ export default function PublicGamePage() {
               <span
                 className={[
                   "public-live-status",
-                  game.status !== "OPEN"
+                  !claimsOpen
                     ? "public-live-status-closed"
                     : "",
                 ].join(" ")}
               >
-                {game.status === "COMPLETED" ? "GAME COMPLETE" : claimsOpen ? "CLAIMS OPEN" : "CLAIMS CLOSED"}
+                {game.archived ? "GAME ARCHIVED" : game.status === "COMPLETED" ? "GAME COMPLETE" : claimsOpen ? "CLAIMS OPEN" : "CLAIMS CLOSED"}
               </span>
             </div>
           </section>
@@ -831,16 +832,20 @@ export default function PublicGamePage() {
 
           <section className="public-grid">
             <article className="public-card">
-              <h3>Claim your spots</h3>
+              <h3>{game.archived ? "Game archived" : "Claim your spots"}</h3>
 
               <p className="public-card-intro">
-                Your claim reserves spots immediately and remains
-                pending until the host confirms it.
+                {game.archived
+                  ? "This game is no longer active."
+                  : "Your claim reserves spots immediately and remains pending until the host confirms it."}
               </p>
 
-              <PaymentInstructionsCard instructions={paymentInstructions} />
+              {game.archived ? (
+                <div className="public-notice">Claims are disabled because this game has been archived by the host.</div>
+              ) : (<>
+                <PaymentInstructionsCard instructions={paymentInstructions} />
 
-              <Form className="public-form" method="post">
+                <Form className="public-form" method="post">
                 <div className="public-field">
                   <label htmlFor="displayName">
                     Facebook display name
@@ -923,7 +928,8 @@ export default function PublicGamePage() {
                       ? "Secure My Spots"
                       : "Claims Closed"}
                 </button>
-              </Form>
+                </Form>
+              </>)}
             </article>
 
             <article className="public-card">

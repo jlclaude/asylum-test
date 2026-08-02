@@ -44,6 +44,7 @@ model Game {
   pricePerSpot Decimal
   wheelCount   Int        @default(2)
   status       GameStatus @default(OPEN)
+  archivedAt   DateTime?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
@@ -52,6 +53,7 @@ model Game {
 
   @@index([shop])
   @@index([shop, status])
+  @@index([shop, archivedAt])
 }
 
 model GameTemplate {

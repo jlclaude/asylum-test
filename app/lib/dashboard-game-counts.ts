@@ -7,6 +7,7 @@ export type DashboardGameCounts = {
   ready: number;
   inProgress: number;
   completed: number;
+  archived: number;
 };
 
 type StatusCount = {
@@ -17,6 +18,7 @@ type StatusCount = {
 export function normalizeDashboardGameCounts(
   total: number,
   statusCounts: StatusCount[],
+  archived = 0,
 ): DashboardGameCounts {
   const counts: DashboardGameCounts = {
     total,
@@ -25,6 +27,7 @@ export function normalizeDashboardGameCounts(
     ready: 0,
     inProgress: 0,
     completed: 0,
+    archived,
   };
 
   for (const statusCount of statusCounts) {

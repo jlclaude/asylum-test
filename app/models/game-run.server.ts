@@ -80,6 +80,7 @@ export async function beginGameRun(gameId: string, shop: string) {
     });
 
     if (!game) throw new Error("Game not found.");
+    if (game.archivedAt) throw new Error("This game is archived. Restore it before using Game Mode.");
     if (game.status !== "CLOSED") {
       throw new Error("Close the game before beginning Game Mode.");
     }
@@ -194,7 +195,7 @@ export async function shuffleGameWheel(
         gameRound: {
           gameRun: {
             gameId,
-            game: { shop },
+            game: { shop, archivedAt: null },
           },
         },
       },
@@ -231,7 +232,7 @@ export async function selectGameWheelDuration(
         gameRound: {
           gameRun: {
             gameId,
-            game: { shop },
+            game: { shop, archivedAt: null },
           },
         },
       },
@@ -271,7 +272,7 @@ export async function startGameWheelSpin(
         gameRound: {
           gameRun: {
             gameId,
-            game: { shop },
+            game: { shop, archivedAt: null },
           },
         },
       },
@@ -365,7 +366,7 @@ export async function completeGameWheelSpin(
         gameRound: {
           gameRun: {
             gameId,
-            game: { shop },
+            game: { shop, archivedAt: null },
           },
         },
       },
