@@ -6,6 +6,7 @@ import { adjacentWheelId, broadcastWheelStatus, defaultActiveWheelId, defaultBro
 import { formatPublicName } from "../app/lib/public-name.ts";
 import { idleRotationAt, remainingSpinSeconds, wheelPositionAt, wheelSpinTotalDegrees } from "../app/lib/wheel-effects.client.ts";
 import {
+  chooseRandomTrack,
   getSpinMusicSnapshot,
   loopingPlaybackOffset,
   subscribeToSpinMusic,
@@ -387,8 +388,10 @@ test("recovered spin music resumes at the looping playback offset", () => {
 
 test("spin music store exposes an SSR-safe stable named API", () => {
   assert.deepEqual(getSpinMusicSnapshot(), {
-    tracks: [],
-    trackId: "",
+    idleTracks: [],
+    spinTracks: [],
+    activeTrackId: "",
+    activePlaylist: null,
     volume: 0.7,
     muted: false,
     status: "OFF",
@@ -398,4 +401,11 @@ test("spin music store exposes an SSR-safe stable named API", () => {
   const unsubscribe = subscribeToSpinMusic(() => undefined);
   assert.equal(typeof unsubscribe, "function");
   unsubscribe();
+});
+
+test("music randomization avoids immediate repeats when alternatives exist", () => {
+  const tracks = [{ id: "one" }, { id: "two" }, { id: "three" }];
+  assert.notEqual(chooseRandomTrack(tracks, "one", () => 0)?.id, "one");
+  assert.equal(chooseRandomTrack([{ id: "only" }], "only", () => 0)?.id, "only");
+  assert.equal(chooseRandomTrack([], "", () => 0), null);
 });

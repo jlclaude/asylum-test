@@ -85,7 +85,7 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
 }, operatorRef) {
   const sectionRef = useRef<HTMLElement>(null);
   const fetcher = useFetcher<WheelActionData>();
-  const { startSpin: startMusic, stop: stopMusic } = useSpinMusic();
+  const { startSpin: startMusic, finishSpin: finishMusic, stop: stopMusic } = useSpinMusic();
   const lastSpinToken = useRef<string | null>(null);
   const completionSent = useRef(false);
   const animationController =
@@ -316,7 +316,7 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
     }
 
     const completeRecoveredSpin = () => {
-      stopMusic(wheel.id);
+      finishMusic(wheel.id);
       setSpinning(false);
       revealActive.current = true;
       setRevealResult(finalResult);
@@ -371,6 +371,7 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
     });
   }, [
     fetcher,
+    finishMusic,
     onCompleted,
     startMusic,
     stopIdle,
@@ -429,7 +430,7 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
         setPointerTick((tick) => tick + 1);
       },
       onComplete: () => {
-        stopMusic(wheel.id);
+        finishMusic(wheel.id);
         setSpinning(false);
         revealActive.current = true;
         setRevealResult(finalResult);
@@ -455,6 +456,7 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
 
   }, [
     fetcher,
+    finishMusic,
     themeKey,
     wheel.entries.length,
     wheel.id,

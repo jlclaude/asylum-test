@@ -1,6 +1,33 @@
 import { reactRouter } from "@react-router/dev/vite";
 import { defineConfig, type UserConfig } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
+import { readdirSync } from "node:fs";
+import { extname, resolve } from "node:path";
+
+const SUPPORTED_MUSIC_EXTENSIONS = new Set([".mp3", ".wav", ".ogg", ".m4a"]);
+function scanMusicFolder(folder: string, kind: "idle" | "spin") {
+  const directory = resolve(process.cwd(), "public", "music", folder);
+  let files: string[] = [];
+  try {
+    files = readdirSync(directory, { withFileTypes: true })
+      .filter((entry) => entry.isFile() && SUPPORTED_MUSIC_EXTENSIONS.has(extname(entry.name).toLowerCase()))
+      .map((entry) => entry.name)
+      .sort((left, right) => left.localeCompare(right));
+  } catch {
+    if (process.env.NODE_ENV !== "production") console.warn(`[Asylum music] Folder unavailable: ${directory}`);
+  }
+  if (files.length === 0 && process.env.NODE_ENV !== "production") {
+    console.warn(`[Asylum music] No supported audio files found in ${directory}`);
+  }
+  return files.map((file) => ({
+    id: `${kind}:${file}`,
+    label: file.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim(),
+    file: `/music/${encodeURIComponent(folder)}/${encodeURIComponent(file)}`,
+  }));
+}
+
+const preSpinMusicLibrary = scanMusicFolder("pre-spin music", "idle");
+const spinMusicLibrary = scanMusicFolder("spin music", "spin");
 
 // Related: https://github.com/remix-run/remix/issues/2835#issuecomment-1144102176
 // Replace the HOST env var with SHOPIFY_APP_URL so that it doesn't break the Vite server.
@@ -43,6 +70,10 @@ if (host === "localhost" && appUrl.protocol === "https:") {
 }
 
 export default defineConfig({
+  define: {
+    __ASYLUM_PRE_SPIN_TRACKS__: JSON.stringify(preSpinMusicLibrary),
+    __ASYLUM_SPIN_TRACKS__: JSON.stringify(spinMusicLibrary),
+  },
   server: {
     allowedHosts: [host],
     cors: {

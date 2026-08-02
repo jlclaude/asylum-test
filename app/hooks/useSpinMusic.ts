@@ -1,14 +1,16 @@
 import { useEffect, useSyncExternalStore } from "react";
 import type { SpinMusicSnapshot } from "../lib/wheel-music";
 import {
-  getSpinMusicSnapshot, initializeSpinMusic, previewSpinMusic, resumeSpinMusic,
-  selectSpinMusicTrack, setSpinMusicMuted, setSpinMusicVolume, startSpinMusic,
+  finishSpinMusic, getSpinMusicSnapshot, initializeSpinMusic, playIdleMusic,
+  previewSpinMusic, resumeSpinMusic, setSpinMusicMuted, setSpinMusicVolume, startSpinMusic,
   stopSpinMusic, stopSpinMusicPreview, subscribeToSpinMusic,
 } from "../lib/wheel-music";
 
 const SERVER_SNAPSHOT: SpinMusicSnapshot = {
-  tracks: [],
-  trackId: "",
+  idleTracks: [],
+  spinTracks: [],
+  activeTrackId: "",
+  activePlaylist: null,
   volume: 0.7,
   muted: false,
   status: "OFF",
@@ -24,7 +26,6 @@ export function useSpinMusic() {
   useEffect(() => initializeSpinMusic(), []);
   return {
     ...snapshot,
-    selectTrack: selectSpinMusicTrack,
     setVolume: setSpinMusicVolume,
     setMuted: setSpinMusicMuted,
     preview: previewSpinMusic,
@@ -32,5 +33,7 @@ export function useSpinMusic() {
     stop: stopSpinMusic,
     stopPreview: stopSpinMusicPreview,
     startSpin: startSpinMusic,
+    finishSpin: finishSpinMusic,
+    playIdle: playIdleMusic,
   };
 }
