@@ -161,7 +161,7 @@ export default function BroadcastModePage() {
         ) : null}
 
         <BroadcastWheelRail wheels={wheels} activeId={activeWheel?.id ?? null} onSelect={setActiveId} />
-        {results?.completedAt && finalResultAccepted ? <BroadcastCompletion gameId={game.id} gameTitle={game.title} results={results} /> : null}
+        {results?.completedAt && finalResultAccepted ? <BroadcastCompletion gameId={game.id} gameTitle={game.title} results={results} secondChance={secondChance} /> : null}
         <GameModeShortcuts message={message} />
 
         <footer className="studio-statusbar broadcast-statusbar">
