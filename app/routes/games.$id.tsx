@@ -25,6 +25,7 @@ import { getSecondChanceResult } from "../models/second-chance.server";
 import { SecondChanceResult } from "../components/second-chance/SecondChanceResult";
 import { renderGameInstructionVariables } from "../lib/game-instruction-variables";
 import { toPublicSecondChanceResult } from "../lib/second-chance";
+import { AsylumLogo } from "../components/asylum/AsylumLogo";
 
 import "../styles/game-results.css";
 
@@ -264,6 +265,13 @@ const styles = `
     background: linear-gradient(145deg, #251316, #130e10);
     font-size: 22px;
     font-weight: 900;
+  }
+
+  .public-brand-mark .asylum-logo-image {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
   }
 
   .public-brand h1 {
@@ -734,8 +742,8 @@ export default function PublicGamePage() {
       <main className="public-game-page">
         <div className="public-game-shell">
           <header className="public-brand">
-            <div className="public-brand-mark" aria-hidden="true">
-              A
+            <div className="public-brand-mark">
+              <AsylumLogo decorative />
             </div>
 
             <div>

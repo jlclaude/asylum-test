@@ -7,6 +7,7 @@ import {
 } from "../models/game.server";
 import { getGameTemplateSummaryForShop } from "../models/game-template.server";
 import { authenticate } from "../shopify.server";
+import { AsylumLogo } from "../components/asylum/AsylumLogo";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const { session } = await authenticate.admin(request);
@@ -120,6 +121,13 @@ const styles = `
       0 12px 30px rgba(0, 0, 0, 0.32);
     font-size: 25px;
     font-weight: 800;
+  }
+
+  .asylum-mark .asylum-logo-image {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
   }
 
   .asylum-brand h1 {
@@ -578,8 +586,8 @@ export default function AppIndex() {
         <div className="asylum-shell">
           <header className="asylum-header">
             <div className="asylum-brand">
-              <div className="asylum-mark" aria-hidden="true">
-                A
+              <div className="asylum-mark">
+                <AsylumLogo decorative />
               </div>
 
               <div>

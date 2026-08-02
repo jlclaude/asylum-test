@@ -1,3 +1,5 @@
+import { AsylumLogo } from "./AsylumLogo";
+
 type AsylumBrandProps = {
   compact?: boolean;
   subtitle?: string;
@@ -15,13 +17,8 @@ export function AsylumBrand({
       ].join(" ")}
       aria-label="Asylum Games"
     >
-      <div className="asylum-brand-mark" aria-hidden="true">
-        <span className="asylum-brand-bars" />
-        <strong>A</strong>
-        <span className="asylum-brand-bolt asylum-brand-bolt-one" />
-        <span className="asylum-brand-bolt asylum-brand-bolt-two" />
-        <span className="asylum-brand-bolt asylum-brand-bolt-three" />
-        <span className="asylum-brand-bolt asylum-brand-bolt-four" />
+      <div className="asylum-brand-mark">
+        <AsylumLogo decorative />
       </div>
 
       <div className="asylum-brand-copy">

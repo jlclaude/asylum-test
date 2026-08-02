@@ -3,6 +3,7 @@ import {
   ASYLUM_THEMES,
   type AsylumThemeKey,
 } from "../../lib/asylum-themes";
+import { AsylumLogo } from "../asylum/AsylumLogo";
 import type { WheelEntry } from "./types";
 
 type WheelCanvasProps = {
@@ -211,9 +212,7 @@ export function WheelCanvas({
         <div className="studio-wheel-bearing" aria-hidden="true" />
 
         <div className="studio-wheel-hub-ring">
-          <strong>A</strong>
-          <span>ASYLUM</span>
-          <small>GAMES</small>
+          <AsylumLogo decorative />
         </div>
 
         {spinning ? (
