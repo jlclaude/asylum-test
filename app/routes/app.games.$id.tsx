@@ -33,6 +33,9 @@ import { getGameResults } from "../models/game-results.server";
 import { getShopSettings } from "../models/shop-settings.server";
 import { GameResultsSummary } from "../components/results/GameResultsSummary";
 import { GameAdministration } from "../components/games/GameAdministration";
+import { SecondChanceSummary } from "../components/second-chance/SecondChanceSummary";
+import { getSecondChanceResult } from "../models/second-chance.server";
+import { renderGameInstructionVariables } from "../lib/game-instruction-variables";
 import { authenticate } from "../shopify.server";
 
 import "../styles/game-results.css";
@@ -53,11 +56,12 @@ export async function loader({
     throw new Response("Game not found.", { status: 404 });
   }
 
-  const [claims, totals, results, shopSettings] = await Promise.all([
+  const [claims, totals, results, shopSettings, secondChance] = await Promise.all([
     getClaimsForGame(game.id),
     getClaimTotals(game.id),
     getGameResults(game.id),
     getShopSettings(session.shop),
+    getSecondChanceResult(game.id),
   ]);
 
   const requestUrl = new URL(request.url);
@@ -72,6 +76,7 @@ export async function loader({
       wheelCount: game.wheelCount,
       status: game.status,
       archivedAt: game.archivedAt?.toISOString() ?? null,
+      secondChanceOffset: game.secondChanceOffset,
       createdAt: game.createdAt.toISOString(),
       updatedAt: game.updatedAt.toISOString(),
     },
@@ -90,6 +95,7 @@ export async function loader({
     paymentInstructionsConfigured: Boolean(shopSettings?.paymentInstructions),
     publicUrl: `${requestUrl.origin}/games/${game.id}`,
     duplicated: requestUrl.searchParams.get("duplicated") === "1",
+    secondChance,
   };
 }
 
@@ -388,7 +394,7 @@ export default function GameControlCenter() {
   const actionData = useActionData<ActionData>();
   const navigate = useNavigate();
   const fetcher = useFetcher<ActionData>();
-  const { game, claims, totals, publicUrl, results, paymentInstructionsConfigured, duplicated } = useLoaderData<typeof loader>();
+  const { game, claims, totals, publicUrl, results, paymentInstructionsConfigured, duplicated, secondChance } = useLoaderData<typeof loader>();
 
   const [filter, setFilter] = useState<FilterValue>("ALL");
   const [search, setSearch] = useState("");
@@ -446,7 +452,7 @@ export default function GameControlCenter() {
             <div>
               <p className="control-eyebrow">Game control center</p>
               <h1>{game.title}</h1>
-              <p className="control-description">{game.description || "Manage claims, payments, availability, and public access."}</p>
+              <p className="control-description">{game.description ? renderGameInstructionVariables(game.description, { secondChanceNumber: game.secondChanceOffset }) : "Manage claims, payments, availability, and public access."}</p>
             </div>
             <span className={["control-status", `control-status-${game.status.toLowerCase()}`].join(" ")}>{game.status.replace("_", " ")}</span>
           </header>
@@ -477,6 +483,7 @@ export default function GameControlCenter() {
               action={<a className="game-results-action" href={`/app/games/${game.id}/play#game-results`}>Open Game Results</a>}
             />
           ) : null}
+          <SecondChanceSummary offset={game.secondChanceOffset} result={secondChance} />
 
           {fetcher.data?.error ? <div className="control-message control-message-error">{fetcher.data.error}</div> : null}
           {fetcher.data?.success ? <div className="control-message control-message-success">{fetcher.data.success}</div> : null}

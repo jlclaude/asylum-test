@@ -21,6 +21,10 @@ import { PublicGameResults } from "../components/results/PublicGameResults";
 import { PaymentInstructionsCard } from "../components/payment/PaymentInstructionsCard";
 import { formatPublicName } from "../lib/public-name";
 import { getPublicPaymentInstructions } from "../models/shop-settings.server";
+import { getSecondChanceResult } from "../models/second-chance.server";
+import { SecondChanceResult } from "../components/second-chance/SecondChanceResult";
+import { renderGameInstructionVariables } from "../lib/game-instruction-variables";
+import { toPublicSecondChanceResult } from "../lib/second-chance";
 
 import "../styles/game-results.css";
 
@@ -41,20 +45,26 @@ export async function loader({
     });
   }
 
-  const [totals, claims, results, paymentInstructions] = await Promise.all([
+  const [totals, claims, results, paymentInstructions, savedSecondChance] = await Promise.all([
     getClaimTotals(game.id),
     getPublicClaimsForGame(game.id),
     game.status === "COMPLETED"
       ? getPublicGameResults(game.id)
       : Promise.resolve(null),
     getPublicPaymentInstructions(game.shop),
+    game.status === "COMPLETED" ? getSecondChanceResult(game.id) : Promise.resolve(null),
   ]);
+  const secondChance = savedSecondChance
+    ? toPublicSecondChanceResult(savedSecondChance, formatPublicName)
+    : null;
 
   return {
     game: {
       id: game.id,
       title: game.title,
-      description: game.description,
+      description: game.description
+        ? renderGameInstructionVariables(game.description, { secondChanceNumber: game.secondChanceOffset })
+        : null,
       totalSpots: game.totalSpots,
       pricePerSpot: game.pricePerSpot.toString(),
       status: game.status,
@@ -63,6 +73,7 @@ export async function loader({
     totals,
     results,
     paymentInstructions,
+    secondChance,
     claims: claims.map((claim) => ({
       id: claim.id,
       displayName: formatPublicName(claim.displayName),
@@ -690,7 +701,7 @@ const styles = `
 `;
 
 export default function PublicGamePage() {
-  const { game, totals, claims, results, paymentInstructions } =
+  const { game, totals, claims, results, paymentInstructions, secondChance } =
     useLoaderData<typeof loader>();
 
   const actionData = useActionData<ActionData>();
@@ -828,6 +839,9 @@ export default function PublicGamePage() {
 
           {game.status === "COMPLETED" && results ? (
             <PublicGameResults gameTitle={game.title} results={results} />
+          ) : null}
+          {game.status === "COMPLETED" && secondChance ? (
+            <SecondChanceResult result={secondChance} />
           ) : null}
 
           <section className="public-grid">

@@ -1,6 +1,7 @@
 import { randomInt } from "node:crypto";
 import db from "../db.server";
 import { MAX_SPIN_DURATION_SECONDS, MIN_SPIN_DURATION_SECONDS } from "../lib/spin-duration";
+import { ensureSecondChanceForCompletedWheel } from "./second-chance.server";
 
 export type NameWheelEntry = {
   claimId: string;
@@ -55,6 +56,18 @@ function isNameEntry(entry: WheelEntry): entry is NameWheelEntry {
 
 function isValueEntry(entry: WheelEntry): entry is ValueWheelEntry {
   return "value" in entry;
+}
+
+function secondChanceCompletionPayload(run: {
+  secondChanceCalculatedAt: Date | null;
+  secondChanceBeforeDisplayName: string | null;
+  secondChanceAfterDisplayName: string | null;
+}) {
+  return run.secondChanceCalculatedAt ? {
+    calculatedAt: run.secondChanceCalculatedAt.toISOString(),
+    beforeDisplayName: run.secondChanceBeforeDisplayName,
+    afterDisplayName: run.secondChanceAfterDisplayName,
+  } : null;
 }
 
 export async function getGameRun(gameId: string) {
@@ -383,11 +396,17 @@ export async function completeGameWheelSpin(
     }
 
     if (wheel.status === "COMPLETED") {
+      const secondChanceRun = await ensureSecondChanceForCompletedWheel(
+        transaction,
+        wheel.gameRound.gameRunId,
+        wheel.id,
+      );
       return {
         wheelId: wheel.id,
         winnerDisplayName: wheel.winnerDisplayName,
         winnerValue: wheel.winnerValue,
         gameCompleted: wheel.gameRound.gameRun.completedAt !== null,
+        secondChance: secondChanceCompletionPayload(secondChanceRun),
       };
     }
 
@@ -410,13 +429,26 @@ export async function completeGameWheelSpin(
         },
       });
 
+      const secondChanceRun = await ensureSecondChanceForCompletedWheel(
+        transaction,
+        completedWheel.gameRound.gameRunId,
+        completedWheel.id,
+      );
+
       return {
         wheelId: completedWheel.id,
         winnerDisplayName: completedWheel.winnerDisplayName,
         winnerValue: completedWheel.winnerValue,
         gameCompleted: completedWheel.gameRound.gameRun.completedAt !== null,
+        secondChance: secondChanceCompletionPayload(secondChanceRun),
       };
     }
+
+    const secondChanceRun = await ensureSecondChanceForCompletedWheel(
+      transaction,
+      wheel.gameRound.gameRunId,
+      wheel.id,
+    );
 
     const unfinishedRoundWheels = await transaction.gameWheel.count({
       where: {
@@ -469,6 +501,7 @@ export async function completeGameWheelSpin(
       winnerDisplayName: wheel.winnerDisplayName,
       winnerValue: wheel.winnerValue,
       gameCompleted,
+      secondChance: secondChanceCompletionPayload(secondChanceRun),
     };
   });
 }

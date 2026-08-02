@@ -22,9 +22,11 @@ import {
   gameSetupTemplateInput,
   validateGameTemplate,
 } from "../app/lib/game-template-validation.ts";
+import { renderGameInstructionVariables } from "../app/lib/game-instruction-variables.ts";
+import { selectSecondChanceEntries, toPublicSecondChanceResult } from "../app/lib/second-chance.ts";
 
-test("template default game descriptions preserve exact plain-text spacing", () => {
-  const description = "  Welcome!\n\nHow to play:\n1. Claim.\n2. Pay.\n\n  Indented note\n";
+test("template default game descriptions preserve spacing and raw variables", () => {
+  const description = "  Welcome!\n\nHow to play:\n1. Claim.\n2. Pay.\n\nOffset: {{SECOND_CHANCE_NUMBER}}\n  Indented note\n";
   const formData = new FormData();
   formData.set("name", "Formatted template");
   formData.set("defaultGameDescription", description);
@@ -132,6 +134,81 @@ test("duplicated games receive a bounded copy title", () => {
   assert.equal(duplicateGameTitle("Friday Game"), "Friday Game Copy");
   assert.equal(duplicateGameTitle("x".repeat(150)).length, 150);
   assert.match(duplicateGameTitle("x".repeat(150)), / Copy$/);
+});
+
+const secondChanceEntries = (names: string[]) => names.map((displayName, index) => ({
+  claimId: `claim-${index}`,
+  displayName,
+}));
+
+test("Second Chance selects exact offset positions for odd and even wheels", () => {
+  const odd = selectSecondChanceEntries(secondChanceEntries(["A", "B", "C", "D", "E"]), 0, 2);
+  assert.equal(odd.before?.displayName, "D");
+  assert.equal(odd.after?.displayName, "C");
+  const even = selectSecondChanceEntries(secondChanceEntries(["A", "B", "C", "D", "E", "F"]), 5, 2);
+  assert.equal(even.before?.displayName, "D");
+  assert.equal(even.after?.displayName, "B");
+});
+
+test("Second Chance offset 10 wraps around both wheel boundaries", () => {
+  const fromFirst = selectSecondChanceEntries(secondChanceEntries(["A", "B", "C", "D", "E", "F", "G"]), 0, 10);
+  assert.equal(fromFirst.before?.entryIndex, 4);
+  assert.equal(fromFirst.after?.entryIndex, 3);
+  const fromLast = selectSecondChanceEntries(secondChanceEntries(["A", "B", "C", "D", "E", "F", "G"]), 6, 10);
+  assert.equal(fromLast.before?.entryIndex, 3);
+  assert.equal(fromLast.after?.entryIndex, 2);
+});
+
+test("Second Chance skips repeated main-winner entries in each direction", () => {
+  const entries = secondChanceEntries(["Other Before", "Main", "MAIN", " Main ", "Main", "Other After"]);
+  const result = selectSecondChanceEntries(entries, 3, 2);
+  assert.equal(result.before?.displayName, "Other Before");
+  assert.equal(result.after?.displayName, "Other After");
+});
+
+test("Second Chance preserves capitalization and may award one person twice", () => {
+  const result = selectSecondChanceEntries(secondChanceEntries(["Main", "Jane Smith", "Main", "Jane Smith"]), 0, 2);
+  assert.equal(result.before?.displayName, "Jane Smith");
+  assert.equal(result.after?.displayName, "Jane Smith");
+});
+
+test("Second Chance records unresolved directions when all entries match", () => {
+  const result = selectSecondChanceEntries(secondChanceEntries(["Main", " main ", "MAIN"]), 0, 2);
+  assert.equal(result.before, null);
+  assert.equal(result.after, null);
+});
+
+test("repeated Second Chance selection is deterministic", () => {
+  const entries = secondChanceEntries(["Main", "A", "B", "Main", "C"]);
+  const first = selectSecondChanceEntries(entries, 0, 2);
+  const repeated = selectSecondChanceEntries(entries, 0, 2);
+  assert.deepEqual(repeated, first);
+});
+
+test("game instruction variables replace only the supported token", () => {
+  const raw = "<script>alert(1)</script>\n\nOffset {{SECOND_CHANCE_NUMBER}} and {{OTHER}}";
+  assert.equal(
+    renderGameInstructionVariables(raw, { secondChanceNumber: 7 }),
+    "<script>alert(1)</script>\n\nOffset 7 and {{OTHER}}",
+  );
+});
+
+test("public Second Chance payload shortens names and omits internal fields", () => {
+  const internal = {
+    offset: 7,
+    beforeDisplayName: "Jane Louise Smith",
+    afterDisplayName: "Mike Robert Jones",
+    sourceWheelId: "private-wheel",
+    beforeClaimId: "private-claim",
+    beforeEntryIndex: 12,
+  };
+  const publicResult = toPublicSecondChanceResult(internal, formatPublicName);
+  assert.deepEqual(publicResult, {
+    offset: 7,
+    beforeDisplayName: "Jane S.",
+    afterDisplayName: "Mike J.",
+  });
+  assert.equal(JSON.stringify(publicResult).includes("private"), false);
 });
 
 test("public names use the existing privacy convention", () => {

@@ -17,6 +17,8 @@ import { SpinMusicControls } from "../components/audio/SpinMusicControls";
 import { GameIdentityCard } from "../components/asylum/GameIdentityCard";
 import { GameCompletionCard } from "../components/results/GameCompletionCard";
 import { GameResultsSummary } from "../components/results/GameResultsSummary";
+import { SecondChanceResult } from "../components/second-chance/SecondChanceResult";
+import { getSecondChanceResult } from "../models/second-chance.server";
 import { WheelSection } from "../components/wheel/WheelSection";
 import { GameModeShortcuts } from "../components/wheel/GameModeShortcuts";
 import { GameModeToolbar } from "../components/wheel/GameModeToolbar";
@@ -82,9 +84,10 @@ export async function loader({
     );
   }
 
-  const [run, results] = await Promise.all([
+  const [run, results, secondChance] = await Promise.all([
     getGameRun(game.id),
     getGameResults(game.id),
+    getSecondChanceResult(game.id),
   ]);
 
   return {
@@ -92,6 +95,7 @@ export async function loader({
       id: game.id,
       title: game.title,
       description: game.description,
+      secondChanceOffset: game.secondChanceOffset,
       status: game.status,
       archivedAt: game.archivedAt?.toISOString() ?? null,
       wheelCount: game.wheelCount,
@@ -103,6 +107,7 @@ export async function loader({
     },
 
     results,
+    secondChance,
     run: run
       ? {
           id: run.id,
@@ -271,6 +276,7 @@ export async function action({
         winnerValue:
           result.winnerValue ??
           undefined,
+        secondChance: result.secondChance,
         success: "Containment result saved.",
       };
     }
@@ -308,7 +314,7 @@ export default function GameModePage() {
   const beginFetcher =
     useFetcher<WheelActionData>();
 
-  const { game, run, results } =
+  const { game, run, results, secondChance } =
     useLoaderData<typeof loader>();
 
   const [themeKey, setThemeKey] =
@@ -651,6 +657,7 @@ export default function GameModePage() {
             </section>
           ))}
 
+          {secondChance ? <SecondChanceResult result={secondChance} /> : null}
           {results ? <GameResultsSummary results={results} heading="Live wheel record" /> : null}
 
           {game.status === "COMPLETED" && results?.completedAt ? (

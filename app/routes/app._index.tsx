@@ -608,6 +608,7 @@ export default function AppIndex() {
 
             <div className="asylum-hero-actions">
               <button className="asylum-secondary-button" type="button" onClick={() => navigate("/app/games/archived")}>Archived Games</button>
+              <button className="asylum-secondary-button" type="button" onClick={() => navigate("/app/second-chance")}>Second Chance Entries</button>
               <button className="asylum-secondary-button" type="button" onClick={() => navigate("/app/templates")}>Manage Templates</button>
               <button className="asylum-primary-button" type="button" onClick={() => navigate("/app/games/new")}>+ Create Game</button>
             </div>

@@ -30,6 +30,11 @@ export type WheelActionData = {
   winnerValue?: string;
   spinDurationSeconds?: number;
   spinToken?: string;
+  secondChance?: {
+    calculatedAt: string;
+    beforeDisplayName: string | null;
+    afterDisplayName: string | null;
+  } | null;
 };
 
 export type WheelOperatorAction =

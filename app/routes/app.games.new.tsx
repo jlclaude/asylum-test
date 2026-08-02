@@ -828,7 +828,7 @@ export default function NewGamePage() {
                   <p className="game-error">{actionData.errors.description}</p>
                 ) : (
                   <p className="game-help">
-                    Optional information shown on the public game page.
+                    Optional information shown on the public game page. Use {"{{SECOND_CHANCE_NUMBER}}"} to display this game’s saved Second Chance offset.
                   </p>
                 )}
               </div>

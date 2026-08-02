@@ -1,4 +1,5 @@
 import type { GameStatus } from "@prisma/client";
+import { randomInt } from "node:crypto";
 import db from "../db.server";
 import { normalizeDashboardGameCounts } from "../lib/dashboard-game-counts";
 import {
@@ -17,6 +18,10 @@ export type CreateGameInput = {
   status: GameStatus;
 };
 
+export function generateSecondChanceOffset() {
+  return randomInt(2, 11);
+}
+
 export async function createGame(input: CreateGameInput) {
   return db.game.create({
     data: {
@@ -26,6 +31,7 @@ export async function createGame(input: CreateGameInput) {
       totalSpots: input.totalSpots,
       pricePerSpot: input.pricePerSpot,
       wheelCount: input.wheelCount,
+      secondChanceOffset: generateSecondChanceOffset(),
       status: input.status,
     },
   });
@@ -190,6 +196,7 @@ export async function duplicateGameSetup(id: string, shop: string) {
         totalSpots: source.totalSpots,
         pricePerSpot: source.pricePerSpot,
         wheelCount: source.wheelCount,
+        secondChanceOffset: generateSecondChanceOffset(),
         status: "OPEN",
       },
     });
