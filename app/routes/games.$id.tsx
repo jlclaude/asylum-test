@@ -29,7 +29,6 @@ import { AsylumLogo } from "../components/asylum/AsylumLogo";
 import { formatRaffleCode } from "../lib/raffle-number";
 
 import "../styles/game-results.css";
-import "../styles/public-game.css";
 
 export async function loader({
   params,
@@ -203,40 +202,23 @@ function formatDate(value: string) {
 }
 
 const styles = `
-  html:has(.public-game-page),
-  html:has(.public-error-page) {
+  :root {
     color-scheme: dark;
-    background: #0b0b0d;
   }
 
-  body:has(.public-game-page),
-  body:has(.public-error-page) {
-    margin: 0;
-    background: #0b0b0d;
-  }
-
-  .public-game-page,
-  .public-game-page *,
-  .public-game-page *::before,
-  .public-game-page *::after,
-  .public-error-page,
-  .public-error-page *,
-  .public-error-page *::before,
-  .public-error-page *::after {
+  * {
     box-sizing: border-box;
   }
 
+  body {
+    margin: 0;
+    background: #0d0d0f;
+  }
+
   .public-game-page {
-    --theme-page: #0b0b0d;
-    --theme-panel: #1a1a1d;
-    --theme-text: #f5f5f5;
-    --theme-muted: #a2a3a8;
-    --theme-border: #303034;
-    --theme-primary: #d94051;
-    --theme-primary-dark: #8f2431;
     min-height: 100vh;
     padding: 28px;
-    color: var(--theme-text, #f5f5f5);
+    color: #f5f5f5;
     background:
       radial-gradient(
         circle at top right,
@@ -252,7 +234,7 @@ const styles = `
         145deg,
         #09090b 0%,
         #171719 52%,
-        var(--theme-page, #0b0b0d) 100%
+        #0e0e10 100%
       );
     font-family:
       Inter,
@@ -275,7 +257,6 @@ const styles = `
   }
 
   .public-brand-mark {
-    flex: 0 0 auto;
     display: grid;
     place-items: center;
     width: 46px;
@@ -288,12 +269,10 @@ const styles = `
     font-weight: 900;
   }
 
-  .public-game-page .public-claim-logo {
+  .public-brand-mark .asylum-logo-image {
     display: block;
     width: 100%;
-    max-width: 46px;
-    height: auto;
-    max-height: 46px;
+    height: 100%;
     object-fit: contain;
   }
 
@@ -345,14 +324,6 @@ const styles = `
     font-weight: 800;
     letter-spacing: 0.16em;
     text-transform: uppercase;
-  }
-
-  .public-raffle-code {
-    display: block;
-    margin: 0 0 9px;
-    color: var(--theme-text, #f5f5f5);
-    font-size: 13px;
-    letter-spacing: 0.04em;
   }
 
   .public-hero h2 {
@@ -575,12 +546,6 @@ const styles = `
     box-shadow: 0 0 0 3px rgba(217, 75, 91, 0.14);
   }
 
-  .public-input::placeholder,
-  .public-textarea::placeholder {
-    color: #77787e;
-    opacity: 1;
-  }
-
   .public-notice {
     padding: 13px;
     border: 1px solid #47474c;
@@ -780,7 +745,7 @@ export default function PublicGamePage() {
         <div className="public-game-shell">
           <header className="public-brand">
             <div className="public-brand-mark">
-              <AsylumLogo className="public-claim-logo" decorative />
+              <AsylumLogo decorative />
             </div>
 
             <div>
@@ -798,9 +763,7 @@ export default function PublicGamePage() {
                   {game.status === "COMPLETED" ? "Official game record" : "Secure your spots"}
                 </p>
 
-                <strong className="public-raffle-code">
-                  Raffle Number: {game.raffleCode}
-                </strong>
+                <strong>Raffle Number: {game.raffleCode}</strong>
 
                 <h2>{game.title}</h2>
 
