@@ -347,6 +347,11 @@ export default function GameModePage() {
   const { game, run, results, secondChance, eligiblePrizeWheels, prizeClaims } =
     useLoaderData<typeof loader>();
 
+  const orderedWheels = useMemo(
+    () => run?.rounds.flatMap((round) => round.wheels) ?? [],
+    [run],
+  );
+
   const [themeKey, setThemeKey] =
     useState<AsylumThemeKey>("classic");
   const [operatorStates, setOperatorStates] = useState<Record<string, WheelOperatorState>>({});
@@ -357,10 +362,6 @@ export default function GameModePage() {
   );
   const [focusReleased, setFocusReleased] = useState(false);
 
-  const orderedWheels = useMemo(
-    () => run?.rounds.flatMap((round) => round.wheels) ?? [],
-    [run],
-  );
   const unfinishedWheels = useMemo(
     () => {
       const ids = new Set(unfinishedWheelIds(orderedWheels, completedLocally));
