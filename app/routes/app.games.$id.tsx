@@ -5,6 +5,7 @@ import type {
   LoaderFunctionArgs,
 } from "react-router";
 import {
+  data,
   isRouteErrorResponse,
   useActionData,
   useFetcher,
@@ -38,6 +39,7 @@ import { GameAdministration } from "../components/games/GameAdministration";
 import { SecondChanceSummary } from "../components/second-chance/SecondChanceSummary";
 import { GamePrizeClaims } from "../components/prize-claims/GamePrizeClaims";
 import { PRIZE_CLAIM_EXPIRATION_DAYS, type PrizeClaimExpirationDays } from "../lib/prize-claim";
+import { buildPrizeClaimUrl } from "../lib/prize-claim-token.server";
 import { createWinnerPrizeClaim, getEligiblePrizeWheels, getPrizeClaimsForGame, toPrizeClaimSummary, updatePrizeClaimStatus } from "../models/prize-claim.server";
 import { getSecondChanceResult } from "../models/second-chance.server";
 import { renderGameInstructionVariables } from "../lib/game-instruction-variables";
@@ -125,7 +127,7 @@ type ActionData = {
 export async function action({
   request,
   params,
-}: ActionFunctionArgs): Promise<Response | ActionData> {
+}: ActionFunctionArgs) {
   const { session, redirect } = await authenticate.admin(request);
 
   if (!params.id) return { error: "Game ID is missing." };
@@ -187,8 +189,11 @@ export async function action({
       if (!PRIZE_CLAIM_EXPIRATION_DAYS.includes(expirationDays as PrizeClaimExpirationDays)) return { error: "Select a valid expiration period.", intent, wheelId };
       const result = await createWinnerPrizeClaim({ shop: session.shop, gameId: game.id, gameWheelId: wheelId, expirationDays: expirationDays as PrizeClaimExpirationDays });
       if (!result.created) return { success: "An active claim link already exists for this winner.", intent, wheelId };
-      const privateUrl = `${new URL(request.url).origin}/prize-claim/${result.token}`;
-      return { success: "Private prize claim link created. Copy it now.", intent, wheelId, privateUrl };
+      const privateUrl = buildPrizeClaimUrl(result.token, new URL(request.url).origin);
+      return data<ActionData>(
+        { success: "Private prize claim link created.", intent, wheelId, privateUrl },
+        { headers: { "Cache-Control": "no-store" } },
+      );
     }
 
     if (["revoke-prize-claim", "fulfill-prize-claim"].includes(intent)) {

@@ -6,7 +6,8 @@ import { adjacentWheelId, broadcastWheelStatus, defaultActiveWheelId, defaultBro
 import { formatPublicName } from "../app/lib/public-name.ts";
 import { claimNameEditBlockReason, replaceClaimDisplayNameInEntries, validateClaimDisplayName } from "../app/lib/claim-display-name.ts";
 import { formatPrizeClaimShippingSummary, isPrizeClaimExpired, prizeClaimExpirationDate, validatePrizeClaimSubmission } from "../app/lib/prize-claim.ts";
-import { generatePrizeClaimToken, hashPrizeClaimToken } from "../app/lib/prize-claim-token.server.ts";
+import { buildPrizeClaimUrl, generatePrizeClaimToken, hashPrizeClaimToken } from "../app/lib/prize-claim-token.server.ts";
+import { decryptPrizeClaimToken, encryptPrizeClaimToken } from "../app/lib/prize-claim-encryption.server.ts";
 import { formatRaffleCode, parseRaffleSearch } from "../app/lib/raffle-number.ts";
 import { getContainmentLabel, getWheelDisplayLabel } from "../app/lib/wheel-labels.ts";
 import { idleRotationAt, remainingSpinSeconds, wheelPositionAt, wheelSpinTotalDegrees } from "../app/lib/wheel-effects.client.ts";
@@ -311,6 +312,42 @@ test("prize claim tokens have 256-bit randomness and are stored by hash", () => 
   assert.equal(hashPrizeClaimToken(first).length, 64);
   assert.equal(hashPrizeClaimToken(first).includes(first), false);
   assert.equal(hashPrizeClaimToken(first), hashPrizeClaimToken(first));
+});
+
+test("prize claim tokens use authenticated encryption and decrypt unchanged", () => {
+  const key = Buffer.alloc(32, 7).toString("base64");
+  const token = generatePrizeClaimToken();
+  const encrypted = encryptPrizeClaimToken(token, key);
+  assert.equal(encrypted.startsWith("v1."), true);
+  assert.equal(encrypted.includes(token), false);
+  assert.equal(decryptPrizeClaimToken(encrypted, key), token);
+  assert.notEqual(encryptPrizeClaimToken(token, key), encrypted);
+});
+
+test("prize claim token encryption rejects tampering and invalid keys", () => {
+  const key = Buffer.alloc(32, 9).toString("base64");
+  const encrypted = encryptPrizeClaimToken("private-token", key);
+  const parts = encrypted.split(".");
+  parts[2] = `${parts[2]?.slice(0, -1)}${parts[2]?.endsWith("A") ? "B" : "A"}`;
+  assert.throws(
+    () => decryptPrizeClaimToken(parts.join("."), key),
+    /could not be decrypted/,
+  );
+  assert.throws(
+    () => encryptPrizeClaimToken("private-token", "not-a-32-byte-key"),
+    /not configured correctly/,
+  );
+});
+
+test("prize claim URLs use the configured application origin", () => {
+  assert.equal(
+    buildPrizeClaimUrl(
+      "private/token",
+      "https://localhost:3458",
+      "https://asylum.example/app/",
+    ),
+    "https://asylum.example/prize-claim/private%2Ftoken",
+  );
 });
 
 test("prize request validation requires prize, recipient, and shipping address", () => {

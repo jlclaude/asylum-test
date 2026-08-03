@@ -28,6 +28,20 @@ shopify app init --template=https://github.com/Shopify/shopify-app-template-reac
 shopify app dev
 ```
 
+### Prize claim token encryption
+
+Reusable private prize-claim links require a server-only AES-256-GCM key. Generate
+one as 32 random bytes encoded with Base64:
+
+```shell
+openssl rand -base64 32
+```
+
+Set the resulting value as `PRIZE_CLAIM_ENCRYPTION_KEY` in each runtime environment.
+Keep the value secret and stable: changing it prevents previously encrypted claim
+tokens from being revealed. The application URL is derived from `SHOPIFY_APP_URL`
+(with the authenticated request origin used only as a local-development fallback).
+
 Press P to open the URL to your app. Once you click install, you can start development.
 
 Local development is powered by [the Shopify CLI](https://shopify.dev/docs/apps/tools/cli). It logs into your account, connects to an app, provides environment variables, updates remote config, creates a tunnel and provides commands to generate extensions.

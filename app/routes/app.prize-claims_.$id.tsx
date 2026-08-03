@@ -1,15 +1,20 @@
+import { useEffect, useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import {
+  data,
   Form,
   isRouteErrorResponse,
   Link,
   useActionData,
+  useFetcher,
   useLoaderData,
   useNavigation,
   useRouteError,
+  redirect,
 } from "react-router";
 import {
   getPrizeClaimForShop,
+  revealPrizeClaimLink,
   updatePrizeClaimStatus,
 } from "../models/prize-claim.server";
 import { authenticate } from "../shopify.server";
@@ -41,16 +46,50 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     },
   };
 }
-type ActionData = { error?: string; success?: string };
+type ActionData = {
+  intent?: string;
+  error?: string;
+  success?: string;
+  privateUrl?: string;
+};
 export async function action({
   request,
   params,
-}: ActionFunctionArgs): Promise<ActionData> {
+}: ActionFunctionArgs) {
   const { session } = await authenticate.admin(request);
   if (!params.id) return { error: "Prize claim ID is missing." };
   const formData = await request.formData();
   const intent = String(formData.get("intent") ?? "");
   try {
+    if (
+      intent === "reveal-prize-claim-link" ||
+      intent === "open-prize-claim-link"
+    ) {
+      const configuredOrigin = process.env.SHOPIFY_APP_URL?.trim();
+      const result = await revealPrizeClaimLink({
+        id: params.id,
+        shop: session.shop,
+        origin: configuredOrigin || new URL(request.url).origin,
+      });
+      const headers = { "Cache-Control": "no-store" };
+      if (!result.available) {
+        const message = result.reason === "Legacy link"
+          ? "This claim link was created before reusable link storage was enabled. Revoke it and create a replacement to obtain a new copyable link."
+          : `Claim link unavailable: ${result.reason}.`;
+        return data<ActionData>({ intent, error: message }, { headers });
+      }
+      if (intent === "open-prize-claim-link") {
+        return redirect(result.url, { headers });
+      }
+      return data<ActionData>(
+        {
+          intent,
+          privateUrl: result.url,
+          success: "Claim link ready to copy.",
+        },
+        { headers },
+      );
+    }
     if (!["review", "fulfill", "revoke"].includes(intent))
       return { error: "Unknown prize claim action." };
     await updatePrizeClaimStatus({
@@ -89,8 +128,27 @@ const date = (value: string | null) =>
 export default function PrizeClaimDetail() {
   const { claim } = useLoaderData<typeof loader>();
   const actionData = useActionData<ActionData>();
+  const revealFetcher = useFetcher<ActionData>();
   const navigation = useNavigation();
+  const [copyMessage, setCopyMessage] = useState<string | null>(null);
   const busy = navigation.state === "submitting";
+  const revealBusy = revealFetcher.state !== "idle";
+  const linkAvailable = claim.status === "OPEN" && claim.hasReusableLink;
+  const linkStatus = claim.status === "OPEN"
+    ? "Open"
+    : claim.status === "SUBMITTED" || claim.status === "REVIEWED"
+      ? "Already submitted"
+      : claim.status.charAt(0) + claim.status.slice(1).toLowerCase();
+
+  useEffect(() => {
+    if (
+      revealFetcher.data?.intent !== "reveal-prize-claim-link" ||
+      !revealFetcher.data.privateUrl
+    ) return;
+    void navigator.clipboard.writeText(revealFetcher.data.privateUrl)
+      .then(() => setCopyMessage("Claim link copied."))
+      .catch(() => setCopyMessage("Copy failed. Try again."));
+  }, [revealFetcher.data]);
   const shippingAddress = [
     claim.addressLine1,
     claim.addressLine2,
@@ -119,6 +177,42 @@ export default function PrizeClaimDetail() {
         {actionData?.success ? (
           <p className="prize-message">{actionData.success}</p>
         ) : null}
+        <section className="prize-private-link" aria-labelledby="private-link-heading">
+          <div>
+            <small>Private claim link</small>
+            <h2 id="private-link-heading">PRIVATE CLAIM LINK</h2>
+            <p>
+              Status: {linkStatus} · Token ending: {claim.tokenLastFour}
+              {claim.expiresAt ? ` · Expires: ${date(claim.expiresAt)}` : " · No expiration"}
+            </p>
+          </div>
+          {claim.status === "OPEN" && !claim.hasReusableLink ? (
+            <p className="prize-link-note">
+              This claim link was created before reusable link storage was enabled.
+              Revoke it and create a replacement to obtain a new copyable link.
+            </p>
+          ) : null}
+          {revealFetcher.data?.error ? (
+            <p className="prize-message prize-error" role="alert">
+              {revealFetcher.data.error}
+            </p>
+          ) : null}
+          {copyMessage ? <p className="prize-message" role="status">{copyMessage}</p> : null}
+          <div className="prize-actions">
+            <revealFetcher.Form method="post">
+              <input type="hidden" name="intent" value="reveal-prize-claim-link" />
+              <button type="submit" disabled={!linkAvailable || revealBusy}>
+                COPY CLAIM LINK
+              </button>
+            </revealFetcher.Form>
+            <Form method="post" target="_blank">
+              <input type="hidden" name="intent" value="open-prize-claim-link" />
+              <button type="submit" disabled={!linkAvailable}>
+                OPEN CLAIM FORM
+              </button>
+            </Form>
+          </div>
+        </section>
         <section className="prize-detail-grid">
           <article>
             <h2>Prize request</h2>

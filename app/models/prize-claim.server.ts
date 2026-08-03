@@ -6,7 +6,11 @@ import {
   type PrizeClaimExpirationDays,
   type PrizeClaimSubmissionInput,
 } from "../lib/prize-claim";
-import { generatePrizeClaimToken, hashPrizeClaimToken } from "../lib/prize-claim-token.server";
+import { buildPrizeClaimUrl, generatePrizeClaimToken, hashPrizeClaimToken } from "../lib/prize-claim-token.server";
+import {
+  decryptPrizeClaimToken,
+  encryptPrizeClaimToken,
+} from "../lib/prize-claim-encryption.server";
 import { formatRaffleCode, parseRaffleSearch } from "../lib/raffle-number";
 
 export async function createWinnerPrizeClaim(input: {
@@ -54,6 +58,7 @@ export async function createWinnerPrizeClaim(input: {
         wheelLabel: wheel.label,
         tokenHash: hashPrizeClaimToken(token),
         tokenLastFour: token.slice(-4),
+        encryptedToken: encryptPrizeClaimToken(token),
         expiresAt: prizeClaimExpirationDate(input.expirationDays),
       },
     });
@@ -169,8 +174,12 @@ export async function listPrizeClaims(shop: string, options: { search?: string; 
   });
 }
 
-export function getPrizeClaimForShop(id: string, shop: string) {
-  return db.prizeClaim.findFirst({
+export async function getPrizeClaimForShop(id: string, shop: string) {
+  await db.prizeClaim.updateMany({
+    where: { id, shop, status: "OPEN", expiresAt: { lte: new Date() } },
+    data: { status: "EXPIRED", activeGameWheelId: null },
+  });
+  const claim = await db.prizeClaim.findFirst({
     where: { id, shop },
     select: {
       id: true,
@@ -178,6 +187,8 @@ export function getPrizeClaimForShop(id: string, shop: string) {
       winnerDisplayName: true,
       wheelLabel: true,
       status: true,
+      tokenLastFour: true,
+      encryptedToken: true,
       expiresAt: true,
       generatedAt: true,
       submittedAt: true,
@@ -205,6 +216,59 @@ export function getPrizeClaimForShop(id: string, shop: string) {
       },
     },
   });
+  if (!claim) return null;
+  const { encryptedToken, ...detail } = claim;
+  return {
+    ...detail,
+    hasReusableLink: encryptedToken !== null,
+  };
+}
+
+export async function revealPrizeClaimLink(input: {
+  id: string;
+  shop: string;
+  origin: string;
+}) {
+  const claim = await db.prizeClaim.findFirst({
+    where: { id: input.id, shop: input.shop },
+    select: {
+      id: true,
+      status: true,
+      expiresAt: true,
+      encryptedToken: true,
+    },
+  });
+  if (!claim) throw new Error("Prize claim not found.");
+
+  if (claim.status === "OPEN" && isPrizeClaimExpired(claim.expiresAt)) {
+    await db.prizeClaim.updateMany({
+      where: { id: claim.id, status: "OPEN" },
+      data: { status: "EXPIRED", activeGameWheelId: null },
+    });
+    return { available: false as const, reason: "Expired" };
+  }
+  if (claim.status !== "OPEN") {
+    const labels = {
+      SUBMITTED: "Already submitted",
+      REVIEWED: "Already submitted",
+      FULFILLED: "Fulfilled",
+      EXPIRED: "Expired",
+      REVOKED: "Revoked",
+    } as const;
+    return {
+      available: false as const,
+      reason: labels[claim.status as keyof typeof labels] ?? "Unavailable",
+    };
+  }
+  if (!claim.encryptedToken) {
+    return { available: false as const, reason: "Legacy link" };
+  }
+
+  const token = decryptPrizeClaimToken(claim.encryptedToken);
+  return {
+    available: true as const,
+    url: buildPrizeClaimUrl(token, input.origin, input.origin),
+  };
 }
 
 export function toPrizeClaimSummary(claim: Awaited<ReturnType<typeof getPrizeClaimsForGame>>[number]) {

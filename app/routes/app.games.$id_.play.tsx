@@ -4,6 +4,7 @@ import type {
   LoaderFunctionArgs,
 } from "react-router";
 import {
+  data,
   isRouteErrorResponse,
   Link,
   useFetcher,
@@ -54,6 +55,7 @@ import { getGameResults } from "../models/game-results.server";
 import { authenticate } from "../shopify.server";
 import { formatRaffleCode } from "../lib/raffle-number";
 import { PRIZE_CLAIM_EXPIRATION_DAYS, type PrizeClaimExpirationDays } from "../lib/prize-claim";
+import { buildPrizeClaimUrl } from "../lib/prize-claim-token.server";
 import { createWinnerPrizeClaim, getEligiblePrizeWheels, getPrizeClaimsForGame, toPrizeClaimSummary, updatePrizeClaimStatus } from "../models/prize-claim.server";
 
 import "../styles/asylum-brand.css";
@@ -171,7 +173,7 @@ export async function loader({
 export async function action({
   request,
   params,
-}: ActionFunctionArgs): Promise<WheelActionData> {
+}: ActionFunctionArgs) {
   const { session } =
     await authenticate.admin(request);
 
@@ -304,7 +306,10 @@ export async function action({
       if (!PRIZE_CLAIM_EXPIRATION_DAYS.includes(expirationDays as PrizeClaimExpirationDays)) return { intent, wheelId, error: "Select a valid expiration period." };
       const result = await createWinnerPrizeClaim({ shop: session.shop, gameId: params.id, gameWheelId: wheelId, expirationDays: expirationDays as PrizeClaimExpirationDays });
       if (!result.created) return { intent, wheelId, success: "An active claim link already exists for this winner." };
-      return { intent, wheelId, success: "Private prize claim link created. Copy it now.", privateUrl: `${new URL(request.url).origin}/prize-claim/${result.token}` };
+      return data<WheelActionData>(
+        { intent, wheelId, success: "Private prize claim link created.", privateUrl: buildPrizeClaimUrl(result.token, new URL(request.url).origin) },
+        { headers: { "Cache-Control": "no-store" } },
+      );
     }
 
     if (["revoke-prize-claim", "fulfill-prize-claim"].includes(intent)) {

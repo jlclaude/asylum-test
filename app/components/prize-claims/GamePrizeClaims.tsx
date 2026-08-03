@@ -70,7 +70,7 @@ export function GamePrizeClaims({ eligibleWheels, claims }: { eligibleWheels: El
               </dl>
             ) : null}
             {immediateUrl ? <div className="prize-private-link"><code>{immediateUrl}</code><button type="button" onClick={() => void copyImmediateLink()}>{copied ? "Copied" : "Copy Claim Link"}</button><a href={immediateUrl} target="_blank" rel="noreferrer">Open Claim Form</a></div> : null}
-            {saved && !immediateUrl ? <p className="prize-link-note">For security, the full private link was shown only when generated. Revoke and replace it if it was lost. Token ending: {saved.tokenLastFour}</p> : null}
+            {saved && !immediateUrl ? <p className="prize-link-note">Open Admin Detail to copy an available claim link again. Token ending: {saved.tokenLastFour}</p> : null}
             <div className="prize-actions">
               {!saved || ["REVOKED", "EXPIRED"].includes(saved.status) ? (
                 <fetcher.Form method="post">
