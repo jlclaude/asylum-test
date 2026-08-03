@@ -49,8 +49,9 @@ model Game {
   createdAt          DateTime   @default(now())
   updatedAt          DateTime   @updatedAt
 
-  claims Claim[]
-  run    GameRun?
+  claims      Claim[]
+  run         GameRun?
+  prizeClaims PrizeClaim[]
 
   @@index([shop])
   @@index([shop, status])
@@ -90,8 +91,9 @@ model Claim {
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
-  game          Game        @relation(fields: [gameId], references: [id], onDelete: Cascade)
-  winningWheels GameWheel[] @relation("WinningClaim")
+  game          Game         @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  winningWheels GameWheel[]  @relation("WinningClaim")
+  prizeClaims   PrizeClaim[] @relation("PrizeClaimWinner")
 
   @@index([gameId])
   @@index([gameId, status])
@@ -152,16 +154,64 @@ model GameWheel {
   shuffledAt          DateTime?
   spunAt              DateTime?
   completedAt         DateTime?
+  resultAcceptedAt    DateTime?
   createdAt           DateTime    @default(now())
   updatedAt           DateTime    @updatedAt
 
-  gameRound    GameRound @relation(fields: [gameRoundId], references: [id], onDelete: Cascade)
-  winningClaim Claim?    @relation("WinningClaim", fields: [winnerClaimId], references: [id], onDelete: SetNull)
+  gameRound    GameRound    @relation(fields: [gameRoundId], references: [id], onDelete: Cascade)
+  winningClaim Claim?       @relation("WinningClaim", fields: [winnerClaimId], references: [id], onDelete: SetNull)
+  prizeClaims  PrizeClaim[]
 
   @@unique([gameRoundId, position])
   @@index([gameRoundId, type])
   @@index([gameRoundId, status])
   @@index([winnerClaimId])
+}
+
+model PrizeClaim {
+  id                String           @id @default(cuid())
+  shop              String
+  gameId            String
+  gameWheelId       String
+  activeGameWheelId String?          @unique
+  winnerClaimId     String?
+  winnerDisplayName String
+  wheelLabel        String
+  tokenHash         String           @unique
+  tokenLastFour     String
+  status            PrizeClaimStatus @default(OPEN)
+  expiresAt         DateTime?
+  generatedAt       DateTime         @default(now())
+  submittedAt       DateTime?
+  reviewedAt        DateTime?
+  fulfilledAt       DateTime?
+  revokedAt         DateTime?
+  preferredPrize    String?
+  backupPrize       String?
+  sizeOrVariant     String?
+  recipientName     String?
+  email             String?
+  phone             String?
+  addressLine1      String?
+  addressLine2      String?
+  city              String?
+  stateProvince     String?
+  postalCode        String?
+  country           String?
+  winnerNotes       String?
+  adminNotes        String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  game        Game      @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  gameWheel   GameWheel @relation(fields: [gameWheelId], references: [id], onDelete: Cascade)
+  winnerClaim Claim?    @relation("PrizeClaimWinner", fields: [winnerClaimId], references: [id], onDelete: SetNull)
+
+  @@index([shop])
+  @@index([gameId])
+  @@index([gameWheelId])
+  @@index([shop, status])
+  @@index([generatedAt])
 }
 
 enum GameStatus {
@@ -194,4 +244,13 @@ enum WheelStatus {
   READY
   SPINNING
   COMPLETED
+}
+
+enum PrizeClaimStatus {
+  OPEN
+  SUBMITTED
+  REVIEWED
+  FULFILLED
+  EXPIRED
+  REVOKED
 }

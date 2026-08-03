@@ -17,6 +17,7 @@ import { SpinMusicControls } from "../components/audio/SpinMusicControls";
 import { GameIdentityCard } from "../components/asylum/GameIdentityCard";
 import { GameCompletionCard } from "../components/results/GameCompletionCard";
 import { GameResultsSummary } from "../components/results/GameResultsSummary";
+import { GamePrizeClaims } from "../components/prize-claims/GamePrizeClaims";
 import { getSecondChanceResult } from "../models/second-chance.server";
 import { secondChanceResultForWheel } from "../lib/second-chance";
 import { WheelSection } from "../components/wheel/WheelSection";
@@ -40,6 +41,7 @@ import {
 } from "../lib/asylum-themes";
 import {
   beginGameRun,
+  acceptGameWheelResult,
   completeGameWheelSpin,
   deserializeWheelEntries,
   getGameRun,
@@ -50,10 +52,13 @@ import {
 import { getGameForShop } from "../models/game.server";
 import { getGameResults } from "../models/game-results.server";
 import { authenticate } from "../shopify.server";
+import { PRIZE_CLAIM_EXPIRATION_DAYS, type PrizeClaimExpirationDays } from "../lib/prize-claim";
+import { createWinnerPrizeClaim, getEligiblePrizeWheels, getPrizeClaimsForGame, toPrizeClaimSummary, updatePrizeClaimStatus } from "../models/prize-claim.server";
 
 import "../styles/asylum-brand.css";
 import "../styles/game-results.css";
 import "../styles/wheel-studio.css";
+import "../styles/prize-claims.css";
 
 export async function loader({
   request,
@@ -84,10 +89,12 @@ export async function loader({
     );
   }
 
-  const [run, results, secondChance] = await Promise.all([
+  const [run, results, secondChance, eligiblePrizeWheels, prizeClaims] = await Promise.all([
     getGameRun(game.id),
     getGameResults(game.id),
     getSecondChanceResult(game.id),
+    getEligiblePrizeWheels(game.id, session.shop),
+    getPrizeClaimsForGame(game.id, session.shop),
   ]);
 
   return {
@@ -108,6 +115,8 @@ export async function loader({
 
     results,
     secondChance,
+    eligiblePrizeWheels: eligiblePrizeWheels.map((wheel) => ({ ...wheel, resultAcceptedAt: wheel.resultAcceptedAt?.toISOString() ?? null })),
+    prizeClaims: prizeClaims.map(toPrizeClaimSummary),
     run: run
       ? {
           id: run.id,
@@ -146,6 +155,8 @@ export async function loader({
 
                   spunAt:
                     wheel.spunAt?.toISOString() ?? null,
+                  resultAcceptedAt:
+                    wheel.resultAcceptedAt?.toISOString() ?? null,
                 }),
               ),
             }),
@@ -281,6 +292,25 @@ export async function action({
       };
     }
 
+    if (intent === "accept-result") {
+      await acceptGameWheelResult(wheelId, params.id, session.shop);
+      return { intent, wheelId, success: "Persisted result accepted." };
+    }
+
+    if (intent === "create-prize-claim") {
+      const expirationDays = Number(formData.get("expirationDays"));
+      if (!PRIZE_CLAIM_EXPIRATION_DAYS.includes(expirationDays as PrizeClaimExpirationDays)) return { intent, wheelId, error: "Select a valid expiration period." };
+      const result = await createWinnerPrizeClaim({ shop: session.shop, gameId: params.id, gameWheelId: wheelId, expirationDays: expirationDays as PrizeClaimExpirationDays });
+      if (!result.created) return { intent, wheelId, success: "An active claim link already exists for this winner." };
+      return { intent, wheelId, success: "Private prize claim link created. Copy it now.", privateUrl: `${new URL(request.url).origin}/prize-claim/${result.token}` };
+    }
+
+    if (["revoke-prize-claim", "fulfill-prize-claim"].includes(intent)) {
+      const prizeClaimId = String(formData.get("prizeClaimId") ?? "").trim();
+      await updatePrizeClaimStatus({ id: prizeClaimId, shop: session.shop, action: intent === "revoke-prize-claim" ? "revoke" : "fulfill" });
+      return { intent, wheelId, success: intent === "revoke-prize-claim" ? "Prize claim link revoked." : "Prize claim marked fulfilled." };
+    }
+
     return {
       intent,
       error: "Unknown Game Mode action.",
@@ -310,8 +340,9 @@ export default function GameModePage() {
 
   const beginFetcher =
     useFetcher<WheelActionData>();
+  const acceptFetcher = useFetcher<WheelActionData>();
 
-  const { game, run, results, secondChance } =
+  const { game, run, results, secondChance, eligiblePrizeWheels, prizeClaims } =
     useLoaderData<typeof loader>();
 
   const [themeKey, setThemeKey] =
@@ -319,7 +350,9 @@ export default function GameModePage() {
   const [operatorStates, setOperatorStates] = useState<Record<string, WheelOperatorState>>({});
   const [operatorMessage, setOperatorMessage] = useState<string | null>(null);
   const [completedLocally, setCompletedLocally] = useState<Set<string>>(() => new Set());
-  const [acceptedIds, setAcceptedIds] = useState<Set<string>>(() => new Set());
+  const [acceptedIds, setAcceptedIds] = useState<Set<string>>(
+    () => new Set(orderedWheels.filter((wheel) => wheel.resultAcceptedAt).map((wheel) => wheel.id)),
+  );
   const [focusReleased, setFocusReleased] = useState(false);
 
   const orderedWheels = useMemo(
@@ -371,6 +404,7 @@ export default function GameModePage() {
   }, []);
 
   const acceptResult = useCallback((wheelId: string) => {
+    acceptFetcher.submit({ intent: "accept-result", wheelId }, { method: "post" });
     setAcceptedIds((current) => new Set(current).add(wheelId));
     const nextId = nextUnfinishedWheelId(
       orderedWheels.map((wheel) => completedLocally.has(wheel.id)
@@ -389,7 +423,7 @@ export default function GameModePage() {
       const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       wheelRefs.current.get(nextId)?.scrollIntoView(reducedMotion);
     });
-  }, [completedLocally, orderedWheels]);
+  }, [acceptFetcher, completedLocally, orderedWheels]);
 
   const activeWheel = activeWheelId
     ? operatorStates[activeWheelId] ?? (() => {
@@ -654,6 +688,7 @@ export default function GameModePage() {
           ))}
 
           {results ? <GameResultsSummary results={results} heading="Live wheel record" /> : null}
+          <GamePrizeClaims eligibleWheels={eligiblePrizeWheels} claims={prizeClaims} />
 
           {game.status === "COMPLETED" && results?.completedAt && activeWheelId && acceptedIds.has(activeWheelId) ? (
             <GameCompletionCard

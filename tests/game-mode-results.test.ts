@@ -5,6 +5,8 @@ import { toPublicGameResults } from "../app/lib/game-results.ts";
 import { adjacentWheelId, broadcastWheelStatus, defaultActiveWheelId, defaultBroadcastActiveWheelId, defaultGameModeActiveWheelId, fullscreenIsActive, nextUnfinishedWheelId, savedSoundIsMuted, shortcutTargetIsEditable, unfinishedWheelIds, wheelActionBlockReason, wheelScrollBehavior } from "../app/lib/game-mode-operator.ts";
 import { formatPublicName } from "../app/lib/public-name.ts";
 import { claimNameEditBlockReason, replaceClaimDisplayNameInEntries, validateClaimDisplayName } from "../app/lib/claim-display-name.ts";
+import { isPrizeClaimExpired, prizeClaimExpirationDate, validatePrizeClaimSubmission } from "../app/lib/prize-claim.ts";
+import { generatePrizeClaimToken, hashPrizeClaimToken } from "../app/lib/prize-claim-token.server.ts";
 import { idleRotationAt, remainingSpinSeconds, wheelPositionAt, wheelSpinTotalDegrees } from "../app/lib/wheel-effects.client.ts";
 import { getWinningRestRotation, normalizeDegrees } from "../app/lib/wheel-geometry.ts";
 import {
@@ -272,6 +274,41 @@ test("claim names lock after spinning, completion, or Second Chance", () => {
   assert.equal(claimNameEditBlockReason([{ ...ready, status: "SPINNING" }], null), "Names are locked because wheel results have begun.");
   assert.equal(claimNameEditBlockReason([{ ...ready, status: "COMPLETED" }], null), "Names are locked because wheel results have begun.");
   assert.equal(claimNameEditBlockReason([ready], new Date()), "Names are locked because wheel results have begun.");
+});
+
+test("prize claim tokens have 256-bit randomness and are stored by hash", () => {
+  const first = generatePrizeClaimToken();
+  const second = generatePrizeClaimToken();
+  assert.notEqual(first, second);
+  assert.equal(Buffer.from(first, "base64url").byteLength, 32);
+  assert.equal(hashPrizeClaimToken(first).length, 64);
+  assert.equal(hashPrizeClaimToken(first).includes(first), false);
+  assert.equal(hashPrizeClaimToken(first), hashPrizeClaimToken(first));
+});
+
+test("prize request validation requires prize, recipient, and contact", () => {
+  const missing = new FormData();
+  assert.equal("error" in validatePrizeClaimSubmission(missing), true);
+
+  const valid = new FormData();
+  valid.set("preferredPrize", "  Signed game  ");
+  valid.set("recipientName", "Jane Doe");
+  valid.set("email", "jane@example.com");
+  valid.set("winnerNotes", "Line one\nLine two");
+  const result = validatePrizeClaimSubmission(valid);
+  assert.equal("input" in result, true);
+  if (result.input) {
+    assert.equal(result.input.preferredPrize, "Signed game");
+    assert.equal(result.input.winnerNotes, "Line one\nLine two");
+  }
+});
+
+test("prize claim expiration supports none, 7, 14, and 30 days", () => {
+  const now = new Date("2026-08-03T00:00:00.000Z");
+  assert.equal(prizeClaimExpirationDate(0, now), null);
+  assert.equal(prizeClaimExpirationDate(7, now)?.toISOString(), "2026-08-10T00:00:00.000Z");
+  assert.equal(isPrizeClaimExpired("2026-08-02T00:00:00.000Z", now), true);
+  assert.equal(isPrizeClaimExpired("2026-08-04T00:00:00.000Z", now), false);
 });
 
 test("public names use the existing privacy convention", () => {

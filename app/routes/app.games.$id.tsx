@@ -36,11 +36,15 @@ import { getShopSettings } from "../models/shop-settings.server";
 import { GameResultsSummary } from "../components/results/GameResultsSummary";
 import { GameAdministration } from "../components/games/GameAdministration";
 import { SecondChanceSummary } from "../components/second-chance/SecondChanceSummary";
+import { GamePrizeClaims } from "../components/prize-claims/GamePrizeClaims";
+import { PRIZE_CLAIM_EXPIRATION_DAYS, type PrizeClaimExpirationDays } from "../lib/prize-claim";
+import { createWinnerPrizeClaim, getEligiblePrizeWheels, getPrizeClaimsForGame, toPrizeClaimSummary, updatePrizeClaimStatus } from "../models/prize-claim.server";
 import { getSecondChanceResult } from "../models/second-chance.server";
 import { renderGameInstructionVariables } from "../lib/game-instruction-variables";
 import { authenticate } from "../shopify.server";
 
 import "../styles/game-results.css";
+import "../styles/prize-claims.css";
 
 export async function loader({
   request,
@@ -58,13 +62,15 @@ export async function loader({
     throw new Response("Game not found.", { status: 404 });
   }
 
-  const [claims, totals, results, shopSettings, secondChance, nameEditState] = await Promise.all([
+  const [claims, totals, results, shopSettings, secondChance, nameEditState, eligiblePrizeWheels, prizeClaims] = await Promise.all([
     getClaimsForGame(game.id),
     getClaimTotals(game.id),
     getGameResults(game.id),
     getShopSettings(session.shop),
     getSecondChanceResult(game.id),
     getClaimNameEditState(game.id, session.shop),
+    getEligiblePrizeWheels(game.id, session.shop),
+    getPrizeClaimsForGame(game.id, session.shop),
   ]);
 
   const requestUrl = new URL(request.url);
@@ -100,6 +106,8 @@ export async function loader({
     duplicated: requestUrl.searchParams.get("duplicated") === "1",
     secondChance,
     nameEditState,
+    eligiblePrizeWheels: eligiblePrizeWheels.map((wheel) => ({ ...wheel, resultAcceptedAt: wheel.resultAcceptedAt?.toISOString() ?? null })),
+    prizeClaims: prizeClaims.map(toPrizeClaimSummary),
   };
 }
 
@@ -108,6 +116,8 @@ type ActionData = {
   success?: string;
   intent?: string;
   claimId?: string;
+  wheelId?: string;
+  privateUrl?: string;
 };
 
 export async function action({
@@ -167,6 +177,23 @@ export async function action({
         intent,
         claimId,
       };
+    }
+
+    if (intent === "create-prize-claim") {
+      const wheelId = String(formData.get("wheelId") ?? "").trim();
+      const expirationDays = Number(formData.get("expirationDays"));
+      if (!PRIZE_CLAIM_EXPIRATION_DAYS.includes(expirationDays as PrizeClaimExpirationDays)) return { error: "Select a valid expiration period.", intent, wheelId };
+      const result = await createWinnerPrizeClaim({ shop: session.shop, gameId: game.id, gameWheelId: wheelId, expirationDays: expirationDays as PrizeClaimExpirationDays });
+      if (!result.created) return { success: "An active claim link already exists for this winner.", intent, wheelId };
+      const privateUrl = `${new URL(request.url).origin}/prize-claim/${result.token}`;
+      return { success: "Private prize claim link created. Copy it now.", intent, wheelId, privateUrl };
+    }
+
+    if (["revoke-prize-claim", "fulfill-prize-claim"].includes(intent)) {
+      const prizeClaimId = String(formData.get("prizeClaimId") ?? "").trim();
+      const wheelId = String(formData.get("wheelId") ?? "").trim();
+      await updatePrizeClaimStatus({ id: prizeClaimId, shop: session.shop, action: intent === "revoke-prize-claim" ? "revoke" : "fulfill" });
+      return { success: intent === "revoke-prize-claim" ? "Prize claim link revoked." : "Prize claim marked fulfilled.", intent, wheelId };
     }
 
     if (game.archivedAt) {
@@ -423,7 +450,7 @@ export default function GameControlCenter() {
   const navigate = useNavigate();
   const fetcher = useFetcher<ActionData>();
   const nameFetcher = useFetcher<ActionData>();
-  const { game, claims, totals, publicUrl, results, paymentInstructionsConfigured, duplicated, secondChance, nameEditState } = useLoaderData<typeof loader>();
+  const { game, claims, totals, publicUrl, results, paymentInstructionsConfigured, duplicated, secondChance, nameEditState, eligiblePrizeWheels, prizeClaims } = useLoaderData<typeof loader>();
 
   const [filter, setFilter] = useState<FilterValue>("ALL");
   const [search, setSearch] = useState("");
@@ -521,6 +548,7 @@ export default function GameControlCenter() {
             />
           ) : null}
           <SecondChanceSummary offset={game.secondChanceOffset} result={secondChance} />
+          <GamePrizeClaims eligibleWheels={eligiblePrizeWheels} claims={prizeClaims} />
 
           {fetcher.data?.error ? <div className="control-message control-message-error">{fetcher.data.error}</div> : null}
           {fetcher.data?.success ? <div className="control-message control-message-success">{fetcher.data.success}</div> : null}

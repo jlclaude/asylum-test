@@ -18,6 +18,7 @@ export type WheelData = {
   winnerDisplayName: string | null;
   winnerValue: string | null;
   spunAt: string | null;
+  resultAcceptedAt: string | null;
 };
 
 export type WheelActionData = {
@@ -35,6 +36,7 @@ export type WheelActionData = {
     beforeDisplayName: string | null;
     afterDisplayName: string | null;
   } | null;
+  privateUrl?: string;
 };
 
 export type WheelOperatorAction =

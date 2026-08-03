@@ -16,6 +16,7 @@ export async function getGameResults(gameId: string): Promise<GameResults | null
           wheels: {
             orderBy: { position: "asc" },
             select: {
+              id: true,
               label: true,
               type: true,
               status: true,
@@ -23,6 +24,7 @@ export async function getGameResults(gameId: string): Promise<GameResults | null
               winnerValue: true,
               spinDurationSeconds: true,
               completedAt: true,
+              resultAcceptedAt: true,
               winningClaim: {
                 select: { quantity: true },
               },
@@ -41,6 +43,7 @@ export async function getGameResults(gameId: string): Promise<GameResults | null
       title: round.title ?? `Round ${round.position}`,
       status: round.status,
       wheels: round.wheels.map((wheel) => ({
+        id: wheel.id,
         label: wheel.label,
         type: wheel.type,
         status: wheel.status,
@@ -48,6 +51,7 @@ export async function getGameResults(gameId: string): Promise<GameResults | null
         spinDurationSeconds: wheel.spinDurationSeconds,
         completedAt: wheel.completedAt?.toISOString() ?? null,
         winningClaimQuantity: wheel.winningClaim?.quantity ?? null,
+        resultAcceptedAt: wheel.resultAcceptedAt?.toISOString() ?? null,
       })),
     })),
   };

@@ -505,3 +505,27 @@ export async function completeGameWheelSpin(
     };
   });
 }
+
+export async function acceptGameWheelResult(
+  wheelId: string,
+  gameId: string,
+  shop: string,
+) {
+  return db.$transaction(async (transaction) => {
+    const wheel = await transaction.gameWheel.findFirst({
+      where: {
+        id: wheelId,
+        gameRound: { gameRun: { gameId, game: { shop } } },
+      },
+    });
+    if (!wheel) throw new Error("Wheel not found.");
+    if (wheel.status !== "COMPLETED" || wheel.winnerEntryIndex === null) {
+      throw new Error("Only a persisted completed result can be accepted.");
+    }
+    if (wheel.resultAcceptedAt) return wheel;
+    return transaction.gameWheel.update({
+      where: { id: wheel.id },
+      data: { resultAcceptedAt: new Date() },
+    });
+  });
+}

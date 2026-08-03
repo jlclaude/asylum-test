@@ -212,6 +212,12 @@ export async function permanentlyDeleteGame(
     const game = await transaction.game.findFirst({ where: { id, shop } });
     if (!game) throw new Error("Game not found.");
     if (!game.archivedAt) throw new Error("Only archived games can be permanently deleted.");
+    await transaction.prizeClaim.updateMany({
+      where: { gameId: game.id, status: "OPEN", expiresAt: { lte: new Date() } },
+      data: { status: "EXPIRED", activeGameWheelId: null },
+    });
+    const unclosedPrizeClaims = await transaction.prizeClaim.count({ where: { gameId: game.id, status: { in: ["OPEN", "SUBMITTED", "REVIEWED"] } } });
+    if (unclosedPrizeClaims > 0) throw new Error("Fulfill, revoke, or allow all active prize claims to expire before permanently deleting this game.");
     if (!deleteConfirmationMatches(confirmation, game.title)) {
       throw new Error("Type the exact game title or DELETE to confirm permanent deletion.");
     }

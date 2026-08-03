@@ -1,6 +1,7 @@
 export type WheelResultStatus = "READY" | "SPINNING" | "COMPLETED";
 
 export type WheelResult = {
+  id?: string;
   label: string;
   type: "NAME" | "VALUE";
   status: WheelResultStatus;
@@ -8,6 +9,7 @@ export type WheelResult = {
   spinDurationSeconds: number | null;
   completedAt: string | null;
   winningClaimQuantity: number | null;
+  resultAcceptedAt?: string | null;
 };
 
 export type RoundResults = {

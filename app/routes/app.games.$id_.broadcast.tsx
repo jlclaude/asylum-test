@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from "react";
-import { useLoaderData } from "react-router";
+import { useFetcher, useLoaderData } from "react-router";
 
 import { BroadcastCompletion } from "../components/broadcast/BroadcastCompletion";
 import { SpinMusicControls } from "../components/audio/SpinMusicControls";
@@ -31,13 +31,16 @@ export default function BroadcastModePage() {
   const { game, run, results, secondChance } = useLoaderData<typeof loader>();
   const fullscreenTarget = useRef<HTMLElement>(null);
   const wheelRef = useRef<WheelOperatorHandle>(null);
+  const acceptFetcher = useFetcher();
   const [themeKey, setThemeKey] = useState<AsylumThemeKey>("classic");
   const [message, setMessage] = useState<string | null>(null);
   const [operatorState, setOperatorState] = useState<WheelOperatorState | null>(null);
-  const [acceptedIds, setAcceptedIds] = useState<Set<string>>(() => new Set());
-  const acceptedIdsRef = useRef(new Set<string>());
-  const [finalResultAccepted, setFinalResultAccepted] = useState(false);
   const wheels = useMemo(() => (run?.rounds.flatMap((round) => round.wheels) ?? []) as WheelData[], [run]);
+  const [acceptedIds, setAcceptedIds] = useState<Set<string>>(() => new Set(wheels.filter((wheel) => wheel.resultAcceptedAt).map((wheel) => wheel.id)));
+  const acceptedIdsRef = useRef(new Set(wheels.filter((wheel) => wheel.resultAcceptedAt).map((wheel) => wheel.id)));
+  const [finalResultAccepted, setFinalResultAccepted] = useState(
+    () => wheels.length > 0 && wheels.every((wheel) => wheel.status === "COMPLETED" && Boolean(wheel.resultAcceptedAt)),
+  );
   const [activeId, setActiveId] = useState<string | null>(() => defaultBroadcastActiveWheelId(wheels));
   const activeWheel = wheels.find((wheel) => wheel.id === activeId) ?? wheels[0] ?? null;
   const { muted, toggleMuted } = useSoundPreference();
@@ -46,6 +49,7 @@ export default function BroadcastModePage() {
   const acceptResult = useCallback((wheelId: string) => {
     if (acceptedIdsRef.current.has(wheelId)) return;
     acceptedIdsRef.current.add(wheelId);
+    acceptFetcher.submit({ intent: "accept-result", wheelId }, { method: "post" });
     setAcceptedIds((current) => new Set(current).add(wheelId));
     const nextId = nextUnfinishedWheelId(wheels, wheelId);
     if (nextId) {
@@ -56,7 +60,7 @@ export default function BroadcastModePage() {
       setFinalResultAccepted(true);
       setMessage("All persisted results accepted.");
     }
-  }, [wheels]);
+  }, [acceptFetcher, wheels]);
 
   const runAction = useCallback((operatorAction: WheelOperatorAction): WheelOperatorResult => (
     wheelRef.current?.runAction(operatorAction) ?? { triggered: false, message: "Active wheel controls are unavailable." }
