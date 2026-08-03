@@ -10,6 +10,16 @@ export type PublicPrizeProduct = {
   imageAlt: string | null;
 };
 
+export type PrizeCollectionChoice = {
+  id: string;
+  title: string;
+  handle: string;
+  updatedAt: string;
+  imageUrl: string | null;
+  imageAlt: string | null;
+  productCount: number | null;
+};
+
 type ProductNode = {
   id: string; title: string; handle: string; status: string;
   featuredImage: { url: string; altText: string | null } | null;
@@ -18,6 +28,18 @@ type ProductNode = {
 const COLLECTIONS_QUERY = `#graphql
   query PrizeCollections($ids: [ID!]!) {
     nodes(ids: $ids) { ... on Collection { id title handle } }
+  }`;
+
+const COLLECTION_LIST_QUERY = `#graphql
+  query PrizeClaimCollections($first: Int!, $after: String, $query: String) {
+    collections(first: $first, after: $after, query: $query, sortKey: TITLE) {
+      nodes {
+        id title handle updatedAt
+        image { url altText }
+        productsCount { count }
+      }
+      pageInfo { hasNextPage endCursor }
+    }
   }`;
 
 const COLLECTION_PRODUCTS_QUERY = `#graphql
@@ -42,6 +64,39 @@ export async function verifyPrizeOptionCollections(admin: AdminApiContext, optio
     if (!collection) throw new Error(`The collection for “${option.label}” is unavailable.`);
     return { ...option, collectionTitle: collection.title, collectionHandle: collection.handle };
   });
+}
+
+function collectionSearchQuery(search: string) {
+  const normalized = search.trim().replace(/[\\:*()]/g, " ").replace(/\s+/g, " ");
+  if (!normalized) return null;
+  return `title:*${normalized}* OR handle:*${normalized}*`;
+}
+
+export async function listPrizeCollections(admin: AdminApiContext, input: { after?: string | null; search?: string; first?: number } = {}) {
+  const first = Math.min(Math.max(input.first ?? 50, 1), 50);
+  const response = await admin.graphql(COLLECTION_LIST_QUERY, {
+    variables: { first, after: input.after || null, query: collectionSearchQuery(input.search ?? "") },
+  });
+  const payload = await response.json() as {
+    data?: { collections?: { nodes: Array<{ id: string; title: string; handle: string; updatedAt: string; image: { url: string; altText: string | null } | null; productsCount?: { count: number } | null }>; pageInfo: { hasNextPage: boolean; endCursor: string | null } } };
+    errors?: Array<{ message: string }>;
+  };
+  if (payload.errors?.length) throw new Error("Shopify could not load collections.");
+  const connection = payload.data?.collections;
+  if (!connection) throw new Error("Shopify returned no collection data.");
+  const collections: PrizeCollectionChoice[] = connection.nodes.map((node) => ({
+    id: node.id,
+    title: node.title,
+    handle: node.handle,
+    updatedAt: node.updatedAt,
+    imageUrl: node.image?.url ?? null,
+    imageAlt: node.image?.altText ?? null,
+    productCount: typeof node.productsCount?.count === "number" ? node.productsCount.count : null,
+  }));
+  if (process.env.NODE_ENV === "development") {
+    console.info("Prize collection query:", { count: collections.length, collections: collections.map(({ id, title }) => ({ id, title })), pageInfo: connection.pageInfo });
+  }
+  return { collections, pageInfo: connection.pageInfo };
 }
 
 async function getCollectionPage(admin: AdminApiContext, collectionId: string, after: string | null, first = 50) {

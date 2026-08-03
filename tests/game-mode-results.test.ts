@@ -9,7 +9,7 @@ import { formatPrizeClaimShippingSummary, isPrizeClaimExpired, prizeClaimExpirat
 import { buildPrizeClaimUrl, generatePrizeClaimToken, hashPrizeClaimToken } from "../app/lib/prize-claim-token.server.ts";
 import { decryptPrizeClaimToken, encryptPrizeClaimToken } from "../app/lib/prize-claim-encryption.server.ts";
 import { parsePrizePackageOptions, validateAdminPrizePackageOptions, validateStructuredPrizeSelection } from "../app/lib/prize-packages.ts";
-import { loadPublicPrizeProducts, resolveSubmittedPrizeProducts, verifyPrizeOptionCollections } from "../app/lib/shopify-prize-products.server.ts";
+import { listPrizeCollections, loadPublicPrizeProducts, resolveSubmittedPrizeProducts, verifyPrizeOptionCollections } from "../app/lib/shopify-prize-products.server.ts";
 import { formatRaffleCode, parseRaffleSearch } from "../app/lib/raffle-number.ts";
 import { getContainmentLabel, getWheelDisplayLabel } from "../app/lib/wheel-labels.ts";
 import { idleRotationAt, remainingSpinSeconds, wheelPositionAt, wheelSpinTotalDegrees } from "../app/lib/wheel-effects.client.ts";
@@ -438,6 +438,33 @@ test("Shopify collection configuration and public products stay collection-scope
   const products = await loadPublicPrizeProducts(admin as never, verified[0]!);
   assert.deepEqual(products.map((product) => product.title), ["Phaze II"]);
   assert.equal(JSON.stringify(products).includes("accessToken"), false);
+});
+
+test("collection picker maps every Shopify collection and authoritative product count independently", async () => {
+  const admin = { graphql: async () => new Response(JSON.stringify({ data: { collections: { nodes: [
+    { id: "gid://shopify/Collection/1", title: "Home page", handle: "frontpage", updatedAt: "2026-01-01", image: null, productsCount: { count: 0 } },
+    { id: "gid://shopify/Collection/2", title: "Domestic Balls", handle: "domestic-balls", updatedAt: "2026-01-02", image: { url: "https://cdn.example/domestic.png", altText: "Domestic" }, productsCount: { count: 24 } },
+    { id: "gid://shopify/Collection/3", title: "Overseas Balls", handle: "overseas-balls", updatedAt: "2026-01-03", image: null, productsCount: null },
+  ], pageInfo: { hasNextPage: true, endCursor: "next-page" } } } }), { headers: { "Content-Type": "application/json" } }) };
+  const result = await listPrizeCollections(admin as never);
+  assert.deepEqual(result.collections.map(({ id, title, productCount }) => ({ id, title, productCount })), [
+    { id: "gid://shopify/Collection/1", title: "Home page", productCount: 0 },
+    { id: "gid://shopify/Collection/2", title: "Domestic Balls", productCount: 24 },
+    { id: "gid://shopify/Collection/3", title: "Overseas Balls", productCount: null },
+  ]);
+  assert.equal(result.pageInfo.endCursor, "next-page");
+});
+
+test("collection search and pagination pass fresh Shopify query variables", async () => {
+  const calls: Array<Record<string, unknown>> = [];
+  const admin = { graphql: async (_query: string, options: { variables: Record<string, unknown> }) => {
+    calls.push(options.variables);
+    return new Response(JSON.stringify({ data: { collections: { nodes: [], pageInfo: { hasNextPage: false, endCursor: null } } } }), { headers: { "Content-Type": "application/json" } });
+  } };
+  await listPrizeCollections(admin as never, { search: "Domestic", after: "cursor-1" });
+  await listPrizeCollections(admin as never, { search: "", after: null });
+  assert.deepEqual(calls[0], { first: 50, after: "cursor-1", query: "title:*Domestic* OR handle:*Domestic*" });
+  assert.deepEqual(calls[1], { first: 50, after: null, query: null });
 });
 
 test("public collection products follow Shopify pagination within a bounded limit", async () => {
