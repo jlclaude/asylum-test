@@ -68,14 +68,6 @@ const stateMessage = (state: string) =>
         ? "This prize request has already been submitted."
         : "This prize claim link is unavailable.";
 
-function PrizeClaimLogo() {
-  return (
-    <div className="prize-claim-logo-frame">
-      <AsylumLogo className="prize-claim-logo" />
-    </div>
-  );
-}
-
 export default function PublicPrizeClaimPage() {
   const { claim } = useLoaderData<typeof loader>();
   const actionData = useActionData<ActionData>();
@@ -86,7 +78,7 @@ export default function PublicPrizeClaimPage() {
     return (
       <main className="prize-public-page">
         <section className="prize-public-card prize-confirmation">
-          <PrizeClaimLogo />
+          <AsylumLogo />
           <p>Submission secured</p>
           <h1>PRIZE REQUEST RECEIVED</h1>
           <strong>{value.raffleCode}</strong>
@@ -121,7 +113,7 @@ export default function PublicPrizeClaimPage() {
     return (
       <main className="prize-public-page">
         <section className="prize-public-card">
-          <PrizeClaimLogo />
+          <AsylumLogo />
           <h1>PRIZE CLAIM</h1>
           <p className="prize-message prize-error" role="alert">
             {stateMessage(claim.state)}
@@ -133,7 +125,7 @@ export default function PublicPrizeClaimPage() {
     <main className="prize-public-page">
       <section className="prize-public-card">
         <header>
-          <PrizeClaimLogo />
+          <AsylumLogo />
           <p>Private winner fulfillment</p>
           <h1>PRIZE CLAIM</h1>
           <strong>{claim.raffleCode}</strong>
@@ -287,7 +279,7 @@ export function ErrorBoundary() {
   return (
     <main className="prize-public-page">
       <section className="prize-public-card">
-        <PrizeClaimLogo />
+        <AsylumLogo />
         <h1>PRIZE CLAIM</h1>
         <p className="prize-message prize-error" role="alert">
           {message}
