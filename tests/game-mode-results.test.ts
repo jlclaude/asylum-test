@@ -5,7 +5,7 @@ import { toPublicGameResults } from "../app/lib/game-results.ts";
 import { adjacentWheelId, broadcastWheelStatus, defaultActiveWheelId, defaultBroadcastActiveWheelId, defaultGameModeActiveWheelId, fullscreenIsActive, nextUnfinishedWheelId, savedSoundIsMuted, shortcutTargetIsEditable, unfinishedWheelIds, wheelActionBlockReason, wheelScrollBehavior } from "../app/lib/game-mode-operator.ts";
 import { formatPublicName } from "../app/lib/public-name.ts";
 import { claimNameEditBlockReason, replaceClaimDisplayNameInEntries, validateClaimDisplayName } from "../app/lib/claim-display-name.ts";
-import { isPrizeClaimExpired, prizeClaimExpirationDate, validatePrizeClaimSubmission } from "../app/lib/prize-claim.ts";
+import { formatPrizeClaimShippingSummary, isPrizeClaimExpired, prizeClaimExpirationDate, validatePrizeClaimSubmission } from "../app/lib/prize-claim.ts";
 import { generatePrizeClaimToken, hashPrizeClaimToken } from "../app/lib/prize-claim-token.server.ts";
 import { formatRaffleCode, parseRaffleSearch } from "../app/lib/raffle-number.ts";
 import { getContainmentLabel, getWheelDisplayLabel } from "../app/lib/wheel-labels.ts";
@@ -313,14 +313,18 @@ test("prize claim tokens have 256-bit randomness and are stored by hash", () => 
   assert.equal(hashPrizeClaimToken(first), hashPrizeClaimToken(first));
 });
 
-test("prize request validation requires prize, recipient, and contact", () => {
+test("prize request validation requires prize, recipient, and shipping address", () => {
   const missing = new FormData();
   assert.equal("error" in validatePrizeClaimSubmission(missing), true);
 
   const valid = new FormData();
   valid.set("preferredPrize", "  Signed game  ");
   valid.set("recipientName", "Jane Doe");
-  valid.set("email", "jane@example.com");
+  valid.set("addressLine1", "123 Main St");
+  valid.set("city", "Orlando");
+  valid.set("stateProvince", "FL");
+  valid.set("postalCode", "32801");
+  valid.set("country", "USA");
   valid.set("winnerNotes", "Line one\nLine two");
   const result = validatePrizeClaimSubmission(valid);
   assert.equal("input" in result, true);
@@ -328,6 +332,35 @@ test("prize request validation requires prize, recipient, and contact", () => {
     assert.equal(result.input.preferredPrize, "Signed game");
     assert.equal(result.input.winnerNotes, "Line one\nLine two");
   }
+});
+
+test("prize shipping summary includes only retained fields", () => {
+  const summary = formatPrizeClaimShippingSummary({
+    winnerDisplayName: "Jane Doe",
+    preferredPrize: "Signed game",
+    recipientName: "Jane Doe",
+    addressLine1: "123 Main St",
+    addressLine2: null,
+    city: "Orlando",
+    stateProvince: "FL",
+    postalCode: "32801",
+    country: "USA",
+    winnerNotes: null,
+  });
+  assert.equal(summary, [
+    "Winner: Jane Doe",
+    "Prize Requested: Signed game",
+    "Full Name: Jane Doe",
+    "Address: 123 Main St",
+    "City: Orlando",
+    "State: FL",
+    "Postal Code: 32801",
+    "Country: USA",
+  ].join("\n"));
+  assert.equal(summary.includes("Email"), false);
+  assert.equal(summary.includes("Phone"), false);
+  assert.equal(summary.includes("Backup"), false);
+  assert.equal(summary.includes("Variant"), false);
 });
 
 test("prize claim expiration supports none, 7, 14, and 30 days", () => {

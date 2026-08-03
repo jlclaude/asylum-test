@@ -85,7 +85,7 @@ export default function PublicPrizeClaimPage() {
           <h2>{value.gameTitle}</h2>
           <dl>
             <div>
-              <dt>Preferred prize</dt>
+              <dt>Prize requested</dt>
               <dd>{value.preferredPrize}</dd>
             </div>
             <div>
@@ -162,19 +162,11 @@ export default function PublicPrizeClaimPage() {
         ) : null}
         <Form className="prize-public-form" method="post">
           <label>
-            Preferred prize
+            Prize requested
             <input name="preferredPrize" maxLength={200} required />
           </label>
           <label>
-            Backup prize
-            <input name="backupPrize" maxLength={200} />
-          </label>
-          <label>
-            Size, color, or variant
-            <input name="sizeOrVariant" maxLength={200} />
-          </label>
-          <label>
-            Recipient full name
+            Full name
             <input
               name="recipientName"
               autoComplete="name"
@@ -182,33 +174,13 @@ export default function PublicPrizeClaimPage() {
               required
             />
           </label>
-          <div className="prize-form-grid">
-            <label>
-              Email
-              <input
-                name="email"
-                type="email"
-                autoComplete="email"
-                maxLength={200}
-              />
-            </label>
-            <label>
-              Phone
-              <input
-                name="phone"
-                type="tel"
-                autoComplete="tel"
-                maxLength={200}
-              />
-            </label>
-          </div>
-          <p className="prize-field-note">Enter at least one contact method.</p>
           <label>
-            Shipping address line 1
+            Address line 1
             <input
               name="addressLine1"
               autoComplete="address-line1"
               maxLength={200}
+              required
             />
           </label>
           <label>
@@ -226,6 +198,7 @@ export default function PublicPrizeClaimPage() {
                 name="city"
                 autoComplete="address-level2"
                 maxLength={200}
+                required
               />
             </label>
             <label>
@@ -234,6 +207,7 @@ export default function PublicPrizeClaimPage() {
                 name="stateProvince"
                 autoComplete="address-level1"
                 maxLength={200}
+                required
               />
             </label>
             <label>
@@ -242,6 +216,7 @@ export default function PublicPrizeClaimPage() {
                 name="postalCode"
                 autoComplete="postal-code"
                 maxLength={200}
+                required
               />
             </label>
             <label>
@@ -250,6 +225,7 @@ export default function PublicPrizeClaimPage() {
                 name="country"
                 autoComplete="country-name"
                 maxLength={200}
+                required
               />
             </label>
           </div>
@@ -258,7 +234,7 @@ export default function PublicPrizeClaimPage() {
             <textarea name="winnerNotes" maxLength={2000} />
           </label>
           <p className="prize-privacy">
-            Your contact and shipping details are used only by the host to
+            Your shipping details are used only by the host to
             fulfill this prize request.
           </p>
           <button disabled={busy}>

@@ -197,11 +197,7 @@ model PrizeClaim {
   fulfilledAt       DateTime?
   revokedAt         DateTime?
   preferredPrize    String?
-  backupPrize       String?
-  sizeOrVariant     String?
   recipientName     String?
-  email             String?
-  phone             String?
   addressLine1      String?
   addressLine2      String?
   city              String?

@@ -14,6 +14,7 @@ import {
 } from "../models/prize-claim.server";
 import { authenticate } from "../shopify.server";
 import { formatRaffleCode } from "../lib/raffle-number";
+import { formatPrizeClaimShippingSummary } from "../lib/prize-claim";
 import "../styles/prize-claims.css";
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const { session } = await authenticate.admin(request);
@@ -90,11 +91,7 @@ export default function PrizeClaimDetail() {
   const actionData = useActionData<ActionData>();
   const navigation = useNavigation();
   const busy = navigation.state === "submitting";
-  const contact = [claim.recipientName, claim.email, claim.phone]
-    .filter(Boolean)
-    .join("\n");
-  const shipping = [
-    claim.recipientName,
+  const shippingAddress = [
     claim.addressLine1,
     claim.addressLine2,
     [claim.city, claim.stateProvince, claim.postalCode]
@@ -104,6 +101,7 @@ export default function PrizeClaimDetail() {
   ]
     .filter(Boolean)
     .join("\n");
+  const shippingSummary = formatPrizeClaimShippingSummary(claim);
   return (
     <main className="prize-admin-page">
       <div className="prize-admin-shell">
@@ -126,53 +124,35 @@ export default function PrizeClaimDetail() {
             <h2>Prize request</h2>
             <dl>
               <div>
-                <dt>Preferred</dt>
+                <dt>Prize requested</dt>
                 <dd>{show(claim.preferredPrize)}</dd>
               </div>
               <div>
-                <dt>Backup</dt>
-                <dd>{show(claim.backupPrize)}</dd>
+                <dt>Winner name</dt>
+                <dd>{claim.winnerDisplayName}</dd>
               </div>
               <div>
-                <dt>Size / variant</dt>
-                <dd>{show(claim.sizeOrVariant)}</dd>
-              </div>
-              <div>
-                <dt>Winner notes</dt>
+                <dt>Notes</dt>
                 <dd className="prize-prewrap">{show(claim.winnerNotes)}</dd>
               </div>
             </dl>
           </article>
           <article>
-            <h2>Private contact and shipping</h2>
+            <h2>Shipping address</h2>
             <dl>
               <div>
-                <dt>Recipient</dt>
+                <dt>Full name</dt>
                 <dd>{show(claim.recipientName)}</dd>
               </div>
               <div>
-                <dt>Email</dt>
-                <dd>{show(claim.email)}</dd>
-              </div>
-              <div>
-                <dt>Phone</dt>
-                <dd>{show(claim.phone)}</dd>
-              </div>
-              <div>
                 <dt>Address</dt>
-                <dd className="prize-prewrap">{shipping || "—"}</dd>
+                <dd className="prize-prewrap">{shippingAddress || "—"}</dd>
               </div>
             </dl>
             <div className="prize-actions">
               <button
                 type="button"
-                onClick={() => void navigator.clipboard.writeText(contact)}
-              >
-                Copy Contact Summary
-              </button>
-              <button
-                type="button"
-                onClick={() => void navigator.clipboard.writeText(shipping)}
+                onClick={() => void navigator.clipboard.writeText(shippingSummary)}
               >
                 Copy Shipping Summary
               </button>
@@ -190,10 +170,6 @@ export default function PrizeClaimDetail() {
                 <dd>{date(claim.generatedAt)}</dd>
               </div>
               <div>
-                <dt>Expires</dt>
-                <dd>{date(claim.expiresAt)}</dd>
-              </div>
-              <div>
                 <dt>Submitted</dt>
                 <dd>{date(claim.submittedAt)}</dd>
               </div>
@@ -204,14 +180,6 @@ export default function PrizeClaimDetail() {
               <div>
                 <dt>Fulfilled</dt>
                 <dd>{date(claim.fulfilledAt)}</dd>
-              </div>
-              <div>
-                <dt>Revoked</dt>
-                <dd>{date(claim.revokedAt)}</dd>
-              </div>
-              <div>
-                <dt>Admin notes</dt>
-                <dd className="prize-prewrap">{show(claim.adminNotes)}</dd>
               </div>
             </dl>
           </article>
