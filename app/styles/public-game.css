@@ -1,0 +1,121 @@
+html:has(.public-game-page),
+html:has(.public-error-page),
+body:has(.public-game-page),
+body:has(.public-error-page) {
+  min-height: 100%;
+  background: #0b0b0d;
+  color-scheme: dark;
+}
+
+body:has(.public-game-page),
+body:has(.public-error-page) {
+  margin: 0;
+}
+
+.public-game-page {
+  --theme-page: #0b0b0d;
+  --theme-panel: #1a1a1d;
+  --theme-text: #f5f5f5;
+  --theme-muted: #a2a3a8;
+  --theme-border: #303034;
+  --theme-primary: #d94051;
+  --theme-primary-dark: #8f2431;
+  min-height: 100vh;
+  color: var(--theme-text, #f5f5f5);
+  background: var(--theme-page, #0b0b0d);
+}
+
+.public-game-page,
+.public-game-page *,
+.public-game-page *::before,
+.public-game-page *::after,
+.public-error-page,
+.public-error-page *,
+.public-error-page *::before,
+.public-error-page *::after {
+  box-sizing: border-box;
+}
+
+.public-game-page .public-game-shell {
+  width: min(1120px, 100%);
+  margin-inline: auto;
+}
+
+.public-game-page .public-brand {
+  color: var(--theme-text, #f5f5f5);
+}
+
+.public-game-page .public-brand-mark {
+  flex: 0 0 46px;
+  width: 46px;
+  height: 46px;
+  overflow: hidden;
+  background: linear-gradient(145deg, #251316, #130e10);
+}
+
+.public-game-page .public-claim-logo {
+  display: block;
+  width: 100%;
+  max-width: 46px;
+  height: auto;
+  max-height: 46px;
+  object-fit: contain;
+}
+
+.public-game-page .public-hero,
+.public-game-page .public-stat,
+.public-game-page .public-progress,
+.public-game-page .public-card {
+  color: var(--theme-text, #f5f5f5);
+  background-color: var(--theme-panel, #161619);
+  border-color: var(--theme-border, #3a3a40);
+}
+
+.public-game-page .public-description,
+.public-game-page .public-card-intro,
+.public-game-page .public-stat-note,
+.public-game-page .public-claim-meta {
+  color: var(--theme-muted, #a2a3a8);
+}
+
+.public-game-page .public-input,
+.public-game-page .public-textarea {
+  width: 100%;
+  color: var(--theme-text, #f5f5f5);
+  background: #111113;
+  border-color: var(--theme-border, #3a3a40);
+}
+
+.public-game-page .public-input::placeholder,
+.public-game-page .public-textarea::placeholder {
+  color: #77787e;
+  opacity: 1;
+}
+
+.public-game-page .public-submit {
+  color: #fff;
+  background: linear-gradient(
+    180deg,
+    var(--theme-primary, #d94051),
+    var(--theme-primary-dark, #8f2431)
+  );
+}
+
+.public-error-page {
+  min-height: 100vh;
+  color: #f5f5f5;
+  background: #0b0b0d;
+}
+
+@media (max-width: 480px) {
+  .public-game-page .public-brand-mark {
+    flex-basis: 42px;
+    width: 42px;
+    height: 42px;
+  }
+
+  .public-game-page .public-claim-logo {
+    max-width: 42px;
+    max-height: 42px;
+  }
+}
