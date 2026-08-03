@@ -41,6 +41,7 @@ import { GamePrizeClaims } from "../components/prize-claims/GamePrizeClaims";
 import { PRIZE_CLAIM_EXPIRATION_DAYS, type PrizeClaimExpirationDays } from "../lib/prize-claim";
 import { buildPrizeClaimUrl } from "../lib/prize-claim-token.server";
 import { validateAdminPrizePackageOptions } from "../lib/prize-packages";
+import { verifyPrizeOptionCollections } from "../lib/shopify-prize-products.server";
 import { createWinnerPrizeClaim, getEligiblePrizeWheels, getPrizeClaimsForGame, toPrizeClaimSummary, updatePrizeClaimStatus } from "../models/prize-claim.server";
 import { getSecondChanceResult } from "../models/second-chance.server";
 import { renderGameInstructionVariables } from "../lib/game-instruction-variables";
@@ -129,7 +130,7 @@ export async function action({
   request,
   params,
 }: ActionFunctionArgs) {
-  const { session, redirect } = await authenticate.admin(request);
+  const { session, redirect, admin } = await authenticate.admin(request);
 
   if (!params.id) return { error: "Game ID is missing." };
 
@@ -190,7 +191,8 @@ export async function action({
       if (!PRIZE_CLAIM_EXPIRATION_DAYS.includes(expirationDays as PrizeClaimExpirationDays)) return { error: "Select a valid expiration period.", intent, wheelId };
       const packageValidation = validateAdminPrizePackageOptions(formData.get("prizeOptionsJson"));
       if ("error" in packageValidation) return { error: packageValidation.error, intent, wheelId };
-      const result = await createWinnerPrizeClaim({ shop: session.shop, gameId: game.id, gameWheelId: wheelId, expirationDays: expirationDays as PrizeClaimExpirationDays, prizeOptions: packageValidation.options });
+      const verifiedOptions = await verifyPrizeOptionCollections(admin, packageValidation.options);
+      const result = await createWinnerPrizeClaim({ shop: session.shop, gameId: game.id, gameWheelId: wheelId, expirationDays: expirationDays as PrizeClaimExpirationDays, prizeOptions: verifiedOptions });
       if (!result.created) return { success: "An active claim link already exists for this winner.", intent, wheelId };
       const privateUrl = buildPrizeClaimUrl(result.token, new URL(request.url).origin);
       return data<ActionData>(

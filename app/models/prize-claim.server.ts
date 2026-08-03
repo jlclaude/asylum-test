@@ -1,4 +1,5 @@
 import type { PrizeClaimStatus } from "@prisma/client";
+import type { AdminApiContext } from "@shopify/shopify-app-react-router/server";
 import db from "../db.server";
 import {
   isPrizeClaimExpired,
@@ -17,9 +18,11 @@ import {
   parsePrizePackageOptions,
   parseSelectedBalls,
   parseSelectedPrizeOption,
+  isCollectionPrizeOption,
   validateStructuredPrizeSelection,
   type PrizePackageOption,
 } from "../lib/prize-packages";
+import { resolveSubmittedPrizeProducts } from "../lib/shopify-prize-products.server";
 
 export async function createWinnerPrizeClaim(input: {
   shop: string;
@@ -127,10 +130,11 @@ export async function getPublicPrizeClaim(token: string) {
     wheelLabel: claim.wheelLabel,
     expiresAt: claim.expiresAt?.toISOString() ?? null,
     prizeOptions,
+    shop: claim.shop,
   };
 }
 
-export async function submitPublicPrizeClaim(token: string, formData: FormData) {
+export async function submitPublicPrizeClaim(token: string, formData: FormData, admin?: AdminApiContext) {
   const tokenHash = hashPrizeClaimToken(token);
   return db.$transaction(async (transaction) => {
     const claim = await transaction.prizeClaim.findUnique({
@@ -158,16 +162,29 @@ export async function submitPublicPrizeClaim(token: string, formData: FormData) 
       selectedBallsJson: string;
     } | Record<string, never> = {};
     if (options) {
-      const selection = validateStructuredPrizeSelection(formData, options);
-      if ("error" in selection) throw new Error(selection.error);
-      const validation = validatePrizeClaimSubmission(formData, selection.option.label);
+      const selectedIds = formData.getAll("selectedPrizeOptionId");
+      if (selectedIds.length !== 1) throw new Error("Select exactly one prize option.");
+      const option = options.find((candidate) => candidate.id === String(selectedIds[0]));
+      if (!option) throw new Error("Select one of the available prize options.");
+      let selectedBallsJson: string;
+      if (isCollectionPrizeOption(option)) {
+        if (!admin) throw new Error("Shopify product selection is temporarily unavailable. Contact the host.");
+        const products = formData.getAll("productId").map(String);
+        const weights = formData.getAll("ballWeight").map((value) => String(value));
+        selectedBallsJson = JSON.stringify(await resolveSubmittedPrizeProducts(admin, option, products, weights));
+      } else {
+        const selection = validateStructuredPrizeSelection(formData, options);
+        if ("error" in selection) throw new Error(selection.error);
+        selectedBallsJson = JSON.stringify(selection.balls);
+      }
+      const validation = validatePrizeClaimSubmission(formData, option.label);
       if ("error" in validation) throw new Error(validation.error);
       input = validation.input;
       structuredData = {
-        selectedPrizeOptionId: selection.option.id,
-        selectedPrizeOptionLabel: selection.option.label,
-        selectedPrizeOptionJson: JSON.stringify(selection.option),
-        selectedBallsJson: JSON.stringify(selection.balls),
+        selectedPrizeOptionId: option.id,
+        selectedPrizeOptionLabel: option.label,
+        selectedPrizeOptionJson: JSON.stringify(option),
+        selectedBallsJson,
       };
     } else {
       const validation = validatePrizeClaimSubmission(formData);

@@ -9,6 +9,7 @@ import { formatPrizeClaimShippingSummary, isPrizeClaimExpired, prizeClaimExpirat
 import { buildPrizeClaimUrl, generatePrizeClaimToken, hashPrizeClaimToken } from "../app/lib/prize-claim-token.server.ts";
 import { decryptPrizeClaimToken, encryptPrizeClaimToken } from "../app/lib/prize-claim-encryption.server.ts";
 import { parsePrizePackageOptions, validateAdminPrizePackageOptions, validateStructuredPrizeSelection } from "../app/lib/prize-packages.ts";
+import { loadPublicPrizeProducts, resolveSubmittedPrizeProducts, verifyPrizeOptionCollections } from "../app/lib/shopify-prize-products.server.ts";
 import { formatRaffleCode, parseRaffleSearch } from "../app/lib/raffle-number.ts";
 import { getContainmentLabel, getWheelDisplayLabel } from "../app/lib/wheel-labels.ts";
 import { idleRotationAt, remainingSpinSeconds, wheelPositionAt, wheelSpinTotalDegrees } from "../app/lib/wheel-effects.client.ts";
@@ -404,17 +405,71 @@ test("prize shipping summary includes only retained fields", () => {
 });
 
 test("admin prize package validation normalizes one or multiple bowling-ball options", () => {
-  const one = validateAdminPrizePackageOptions(JSON.stringify([{ label: "1 Overseas Ball", ballType: "OVERSEAS", ballCount: 1 }]));
+  const overseas = { collectionId: "gid://shopify/Collection/1", collectionTitle: "Overseas Bowling Balls", collectionHandle: "overseas" };
+  const domestic = { collectionId: "gid://shopify/Collection/2", collectionTitle: "Domestic Bowling Balls", collectionHandle: "domestic" };
+  const one = validateAdminPrizePackageOptions(JSON.stringify([{ label: "1 Overseas Ball", ballType: "OVERSEAS", ballCount: 1, ...overseas }]));
   assert.equal("options" in one, true);
   if (one.options) {
-    assert.deepEqual(one.options[0], { id: "option-1", label: "1 Overseas Ball", ballType: "OVERSEAS", ballCount: 1, position: 1 });
+    assert.deepEqual(one.options[0], { id: "option-1", label: "1 Overseas Ball", ballType: "OVERSEAS", ballCount: 1, position: 1, ...overseas });
   }
   const two = validateAdminPrizePackageOptions(JSON.stringify([
-    { label: "1 Overseas Ball", ballType: "OVERSEAS", ballCount: 1 },
-    { label: "2 Domestic Balls", ballType: "DOMESTIC", ballCount: 2 },
+    { label: "1 Overseas Ball", ballType: "OVERSEAS", ballCount: 1, ...overseas },
+    { label: "2 Domestic Balls", ballType: "DOMESTIC", ballCount: 2, ...domestic },
   ]));
   assert.equal(two.options?.length, 2);
   assert.equal(parsePrizePackageOptions(two.json)?.[1]?.position, 2);
+});
+
+function mockCollectionAdmin(collectionId: string, products: Array<{ id: string; title: string; handle: string; status?: string }>) {
+  return {
+    graphql: async (query: string) => new Response(JSON.stringify(query.includes("PrizeCollections") ? {
+      data: { nodes: [{ id: collectionId, title: "Domestic Bowling Balls", handle: "domestic" }] },
+    } : {
+      data: { collection: { id: collectionId, title: "Domestic Bowling Balls", handle: "domestic", products: { nodes: products.map((product) => ({ ...product, status: product.status ?? "ACTIVE", featuredImage: null })), pageInfo: { hasNextPage: false, endCursor: null } } } },
+    }), { headers: { "Content-Type": "application/json" } }),
+  };
+}
+
+test("Shopify collection configuration and public products stay collection-scoped", async () => {
+  const option = { id: "option-1", label: "1 Domestic Ball", ballType: "DOMESTIC" as const, ballCount: 1, position: 1, collectionId: "gid://shopify/Collection/2", collectionTitle: "Client title", collectionHandle: null };
+  const admin = mockCollectionAdmin(option.collectionId, [{ id: "gid://shopify/Product/1", title: "Phaze II", handle: "phaze-ii" }, { id: "gid://shopify/Product/2", title: "Archived", handle: "archived", status: "ARCHIVED" }]);
+  const verified = await verifyPrizeOptionCollections(admin as never, [option]);
+  assert.equal(verified[0]?.collectionTitle, "Domestic Bowling Balls");
+  const products = await loadPublicPrizeProducts(admin as never, verified[0]!);
+  assert.deepEqual(products.map((product) => product.title), ["Phaze II"]);
+  assert.equal(JSON.stringify(products).includes("accessToken"), false);
+});
+
+test("public collection products follow Shopify pagination within a bounded limit", async () => {
+  const collectionId = "gid://shopify/Collection/2";
+  const admin = {
+    graphql: async (_query: string, options: { variables: { after: string | null } }) => new Response(JSON.stringify({ data: { collection: {
+      id: collectionId, title: "Domestic", handle: "domestic",
+      products: options.variables.after ? { nodes: [{ id: "gid://shopify/Product/2", title: "Second", handle: "second", status: "ACTIVE", featuredImage: null }], pageInfo: { hasNextPage: false, endCursor: null } } : { nodes: [{ id: "gid://shopify/Product/1", title: "First", handle: "first", status: "ACTIVE", featuredImage: null }], pageInfo: { hasNextPage: true, endCursor: "page-2" } },
+    } } }), { headers: { "Content-Type": "application/json" } }),
+  };
+  const products = await loadPublicPrizeProducts(admin as never, { id: "option-1", label: "Domestic", ballType: "DOMESTIC", ballCount: 1, position: 1, collectionId, collectionTitle: "Domestic" });
+  assert.deepEqual(products.map((product) => product.title), ["First", "Second"]);
+});
+
+test("domestic product snapshots require weight and overseas snapshots discard it", async () => {
+  const collectionId = "gid://shopify/Collection/2";
+  const admin = mockCollectionAdmin(collectionId, [{ id: "gid://shopify/Product/1", title: "Phaze II", handle: "phaze-ii" }]);
+  const domestic = { id: "option-1", label: "Domestic", ballType: "DOMESTIC" as const, ballCount: 1, position: 1, collectionId, collectionTitle: "Domestic Bowling Balls" };
+  await assert.rejects(() => resolveSubmittedPrizeProducts(admin as never, domestic, ["gid://shopify/Product/1"], []), /weights are incomplete/);
+  const balls = await resolveSubmittedPrizeProducts(admin as never, domestic, ["gid://shopify/Product/1"], ["15"]);
+  assert.equal(balls[0]?.productTitle, "Phaze II");
+  assert.equal(balls[0]?.weightPounds, 15);
+  const overseas = { ...domestic, label: "Overseas", ballType: "OVERSEAS" as const };
+  const overseasBalls = await resolveSubmittedPrizeProducts(admin as never, overseas, ["gid://shopify/Product/1"], ["16"]);
+  assert.equal(overseasBalls[0]?.weightPounds, null);
+});
+
+test("products outside or removed from the configured collection are rejected", async () => {
+  const collectionId = "gid://shopify/Collection/2";
+  const admin = mockCollectionAdmin(collectionId, [{ id: "gid://shopify/Product/1", title: "Phaze II", handle: "phaze-ii" }]);
+  const option = { id: "option-1", label: "Domestic", ballType: "DOMESTIC" as const, ballCount: 1, position: 1, collectionId, collectionTitle: "Domestic Bowling Balls" };
+  await assert.rejects(() => resolveSubmittedPrizeProducts(admin as never, option, ["gid://shopify/Product/999"], ["15"]), /no longer available/);
 });
 
 test("structured prize submission trusts the saved option and exact ball count", () => {
@@ -473,6 +528,17 @@ test("structured fulfillment summary includes package and balls in saved order",
   assert.match(summary, /ASY-000123\nFriday Bowling Raffle/);
   assert.match(summary, /Domestic Ball 1: Phaze II\nhttps:\/\/example.com\/phaze/);
   assert.match(summary, /Domestic Ball 2: Black Widow 3.0/);
+});
+
+test("product fulfillment summary shows domestic weights and no product URL", () => {
+  const summary = formatPrizeClaimShippingSummary({
+    raffleCode: "ASY-000123", gameTitle: "Friday Bowling Raffle", winnerDisplayName: "Jane Smith", preferredPrize: "2 Domestic Balls",
+    selectedPrizeOptionLabel: "2 Domestic Balls", selectedPrizeOptionJson: JSON.stringify({ ballType: "DOMESTIC" }),
+    selectedBalls: [{ position: 1, productId: "gid://shopify/Product/1", productTitle: "Phaze II", productHandle: "phaze-ii", productImageUrl: null, productImageAlt: null, collectionId: "gid://shopify/Collection/2", collectionTitle: "Domestic", weightPounds: 15 }],
+    recipientName: "Jane Smith", addressLine1: "123 Main", addressLine2: null, city: "Orlando", stateProvince: "FL", postalCode: "32801", country: "USA", winnerNotes: null,
+  });
+  assert.match(summary, /Domestic Ball 1: Phaze II\nWeight: 15 lb/);
+  assert.equal(summary.includes("Product URL"), false);
 });
 
 test("prize claim expiration supports none, 7, 14, and 30 days", () => {

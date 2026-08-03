@@ -1,10 +1,12 @@
 import { useState } from "react";
+import { useAppBridge } from "@shopify/app-bridge-react";
 import type { PrizeBallType } from "../../lib/prize-packages";
 
-type DraftOption = { label: string; ballType: PrizeBallType; ballCount: number };
-const newOption = (): DraftOption => ({ label: "", ballType: "DOMESTIC", ballCount: 1 });
+type DraftOption = { label: string; ballType: PrizeBallType; ballCount: number; collectionId: string; collectionTitle: string; collectionHandle: string };
+const newOption = (): DraftOption => ({ label: "", ballType: "DOMESTIC", ballCount: 1, collectionId: "", collectionTitle: "", collectionHandle: "" });
 
 export function PrizePackageBuilder() {
+  const shopify = useAppBridge();
   const [options, setOptions] = useState<DraftOption[]>([newOption()]);
   const update = (index: number, value: Partial<DraftOption>) =>
     setOptions((current) => current.map((option, position) => position === index ? { ...option, ...value } : option));
@@ -15,6 +17,12 @@ export function PrizePackageBuilder() {
     [next[index], next[target]] = [next[target], next[index]];
     return next;
   });
+  async function chooseCollection(index: number) {
+    const current = options[index];
+    const result = await shopify.resourcePicker({ type: "collection", action: "select", multiple: false, selectionIds: current.collectionId ? [{ id: current.collectionId }] : [] });
+    const collection = result?.selection[0];
+    if (collection) update(index, { collectionId: collection.id, collectionTitle: collection.title, collectionHandle: collection.handle });
+  }
 
   return (
     <fieldset className="prize-package-builder">
@@ -28,6 +36,7 @@ export function PrizePackageBuilder() {
           <label>Option label<input value={option.label} maxLength={200} required onChange={(event) => update(index, { label: event.currentTarget.value })} /></label>
           <label>Ball type<select value={option.ballType} onChange={(event) => update(index, { ballType: event.currentTarget.value as PrizeBallType })}><option value="DOMESTIC">Domestic</option><option value="OVERSEAS">Overseas</option><option value="CUSTOM">Custom</option></select></label>
           <label>Number of balls<input type="number" min={1} max={10} step={1} value={option.ballCount} required onChange={(event) => update(index, { ballCount: Number(event.currentTarget.value) })} /></label>
+          <div className="prize-collection-choice"><span>Shopify collection</span><strong>{option.collectionTitle || "No collection selected"}</strong><button type="button" onClick={() => void chooseCollection(index)}>{option.collectionId ? "Change collection" : "Choose collection"}</button></div>
           <div className="prize-package-controls">
             <button type="button" disabled={index === 0} onClick={() => move(index, -1)}>Move up</button>
             <button type="button" disabled={index === options.length - 1} onClick={() => move(index, 1)}>Move down</button>

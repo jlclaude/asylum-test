@@ -1,0 +1,102 @@
+import type { AdminApiContext } from "@shopify/shopify-app-react-router/server";
+import type { PrizePackageOption, ProductPrizeBallSelection } from "./prize-packages.ts";
+import { DOMESTIC_WEIGHTS } from "./prize-packages.ts";
+
+export type PublicPrizeProduct = {
+  id: string;
+  title: string;
+  handle: string;
+  imageUrl: string | null;
+  imageAlt: string | null;
+};
+
+type ProductNode = {
+  id: string; title: string; handle: string; status: string;
+  featuredImage: { url: string; altText: string | null } | null;
+};
+
+const COLLECTIONS_QUERY = `#graphql
+  query PrizeCollections($ids: [ID!]!) {
+    nodes(ids: $ids) { ... on Collection { id title handle } }
+  }`;
+
+const COLLECTION_PRODUCTS_QUERY = `#graphql
+  query PrizeCollectionProducts($id: ID!, $first: Int!, $after: String) {
+    collection(id: $id) {
+      id title handle
+      products(first: $first, after: $after) {
+        nodes { id title handle status featuredImage { url altText } }
+        pageInfo { hasNextPage endCursor }
+      }
+    }
+  }`;
+
+export async function verifyPrizeOptionCollections(admin: AdminApiContext, options: PrizePackageOption[]) {
+  const ids = [...new Set(options.map((option) => option.collectionId).filter((id): id is string => Boolean(id)))];
+  const response = await admin.graphql(COLLECTIONS_QUERY, { variables: { ids } });
+  const payload = await response.json() as { data?: { nodes?: Array<{ id: string; title: string; handle: string } | null> } };
+  const collections = new Map((payload.data?.nodes ?? []).filter((node): node is { id: string; title: string; handle: string } => Boolean(node)).map((node) => [node.id, node]));
+  if (collections.size !== ids.length) throw new Error("One or more selected collections are unavailable in this Shopify store.");
+  return options.map((option) => {
+    const collection = option.collectionId ? collections.get(option.collectionId) : null;
+    if (!collection) throw new Error(`The collection for “${option.label}” is unavailable.`);
+    return { ...option, collectionTitle: collection.title, collectionHandle: collection.handle };
+  });
+}
+
+async function getCollectionPage(admin: AdminApiContext, collectionId: string, after: string | null, first = 50) {
+  const response = await admin.graphql(COLLECTION_PRODUCTS_QUERY, { variables: { id: collectionId, first, after } });
+  const payload = await response.json() as { data?: { collection?: { id: string; title: string; handle: string; products: { nodes: ProductNode[]; pageInfo: { hasNextPage: boolean; endCursor: string | null } } } | null } };
+  return payload.data?.collection ?? null;
+}
+
+export async function loadPublicPrizeProducts(admin: AdminApiContext, option: PrizePackageOption, limit = 100) {
+  if (!option.collectionId) return [];
+  const products: PublicPrizeProduct[] = [];
+  let after: string | null = null;
+  do {
+    const collection = await getCollectionPage(admin, option.collectionId, after, Math.min(50, limit - products.length));
+    if (!collection) return [];
+    products.push(...collection.products.nodes.filter((product) => product.status === "ACTIVE").map(publicProduct));
+    if (!collection.products.pageInfo.hasNextPage || !collection.products.pageInfo.endCursor || products.length >= limit) break;
+    after = collection.products.pageInfo.endCursor;
+  } while (products.length < limit);
+  return products.slice(0, limit);
+}
+
+function publicProduct(product: ProductNode): PublicPrizeProduct {
+  return { id: product.id, title: product.title, handle: product.handle, imageUrl: product.featuredImage?.url ?? null, imageAlt: product.featuredImage?.altText ?? null };
+}
+
+export async function resolveSubmittedPrizeProducts(
+  admin: AdminApiContext,
+  option: PrizePackageOption,
+  productIds: string[],
+  weights: Array<string | null>,
+): Promise<ProductPrizeBallSelection[]> {
+  if (!option.collectionId || !option.collectionTitle) throw new Error("This prize option does not have a Shopify collection.");
+  if (productIds.length !== option.ballCount) throw new Error(`Choose exactly ${option.ballCount} bowling ${option.ballCount === 1 ? "ball" : "balls"}.`);
+  if (option.ballType === "DOMESTIC" && weights.length !== option.ballCount) throw new Error("The submitted bowling-ball weights are incomplete.");
+  const wanted = new Set(productIds);
+  const found = new Map<string, ProductNode>();
+  let after: string | null = null;
+  do {
+    const collection = await getCollectionPage(admin, option.collectionId, after);
+    if (!collection) throw new Error("The configured Shopify collection is unavailable.");
+    for (const product of collection.products.nodes) if (wanted.has(product.id) && product.status === "ACTIVE") found.set(product.id, product);
+    if (found.size === wanted.size || !collection.products.pageInfo.hasNextPage) break;
+    after = collection.products.pageInfo.endCursor;
+  } while (after);
+  if (found.size !== wanted.size) throw new Error("A selected product is no longer available in this prize collection. Choose another product.");
+  return productIds.map((productId, index) => {
+    const product = found.get(productId)!;
+    const submittedWeight = option.ballType === "DOMESTIC" ? weights[index]?.trim() ?? "" : "";
+    const weight = option.ballType === "DOMESTIC" ? Number(submittedWeight) : null;
+    if (option.ballType === "DOMESTIC" && !DOMESTIC_WEIGHTS.includes(weight as typeof DOMESTIC_WEIGHTS[number])) throw new Error(`Select a valid weight for Domestic Ball ${index + 1}.`);
+    return {
+      position: index + 1, productId: product.id, productTitle: product.title, productHandle: product.handle,
+      productImageUrl: product.featuredImage?.url ?? null, productImageAlt: product.featuredImage?.altText ?? null,
+      collectionId: option.collectionId!, collectionTitle: option.collectionTitle!, weightPounds: weight,
+    };
+  });
+}

@@ -1,3 +1,5 @@
+import { isProductPrizeBall, type PrizeBallSelection } from "./prize-packages.ts";
+
 export const PRIZE_CLAIM_EXPIRATION_DAYS = [0, 7, 14, 30] as const;
 export type PrizeClaimExpirationDays = typeof PRIZE_CLAIM_EXPIRATION_DAYS[number];
 
@@ -54,7 +56,7 @@ export function formatPrizeClaimShippingSummary(input: {
   winnerNotes: string | null;
   selectedPrizeOptionLabel?: string | null;
   selectedPrizeOptionJson?: string | null;
-  selectedBalls?: Array<{ position: number; name: string; productUrl: string | null }>;
+  selectedBalls?: PrizeBallSelection[];
 }) {
   const packageLabel = input.selectedPrizeOptionLabel ?? input.preferredPrize ?? "—";
   let ballType = "Bowling";
@@ -77,7 +79,9 @@ export function formatPrizeClaimShippingSummary(input: {
     ...(input.raffleCode || input.gameTitle ? [""] : []),
     `Winner: ${input.winnerDisplayName}`,
     `Prize Package: ${packageLabel}`,
-    ...((input.selectedBalls?.length ?? 0) ? ["", ...input.selectedBalls!.map((ball) => `${ballType} Ball ${ball.position}: ${ball.name}${ball.productUrl ? `\n${ball.productUrl}` : ""}`)] : []),
+    ...((input.selectedBalls?.length ?? 0) ? ["", ...input.selectedBalls!.flatMap((ball) => isProductPrizeBall(ball)
+      ? [`${ballType} Ball ${ball.position}: ${ball.productTitle}`, ...(ball.weightPounds ? [`Weight: ${ball.weightPounds} lb`] : []), ""]
+      : [`${ballType} Ball ${ball.position}: ${ball.name}${ball.productUrl ? `\n${ball.productUrl}` : ""}`])].filter((line, index, lines) => line !== "" || index < lines.length - 1) : []),
     "",
     "Ship To:",
     ...(destination.length ? destination : ["—"]),

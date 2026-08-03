@@ -7,9 +7,25 @@ export type PrizePackageOption = {
   ballType: PrizeBallType;
   ballCount: number;
   position: number;
+  collectionId?: string;
+  collectionTitle?: string;
+  collectionHandle?: string | null;
 };
 
-export type PrizeBallSelection = { position: number; name: string; productUrl: string | null };
+export type LegacyPrizeBallSelection = { position: number; name: string; productUrl: string | null };
+export type ProductPrizeBallSelection = {
+  position: number;
+  productId: string;
+  productTitle: string;
+  productHandle: string;
+  productImageUrl: string | null;
+  productImageAlt: string | null;
+  collectionId: string;
+  collectionTitle: string;
+  weightPounds: number | null;
+};
+export type PrizeBallSelection = LegacyPrizeBallSelection | ProductPrizeBallSelection;
+export const DOMESTIC_WEIGHTS = [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16] as const;
 
 const MAX_OPTIONS = 20;
 const MAX_BALLS = 10;
@@ -36,7 +52,13 @@ export function parsePrizePackageOptions(value: string | null | undefined): Priz
           !Number.isInteger(ballCount) || Number(ballCount) < 1 || Number(ballCount) > MAX_BALLS) {
         throw new Error("Invalid prize option.");
       }
-      return { id, label, ballType: ballType as PrizeBallType, ballCount: Number(ballCount), position: index + 1 };
+      const collectionId = cleanLine(record.collectionId);
+      const collectionTitle = cleanLine(record.collectionTitle);
+      const collectionHandle = cleanLine(record.collectionHandle) || null;
+      return {
+        id, label, ballType: ballType as PrizeBallType, ballCount: Number(ballCount), position: index + 1,
+        ...(collectionId && collectionTitle ? { collectionId, collectionTitle, collectionHandle } : {}),
+      };
     });
     if (new Set(options.map((option) => option.id)).size !== options.length) return null;
     return options;
@@ -60,11 +82,15 @@ export function validateAdminPrizePackageOptions(raw: FormDataEntryValue | null)
     const label = cleanLine(record.label);
     const ballCount = Number(record.ballCount);
     const ballType = record.ballType;
+    const collectionId = cleanLine(record.collectionId);
+    const collectionTitle = cleanLine(record.collectionTitle);
+    const collectionHandle = cleanLine(record.collectionHandle) || null;
     if (!label) return { error: `Prize option ${position + 1} needs a label.` };
     if (label.length > MAX_LABEL) return { error: `Prize option labels must be ${MAX_LABEL} characters or fewer.` };
     if (!PRIZE_BALL_TYPES.includes(ballType as PrizeBallType)) return { error: `Prize option ${position + 1} has an invalid ball type.` };
     if (!Number.isInteger(ballCount) || ballCount < 1 || ballCount > MAX_BALLS) return { error: `Prize option ${position + 1} must contain between 1 and ${MAX_BALLS} balls.` };
-    options.push({ id: `option-${position + 1}`, label, ballType: ballType as PrizeBallType, ballCount, position: position + 1 });
+    if (!collectionId.startsWith("gid://shopify/Collection/") || !collectionTitle) return { error: `Prize option ${position + 1} needs a Shopify collection.` };
+    options.push({ id: `option-${position + 1}`, label, ballType: ballType as PrizeBallType, ballCount, position: position + 1, collectionId, collectionTitle, collectionHandle });
   }
   return { options, json: JSON.stringify(options) };
 }
@@ -103,8 +129,16 @@ export function parseSelectedBalls(value: string | null | undefined): PrizeBallS
   try {
     const parsed: unknown = JSON.parse(value);
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter((item): item is PrizeBallSelection => Boolean(item && typeof item === "object" && typeof (item as PrizeBallSelection).name === "string"));
+    return parsed.filter((item): item is PrizeBallSelection => Boolean(item && typeof item === "object" && (typeof (item as LegacyPrizeBallSelection).name === "string" || typeof (item as ProductPrizeBallSelection).productTitle === "string")));
   } catch { return []; }
+}
+
+export function isCollectionPrizeOption(option: PrizePackageOption) {
+  return Boolean(option.collectionId && option.collectionTitle);
+}
+
+export function isProductPrizeBall(ball: PrizeBallSelection): ball is ProductPrizeBallSelection {
+  return "productId" in ball;
 }
 
 export function parseSelectedPrizeOption(value: string | null | undefined): PrizePackageOption | null {

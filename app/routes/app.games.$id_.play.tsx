@@ -57,6 +57,7 @@ import { formatRaffleCode } from "../lib/raffle-number";
 import { PRIZE_CLAIM_EXPIRATION_DAYS, type PrizeClaimExpirationDays } from "../lib/prize-claim";
 import { buildPrizeClaimUrl } from "../lib/prize-claim-token.server";
 import { validateAdminPrizePackageOptions } from "../lib/prize-packages";
+import { verifyPrizeOptionCollections } from "../lib/shopify-prize-products.server";
 import { createWinnerPrizeClaim, getEligiblePrizeWheels, getPrizeClaimsForGame, toPrizeClaimSummary, updatePrizeClaimStatus } from "../models/prize-claim.server";
 
 import "../styles/asylum-brand.css";
@@ -175,7 +176,7 @@ export async function action({
   request,
   params,
 }: ActionFunctionArgs) {
-  const { session } =
+  const { session, admin } =
     await authenticate.admin(request);
 
   if (!params.id) {
@@ -307,7 +308,8 @@ export async function action({
       if (!PRIZE_CLAIM_EXPIRATION_DAYS.includes(expirationDays as PrizeClaimExpirationDays)) return { intent, wheelId, error: "Select a valid expiration period." };
       const packageValidation = validateAdminPrizePackageOptions(formData.get("prizeOptionsJson"));
       if ("error" in packageValidation) return { intent, wheelId, error: packageValidation.error };
-      const result = await createWinnerPrizeClaim({ shop: session.shop, gameId: params.id, gameWheelId: wheelId, expirationDays: expirationDays as PrizeClaimExpirationDays, prizeOptions: packageValidation.options });
+      const verifiedOptions = await verifyPrizeOptionCollections(admin, packageValidation.options);
+      const result = await createWinnerPrizeClaim({ shop: session.shop, gameId: params.id, gameWheelId: wheelId, expirationDays: expirationDays as PrizeClaimExpirationDays, prizeOptions: verifiedOptions });
       if (!result.created) return { intent, wheelId, success: "An active claim link already exists for this winner." };
       return data<WheelActionData>(
         { intent, wheelId, success: "Private prize claim link created.", privateUrl: buildPrizeClaimUrl(result.token, new URL(request.url).origin) },

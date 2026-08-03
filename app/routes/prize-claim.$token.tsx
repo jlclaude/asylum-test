@@ -9,6 +9,9 @@ import {
 } from "react-router";
 import { AsylumLogo } from "../components/asylum/AsylumLogo";
 import { PublicPrizePackageSelector } from "../components/prize-claims/PublicPrizePackageSelector";
+import { isCollectionPrizeOption } from "../lib/prize-packages";
+import { loadPublicPrizeProducts } from "../lib/shopify-prize-products.server";
+import { unauthenticated } from "../shopify.server";
 import {
   getPublicPrizeClaim,
   submitPublicPrizeClaim,
@@ -22,7 +25,18 @@ export async function loader({ params }: LoaderFunctionArgs) {
   const claim = await getPublicPrizeClaim(params.token);
   if (!claim)
     throw new Response("This prize claim link is invalid.", { status: 404 });
-  return { claim };
+  if (claim.state !== "OPEN") return { claim, productsByOption: {} };
+  const { shop, ...publicClaim } = claim;
+  const collectionOptions = publicClaim.prizeOptions?.filter(isCollectionPrizeOption) ?? [];
+  if (!collectionOptions.length) return { claim: publicClaim, productsByOption: {} };
+  try {
+    const { admin } = await unauthenticated.admin(shop);
+    const entries = await Promise.all(collectionOptions.map(async (option) => [option.id, await loadPublicPrizeProducts(admin, option)] as const));
+    return { claim: publicClaim, productsByOption: Object.fromEntries(entries) };
+  } catch (error) {
+    console.error("Prize claim products could not be loaded:", error);
+    return { claim: publicClaim, productsByOption: {}, productError: "Prize products are temporarily unavailable. Refresh the page or contact the host." };
+  }
 }
 
 type ActionData = {
@@ -42,10 +56,14 @@ export async function action({
 }: ActionFunctionArgs): Promise<ActionData> {
   if (!params.token) return { error: "This prize claim link is invalid." };
   try {
+    const claim = await getPublicPrizeClaim(params.token);
+    if (!claim || claim.state !== "OPEN") return { error: claim ? stateMessage(claim.state) : "This prize claim link is invalid." };
+    const hasCollectionOptions = claim.prizeOptions?.some(isCollectionPrizeOption) ?? false;
+    const admin = hasCollectionOptions ? (await unauthenticated.admin(claim.shop)).admin : undefined;
     return {
       confirmation: await submitPublicPrizeClaim(
         params.token,
-        await request.formData(),
+        await request.formData(), admin,
       ),
     };
   } catch (error) {
@@ -70,7 +88,7 @@ const stateMessage = (state: string) =>
         : "This prize claim link is unavailable.";
 
 export default function PublicPrizeClaimPage() {
-  const { claim } = useLoaderData<typeof loader>();
+  const { claim, productsByOption, productError } = useLoaderData<typeof loader>();
   const actionData = useActionData<ActionData>();
   const navigation = useNavigation();
   const busy = navigation.state === "submitting";
@@ -161,8 +179,9 @@ export default function PublicPrizeClaimPage() {
             {actionData.error}
           </p>
         ) : null}
+        {productError ? <p className="prize-message prize-error" role="alert">{productError}</p> : null}
         <Form className="prize-public-form" method="post">
-          {claim.prizeOptions ? <PublicPrizePackageSelector options={claim.prizeOptions} /> : <label>Prize requested<input name="preferredPrize" maxLength={200} required /></label>}
+          {claim.prizeOptions ? <PublicPrizePackageSelector options={claim.prizeOptions} productsByOption={productsByOption} /> : <label>Prize requested<input name="preferredPrize" maxLength={200} required /></label>}
           <label>
             Full name
             <input
@@ -235,7 +254,7 @@ export default function PublicPrizeClaimPage() {
             Your shipping details are used only by the host to
             fulfill this prize request.
           </p>
-          <button disabled={busy}>
+          <button disabled={busy || Boolean(productError)}>
             {busy ? "Submitting…" : "SUBMIT PRIZE REQUEST"}
           </button>
         </Form>
