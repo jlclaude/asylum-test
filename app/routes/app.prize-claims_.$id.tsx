@@ -1,10 +1,12 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import {
   Form,
+  isRouteErrorResponse,
   Link,
   useActionData,
   useLoaderData,
   useNavigation,
+  useRouteError,
 } from "react-router";
 import {
   getPrizeClaimForShop,
@@ -76,6 +78,13 @@ export async function action({
   }
 }
 const show = (value: string | null) => value || "—";
+const date = (value: string | null) =>
+  value
+    ? new Intl.DateTimeFormat("en-US", {
+        dateStyle: "medium",
+        timeStyle: "short",
+      }).format(new Date(value))
+    : "—";
 export default function PrizeClaimDetail() {
   const { claim } = useLoaderData<typeof loader>();
   const actionData = useActionData<ActionData>();
@@ -169,6 +178,43 @@ export default function PrizeClaimDetail() {
               </button>
             </div>
           </article>
+          <article>
+            <h2>Claim record</h2>
+            <dl>
+              <div>
+                <dt>Status</dt>
+                <dd>{claim.status}</dd>
+              </div>
+              <div>
+                <dt>Generated</dt>
+                <dd>{date(claim.generatedAt)}</dd>
+              </div>
+              <div>
+                <dt>Expires</dt>
+                <dd>{date(claim.expiresAt)}</dd>
+              </div>
+              <div>
+                <dt>Submitted</dt>
+                <dd>{date(claim.submittedAt)}</dd>
+              </div>
+              <div>
+                <dt>Reviewed</dt>
+                <dd>{date(claim.reviewedAt)}</dd>
+              </div>
+              <div>
+                <dt>Fulfilled</dt>
+                <dd>{date(claim.fulfilledAt)}</dd>
+              </div>
+              <div>
+                <dt>Revoked</dt>
+                <dd>{date(claim.revokedAt)}</dd>
+              </div>
+              <div>
+                <dt>Admin notes</dt>
+                <dd className="prize-prewrap">{show(claim.adminNotes)}</dd>
+              </div>
+            </dl>
+          </article>
         </section>
         <Form className="prize-admin-action" method="post">
           <label>
@@ -215,6 +261,27 @@ export default function PrizeClaimDetail() {
             Open Game Control Center
           </Link>
         </p>
+      </div>
+    </main>
+  );
+}
+
+export function ErrorBoundary() {
+  const error = useRouteError();
+  const message = isRouteErrorResponse(error)
+    ? String(error.data || error.statusText)
+    : error instanceof Error
+      ? error.message
+      : "Prize claim could not be loaded.";
+
+  return (
+    <main className="prize-admin-page">
+      <div className="prize-admin-shell">
+        <h1>Prize claim could not be loaded.</h1>
+        <p className="prize-message prize-error" role="alert">
+          {message}
+        </p>
+        <Link to="/app/prize-claims">Return to Prize Claims</Link>
       </div>
     </main>
   );

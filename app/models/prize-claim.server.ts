@@ -172,7 +172,42 @@ export async function listPrizeClaims(shop: string, options: { search?: string; 
 export function getPrizeClaimForShop(id: string, shop: string) {
   return db.prizeClaim.findFirst({
     where: { id, shop },
-    include: { game: { select: { title: true, raffleNumber: true, archivedAt: true } } },
+    select: {
+      id: true,
+      gameId: true,
+      winnerDisplayName: true,
+      wheelLabel: true,
+      status: true,
+      expiresAt: true,
+      generatedAt: true,
+      submittedAt: true,
+      reviewedAt: true,
+      fulfilledAt: true,
+      revokedAt: true,
+      preferredPrize: true,
+      backupPrize: true,
+      sizeOrVariant: true,
+      recipientName: true,
+      email: true,
+      phone: true,
+      addressLine1: true,
+      addressLine2: true,
+      city: true,
+      stateProvince: true,
+      postalCode: true,
+      country: true,
+      winnerNotes: true,
+      adminNotes: true,
+      createdAt: true,
+      updatedAt: true,
+      game: {
+        select: {
+          title: true,
+          raffleNumber: true,
+          archivedAt: true,
+        },
+      },
+    },
   });
 }
 
