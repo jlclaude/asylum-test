@@ -1,5 +1,14 @@
 import type { ClaimStatus } from "@prisma/client";
 import db from "../db.server";
+import {
+  claimNameEditBlockReason,
+  replaceClaimDisplayNameInEntries,
+  validateClaimDisplayName,
+} from "../lib/claim-display-name";
+import {
+  deserializeWheelEntries,
+  serializeWheelEntries,
+} from "./game-run.server";
 
 export type CreateClaimInput = {
   gameId: string;
@@ -217,4 +226,153 @@ export async function getClaimTotals(gameId: string) {
     pendingClaims,
     confirmedClaims,
   };
+}
+
+export async function getClaimNameEditState(gameId: string, shop: string) {
+  const game = await db.game.findFirst({
+    where: { id: gameId, shop },
+    select: {
+      run: {
+        select: {
+          secondChanceCalculatedAt: true,
+          rounds: {
+            select: {
+              wheels: {
+                select: {
+                  status: true,
+                  winnerEntryIndex: true,
+                  winnerDisplayName: true,
+                  winnerValue: true,
+                  spunAt: true,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  const wheels = game?.run?.rounds.flatMap((round) => round.wheels) ?? [];
+  const blockReason = claimNameEditBlockReason(
+    wheels,
+    game?.run?.secondChanceCalculatedAt ?? null,
+  );
+  const secondChanceCalculated = game?.run?.secondChanceCalculatedAt !== null &&
+    game?.run?.secondChanceCalculatedAt !== undefined;
+  const resultsBegun = Boolean(claimNameEditBlockReason(wheels, null));
+
+  return {
+    gameModeStarted: Boolean(game?.run),
+    resultsBegun,
+    secondChanceCalculated,
+    editable: Boolean(game) && !blockReason,
+  };
+}
+
+type UpdateClaimDisplayNameInput = {
+  shop: string;
+  gameId: string;
+  claimId: string;
+  displayName: string;
+};
+
+export async function updateClaimDisplayName(input: UpdateClaimDisplayNameInput) {
+  const validation = validateClaimDisplayName(input.displayName);
+  if ("error" in validation) {
+    throw new Error(validation.error);
+  }
+  const displayName = validation.displayName;
+
+  return db.$transaction(async (transaction) => {
+    const game = await transaction.game.findFirst({
+      where: { id: input.gameId, shop: input.shop },
+      select: {
+        id: true,
+        run: {
+          select: {
+            secondChanceCalculatedAt: true,
+            rounds: {
+              select: {
+                wheels: {
+                  orderBy: { position: "asc" },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!game) throw new Error("Game not found.");
+
+    const claim = await transaction.claim.findFirst({
+      where: { id: input.claimId, gameId: game.id },
+    });
+    if (!claim) throw new Error("Claim not found.");
+
+    const wheels = game.run?.rounds.flatMap((round) => round.wheels) ?? [];
+    const blockReason = claimNameEditBlockReason(
+      wheels,
+      game.run?.secondChanceCalculatedAt ?? null,
+    );
+    if (blockReason) throw new Error(blockReason);
+
+    let updatedEntryCount = 0;
+
+    for (const wheel of wheels) {
+      if (wheel.type !== "NAME") continue;
+
+      const originalEntries = deserializeWheelEntries(wheel.originalEntriesJson);
+      const shuffledEntries = deserializeWheelEntries(wheel.shuffledEntriesJson);
+      const original = replaceClaimDisplayNameInEntries(
+        originalEntries,
+        claim.id,
+        displayName,
+      );
+      const shuffled = replaceClaimDisplayNameInEntries(
+        shuffledEntries,
+        claim.id,
+        displayName,
+      );
+
+      if (original.entries.length !== originalEntries.length ||
+          shuffled.entries.length !== shuffledEntries.length) {
+        throw new Error("The saved wheel entry count changed unexpectedly.");
+      }
+
+      updatedEntryCount += shuffled.updatedCount;
+      if (original.updatedCount > 0 || shuffled.updatedCount > 0) {
+        await transaction.gameWheel.update({
+          where: { id: wheel.id },
+          data: {
+            originalEntriesJson: serializeWheelEntries(original.entries),
+            shuffledEntriesJson: serializeWheelEntries(shuffled.entries),
+          },
+        });
+      }
+    }
+
+    await transaction.claim.update({
+      where: { id: claim.id },
+      data: { displayName },
+    });
+
+    if (process.env.NODE_ENV === "development") {
+      console.info("Claim display name corrected", {
+        gameId: game.id,
+        claimId: claim.id,
+        previousName: claim.displayName,
+        newName: displayName,
+        wheelEntriesUpdated: updatedEntryCount,
+      });
+    }
+
+    return {
+      claimId: claim.id,
+      previousName: claim.displayName,
+      displayName,
+      updatedEntryCount,
+    };
+  });
 }

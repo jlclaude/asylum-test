@@ -4,6 +4,7 @@ import test from "node:test";
 import { toPublicGameResults } from "../app/lib/game-results.ts";
 import { adjacentWheelId, broadcastWheelStatus, defaultActiveWheelId, defaultBroadcastActiveWheelId, defaultGameModeActiveWheelId, fullscreenIsActive, nextUnfinishedWheelId, savedSoundIsMuted, shortcutTargetIsEditable, unfinishedWheelIds, wheelActionBlockReason, wheelScrollBehavior } from "../app/lib/game-mode-operator.ts";
 import { formatPublicName } from "../app/lib/public-name.ts";
+import { claimNameEditBlockReason, replaceClaimDisplayNameInEntries, validateClaimDisplayName } from "../app/lib/claim-display-name.ts";
 import { idleRotationAt, remainingSpinSeconds, wheelPositionAt, wheelSpinTotalDegrees } from "../app/lib/wheel-effects.client.ts";
 import { getWinningRestRotation, normalizeDegrees } from "../app/lib/wheel-geometry.ts";
 import {
@@ -227,6 +228,50 @@ test("public Second Chance payload shortens names and omits internal fields", ()
     afterDisplayName: "Mike J.",
   });
   assert.equal(JSON.stringify(publicResult).includes("private"), false);
+});
+
+test("claim name correction validates plain display text", () => {
+  assert.deepEqual(validateClaimDisplayName("  Jane   Doe  "), {
+    displayName: "Jane   Doe",
+  });
+  assert.equal("error" in validateClaimDisplayName("   "), true);
+  assert.equal("error" in validateClaimDisplayName(`Jane\u0000Doe`), true);
+  assert.deepEqual(validateClaimDisplayName("<script>alert('x')</script>"), {
+    displayName: "<script>alert('x')</script>",
+  });
+});
+
+test("claim name correction preserves duplicate count, indexes, and other claims", () => {
+  const entries = [
+    { claimId: "claim-a", displayName: "Jnae Doe" },
+    { claimId: "claim-b", displayName: "Jnae Doe" },
+    { claimId: "claim-a", displayName: "Jnae Doe" },
+    { value: "125" },
+  ];
+  const result = replaceClaimDisplayNameInEntries(entries, "claim-a", "Jane Doe");
+
+  assert.equal(result.updatedCount, 2);
+  assert.equal(result.entries.length, entries.length);
+  assert.deepEqual(result.entries, [
+    { claimId: "claim-a", displayName: "Jane Doe" },
+    { claimId: "claim-b", displayName: "Jnae Doe" },
+    { claimId: "claim-a", displayName: "Jane Doe" },
+    { value: "125" },
+  ]);
+});
+
+test("claim names lock after spinning, completion, or Second Chance", () => {
+  const ready = {
+    status: "READY" as const,
+    winnerEntryIndex: null,
+    winnerDisplayName: null,
+    winnerValue: null,
+    spunAt: null,
+  };
+  assert.equal(claimNameEditBlockReason([ready], null), null);
+  assert.equal(claimNameEditBlockReason([{ ...ready, status: "SPINNING" }], null), "Names are locked because wheel results have begun.");
+  assert.equal(claimNameEditBlockReason([{ ...ready, status: "COMPLETED" }], null), "Names are locked because wheel results have begun.");
+  assert.equal(claimNameEditBlockReason([ready], new Date()), "Names are locked because wheel results have begun.");
 });
 
 test("public names use the existing privacy convention", () => {

@@ -24,7 +24,7 @@ const VALUE_WHEEL_ENTRIES: ValueWheelEntry[] = [
   { value: "125" }, { value: "250" },
 ];
 
-function serializeEntries(entries: WheelEntry[]) {
+export function serializeWheelEntries(entries: WheelEntry[]) {
   return JSON.stringify(entries);
 }
 
@@ -149,7 +149,7 @@ export async function beginGameRun(gameId: string, shop: string) {
       },
     });
 
-    const namesJson = serializeEntries(nameEntries);
+    const namesJson = serializeWheelEntries(nameEntries);
 
     for (let index = 0; index < game.wheelCount; index += 1) {
       await transaction.gameWheel.create({
@@ -164,7 +164,7 @@ export async function beginGameRun(gameId: string, shop: string) {
       });
     }
 
-    const valuesJson = serializeEntries(VALUE_WHEEL_ENTRIES);
+    const valuesJson = serializeWheelEntries(VALUE_WHEEL_ENTRIES);
 
     await transaction.gameWheel.create({
       data: {
@@ -226,7 +226,7 @@ export async function shuffleGameWheel(
     return transaction.gameWheel.update({
       where: { id: wheel.id },
       data: {
-        shuffledEntriesJson: serializeEntries(shuffled),
+        shuffledEntriesJson: serializeWheelEntries(shuffled),
         shuffledAt: new Date(),
       },
     });

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Prisma } from "@prisma/client";
 import type {
   ActionFunctionArgs,
@@ -15,8 +15,10 @@ import {
 
 import {
   createClaim,
+  getClaimNameEditState,
   getClaimsForGame,
   getClaimTotals,
+  updateClaimDisplayName,
   updateClaim,
 } from "../models/claim.server";
 import {
@@ -56,12 +58,13 @@ export async function loader({
     throw new Response("Game not found.", { status: 404 });
   }
 
-  const [claims, totals, results, shopSettings, secondChance] = await Promise.all([
+  const [claims, totals, results, shopSettings, secondChance, nameEditState] = await Promise.all([
     getClaimsForGame(game.id),
     getClaimTotals(game.id),
     getGameResults(game.id),
     getShopSettings(session.shop),
     getSecondChanceResult(game.id),
+    getClaimNameEditState(game.id, session.shop),
   ]);
 
   const requestUrl = new URL(request.url);
@@ -96,6 +99,7 @@ export async function loader({
     publicUrl: `${requestUrl.origin}/games/${game.id}`,
     duplicated: requestUrl.searchParams.get("duplicated") === "1",
     secondChance,
+    nameEditState,
   };
 }
 
@@ -103,6 +107,7 @@ type ActionData = {
   error?: string;
   success?: string;
   intent?: string;
+  claimId?: string;
 };
 
 export async function action({
@@ -144,6 +149,24 @@ export async function action({
         String(formData.get("deleteConfirmation") ?? ""),
       );
       return redirect("/app/games/archived?deleted=1");
+    }
+
+    if (intent === "edit-claim-name") {
+      const claimId = String(formData.get("claimId") ?? "").trim();
+      if (!claimId) return { error: "Claim ID is missing.", intent };
+
+      const result = await updateClaimDisplayName({
+        shop: session.shop,
+        gameId: game.id,
+        claimId,
+        displayName: String(formData.get("displayName") ?? ""),
+      });
+
+      return {
+        success: `Display name updated to “${result.displayName}”.`,
+        intent,
+        claimId,
+      };
     }
 
     if (game.archivedAt) {
@@ -356,6 +379,11 @@ const styles = `
   .control-badge-confirmed { border:1px solid #305c40; color:#97e3b0; background:rgba(29,92,51,.25); }
   .control-badge-canceled,.control-badge-expired { border:1px solid #5e3035; color:#df8b94; background:rgba(91,37,44,.25); }
   .control-claim-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:13px; }
+  .control-name-editor { display:grid; gap:12px; margin-top:14px; padding:14px; border:1px solid #4b2a2f; border-radius:10px; background:#111114; }
+  .control-name-editor dl { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin:0; }
+  .control-name-editor dt { color:#77787e; font-size:10px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; }
+  .control-name-editor dd { margin:3px 0 0; color:#dddde2; font-size:12px; }
+  .control-name-editor-actions { display:flex; justify-content:flex-end; gap:8px; }
   .control-button { padding:10px 13px; border-radius:9px; cursor:pointer; font:inherit; font-size:12px; font-weight:850; }
   .control-button:disabled { cursor:wait; opacity:.55; }
   .control-button-primary { border:1px solid #ee5464; color:white; background:linear-gradient(180deg,#d94051,#9d2432); }
@@ -394,18 +422,27 @@ export default function GameControlCenter() {
   const actionData = useActionData<ActionData>();
   const navigate = useNavigate();
   const fetcher = useFetcher<ActionData>();
-  const { game, claims, totals, publicUrl, results, paymentInstructionsConfigured, duplicated, secondChance } = useLoaderData<typeof loader>();
+  const nameFetcher = useFetcher<ActionData>();
+  const { game, claims, totals, publicUrl, results, paymentInstructionsConfigured, duplicated, secondChance, nameEditState } = useLoaderData<typeof loader>();
 
   const [filter, setFilter] = useState<FilterValue>("ALL");
   const [search, setSearch] = useState("");
   const [copied, setCopied] = useState(false);
+  const [editingClaimId, setEditingClaimId] = useState<string | null>(null);
 
   const isSubmitting = fetcher.state !== "idle";
+  const isSavingName = nameFetcher.state !== "idle";
   const claimsLocked = ["READY", "IN_PROGRESS", "COMPLETED"].includes(game.status);
   const remaining = Math.max(game.totalSpots - totals.reservedQuantity, 0);
   const claimed = totals.reservedQuantity;
   const percentage = game.totalSpots > 0 ? Math.min(Math.round((claimed / game.totalSpots) * 100), 100) : 0;
   const confirmedRevenue = totals.confirmedQuantity * Number(game.pricePerSpot);
+
+  useEffect(() => {
+    if (nameFetcher.data?.intent === "edit-claim-name" && nameFetcher.data.success) {
+      setEditingClaimId(null);
+    }
+  }, [nameFetcher.data]);
 
   const claimNumbers = useMemo(() => {
     const numbers = new Map<string, number>();
@@ -471,7 +508,7 @@ export default function GameControlCenter() {
             <div className="control-progress-track"><div className="control-progress-fill" style={{ width: `${percentage}%` }} /></div>
           </section>
 
-          {game.archivedAt ? <div className="control-message control-message-error">Archived {formatDate(game.archivedAt)}. Gameplay and claim changes are disabled until restored.</div> : null}
+          {game.archivedAt ? <div className="control-message control-message-error">Archived {formatDate(game.archivedAt)}. Gameplay and standard claim changes are disabled until restored.</div> : null}
           {duplicated ? <div className="control-message control-message-success">Game duplicated. This new copy is OPEN and contains setup only.</div> : null}
           {actionData?.error ? <div className="control-message control-message-error">{actionData.error}</div> : null}
           {actionData?.success ? <div className="control-message control-message-success">{actionData.success}</div> : null}
@@ -487,6 +524,8 @@ export default function GameControlCenter() {
 
           {fetcher.data?.error ? <div className="control-message control-message-error">{fetcher.data.error}</div> : null}
           {fetcher.data?.success ? <div className="control-message control-message-success">{fetcher.data.success}</div> : null}
+          {nameFetcher.data?.error ? <div className="control-message control-message-error">{nameFetcher.data.error}</div> : null}
+          {nameFetcher.data?.success ? <div className="control-message control-message-success">{nameFetcher.data.success}</div> : null}
 
           <section className="control-grid">
             <article className="control-card">
@@ -499,6 +538,7 @@ export default function GameControlCenter() {
               </div>
 
               {claimsLocked ? <div className="control-lock-note">Claims are locked because the wheel snapshot has already been created. The wheel entries will not change.</div> : null}
+              {!nameEditState.editable ? <div className="control-lock-note">Names are locked because wheel results have begun.</div> : null}
               <div style={{ height: 14 }} />
 
               {filteredClaims.length === 0 ? <div className="control-empty">No claims match this view.</div> : (
@@ -521,6 +561,31 @@ export default function GameControlCenter() {
                       </div>
 
                       {claim.comment ? <p className="control-claim-comment">{claim.comment}</p> : null}
+
+                      {editingClaimId === claim.id ? (
+                        <nameFetcher.Form className="control-name-editor" method="post">
+                          <input type="hidden" name="intent" value="edit-claim-name" />
+                          <input type="hidden" name="claimId" value={claim.id} />
+                          <dl>
+                            <div><dt>Current display name</dt><dd>{claim.displayName}</dd></div>
+                            <div><dt>Confirmed quantity</dt><dd>{claim.status === "CONFIRMED" ? claim.quantity : 0} spots</dd></div>
+                            <div><dt>Game Mode started</dt><dd>{nameEditState.gameModeStarted ? "Yes" : "No"}</dd></div>
+                            <div><dt>Any wheel spun</dt><dd>{nameEditState.resultsBegun ? "Yes" : "No"}</dd></div>
+                          </dl>
+                          <div className="control-field">
+                            <label htmlFor={`claim-name-${claim.id}`}>New display name</label>
+                            <input className="control-input" id={`claim-name-${claim.id}`} name="displayName" defaultValue={claim.displayName} maxLength={100} required />
+                          </div>
+                          <div className="control-name-editor-actions">
+                            <button className="control-button control-button-secondary" type="button" onClick={() => setEditingClaimId(null)} disabled={isSavingName}>Cancel</button>
+                            <button className="control-button control-button-primary" type="submit" disabled={isSavingName}>{isSavingName ? "Saving…" : "Save"}</button>
+                          </div>
+                        </nameFetcher.Form>
+                      ) : (
+                        <div className="control-claim-actions">
+                          <button className="control-button control-button-secondary" type="button" onClick={() => setEditingClaimId(claim.id)} disabled={!nameEditState.editable || isSavingName}>Edit Name</button>
+                        </div>
+                      )}
 
                       {claim.status === "PENDING" && !claimsLocked ? (
                         <div className="control-claim-actions">
