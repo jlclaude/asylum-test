@@ -5,6 +5,7 @@ import { toPublicGameResults } from "../app/lib/game-results.ts";
 import { adjacentWheelId, broadcastWheelStatus, defaultActiveWheelId, defaultBroadcastActiveWheelId, defaultGameModeActiveWheelId, fullscreenIsActive, nextUnfinishedWheelId, savedSoundIsMuted, shortcutTargetIsEditable, unfinishedWheelIds, wheelActionBlockReason, wheelScrollBehavior } from "../app/lib/game-mode-operator.ts";
 import { formatPublicName } from "../app/lib/public-name.ts";
 import { idleRotationAt, remainingSpinSeconds, wheelPositionAt, wheelSpinTotalDegrees } from "../app/lib/wheel-effects.client.ts";
+import { getWinningRestRotation, normalizeDegrees } from "../app/lib/wheel-geometry.ts";
 import {
   chooseRandomTrack,
   getSpinMusicSnapshot,
@@ -364,6 +365,43 @@ test("25 and 75 second trajectories land on the saved segment center", () => {
     assert.equal(Math.abs(((finalRotation % 360) + 360) % 360 - expected) < 1e-9, true);
     const renderedWinnerAngle = -90 + (winner + 0.5) * (360 / entries) + finalRotation;
     assert.equal(Math.abs(((renderedWinnerAngle % 360) + 360) % 360) < 1e-9, true);
+  }
+});
+
+test("saved winners restore deterministically beneath the right-side pointer", () => {
+  for (const entryCount of [2, 3, 19, 100, 500]) {
+    for (const winnerEntryIndex of [0, entryCount - 1]) {
+      const rotation = getWinningRestRotation({ entryCount, winnerEntryIndex });
+      const segmentCenter = -90 +
+        (winnerEntryIndex + 0.5) * (360 / entryCount);
+
+      assert.equal(
+        Math.abs(normalizeDegrees(segmentCenter + rotation)) < 1e-9 ||
+          Math.abs(normalizeDegrees(segmentCenter + rotation) - 360) < 1e-9,
+        true,
+      );
+      assert.equal(
+        getWinningRestRotation({ entryCount, winnerEntryIndex }),
+        rotation,
+      );
+    }
+  }
+});
+
+test("live spins and restored completed wheels share the same resting angle", () => {
+  for (const entryCount of [3, 19, 500]) {
+    const winnerEntryIndex = entryCount - 1;
+    const restored = getWinningRestRotation({ entryCount, winnerEntryIndex });
+
+    for (const startRotation of [0, 47.25, 359.9, -18]) {
+      const liveFinal = startRotation + wheelSpinTotalDegrees(
+        startRotation,
+        entryCount,
+        winnerEntryIndex,
+        25,
+      );
+      assert.equal(Math.abs(normalizeDegrees(liveFinal) - restored) < 1e-9, true);
+    }
   }
 });
 

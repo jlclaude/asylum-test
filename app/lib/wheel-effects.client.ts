@@ -1,3 +1,8 @@
+import {
+  getWinningRestRotation,
+  normalizeDegrees,
+} from "./wheel-geometry.ts";
+
 export type WheelAnimationController = {
   cancel: () => void;
 };
@@ -125,15 +130,12 @@ export function wheelSpinTotalDegrees(
   winnerEntryIndex: number,
   durationSeconds: number,
 ) {
-  const pointerAngle = 0;
-  const segmentStartAngle = -90;
-  const segmentDegrees = 360 / entryCount;
-  const targetCenter = (winnerEntryIndex + 0.5) * segmentDegrees;
   const turns = 14 + Math.ceil(durationSeconds / 4.5);
-  const currentNormalized = ((startRotation % 360) + 360) % 360;
-  const targetNormalized = (
-    (pointerAngle - (segmentStartAngle + targetCenter)) % 360 + 360
-  ) % 360;
+  const currentNormalized = normalizeDegrees(startRotation);
+  const targetNormalized = getWinningRestRotation({
+    entryCount,
+    winnerEntryIndex,
+  });
   const correction = (targetNormalized - currentNormalized + 360) % 360;
   return turns * 360 + correction;
 }

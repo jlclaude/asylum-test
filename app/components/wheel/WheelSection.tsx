@@ -25,6 +25,7 @@ import {
 import { wheelActionBlockReason, wheelScrollBehavior } from "../../lib/game-mode-operator";
 import { shouldAnimateBroadcastCountdown } from "../../lib/broadcast-countdown";
 import { SPIN_DURATION_RANGE_LABEL } from "../../lib/spin-duration";
+import { getWinningRestRotation } from "../../lib/wheel-geometry";
 import { useSpinMusic } from "../../hooks/useSpinMusic";
 import { WheelCanvas } from "./WheelCanvas";
 import { WheelConsole } from "./WheelConsole";
@@ -95,7 +96,14 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
   const revealDismissTimer = useRef<number | null>(null);
   const countdownTimers = useRef<number[]>([]);
 
-  const [rotation, setRotation] = useState(0);
+  const completedRestRotation = wheel.status === "COMPLETED" &&
+    wheel.winnerEntryIndex !== null
+    ? getWinningRestRotation({
+        entryCount: wheel.entries.length,
+        winnerEntryIndex: wheel.winnerEntryIndex,
+      })
+    : 0;
+  const [rotation, setRotation] = useState(completedRestRotation);
   const rotationRef = useRef(rotation);
   const [pointerTick, setPointerTick] = useState(0);
   const [revealResult, setRevealResult] = useState<string | null>(null);
@@ -263,6 +271,14 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
 
   useEffect(() => {
     if (wheel.status === "COMPLETED" && !revealActive.current) {
+      const restRotation = getWinningRestRotation({
+        entryCount: wheel.entries.length,
+        winnerEntryIndex: wheel.winnerEntryIndex ?? -1,
+      });
+      animationController.current?.cancel();
+      stopIdle();
+      rotationRef.current = restRotation;
+      setRotation(restRotation);
       stopMusic(wheel.id);
       setResult(
         wheel.winnerDisplayName ??
@@ -272,9 +288,12 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
     }
   }, [
     stopMusic,
+    stopIdle,
+    wheel.entries.length,
     wheel.id,
     wheel.status,
     wheel.winnerDisplayName,
+    wheel.winnerEntryIndex,
     wheel.winnerValue,
   ]);
 
