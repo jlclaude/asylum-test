@@ -77,15 +77,15 @@ function drawWheel(
     context.fill();
 
     const light = context.createRadialGradient(
-      center * 0.78,
-      center * 0.72,
-      radius * 0.08,
+      center,
+      center,
+      radius * 0.31,
       center,
       center,
       radius,
     );
 
-    light.addColorStop(0, "rgba(255,255,255,.2)");
+    light.addColorStop(0, "rgba(255,255,255,.025)");
     light.addColorStop(0.46, "rgba(255,255,255,.025)");
     light.addColorStop(0.84, "rgba(0,0,0,.2)");
     light.addColorStop(1, "rgba(0,0,0,.48)");
@@ -139,11 +139,6 @@ function drawWheel(
   context.lineWidth = 5;
   context.stroke();
 
-  context.beginPath();
-  context.arc(center, center, radius * 0.29, 0, Math.PI * 2);
-  context.strokeStyle = "rgba(0,0,0,.42)";
-  context.lineWidth = 9;
-  context.stroke();
 }
 
 export function WheelCanvas({
@@ -207,6 +202,8 @@ export function WheelCanvas({
           transform: `rotate(${rotation}deg)`,
         }}
       />
+
+      <div className="studio-wheel-center-relief" aria-hidden="true" />
 
       <div className="studio-wheel-hub">
         <div className="studio-wheel-bearing" aria-hidden="true" />
