@@ -3,6 +3,7 @@ import db from "../db.server";
 import {
   isPrizeClaimExpired,
   prizeClaimExpirationDate,
+  validatePrizeClaimSubmission,
   type PrizeClaimExpirationDays,
   type PrizeClaimSubmissionInput,
 } from "../lib/prize-claim";
@@ -12,12 +13,20 @@ import {
   encryptPrizeClaimToken,
 } from "../lib/prize-claim-encryption.server";
 import { formatRaffleCode, parseRaffleSearch } from "../lib/raffle-number";
+import {
+  parsePrizePackageOptions,
+  parseSelectedBalls,
+  parseSelectedPrizeOption,
+  validateStructuredPrizeSelection,
+  type PrizePackageOption,
+} from "../lib/prize-packages";
 
 export async function createWinnerPrizeClaim(input: {
   shop: string;
   gameId: string;
   gameWheelId: string;
   expirationDays: PrizeClaimExpirationDays;
+  prizeOptions: PrizePackageOption[];
 }) {
   return db.$transaction(async (transaction) => {
     const existing = await transaction.prizeClaim.findUnique({
@@ -60,6 +69,7 @@ export async function createWinnerPrizeClaim(input: {
         tokenLastFour: token.slice(-4),
         encryptedToken: encryptPrizeClaimToken(token),
         expiresAt: prizeClaimExpirationDate(input.expirationDays),
+        prizeOptionsJson: JSON.stringify(input.prizeOptions),
       },
     });
     return { created: true as const, prizeClaim, token };
@@ -107,6 +117,8 @@ export async function getPublicPrizeClaim(token: string) {
     return { state: "EXPIRED" as const };
   }
   if (claim.status !== "OPEN") return { state: claim.status } as const;
+  const prizeOptions = parsePrizePackageOptions(claim.prizeOptionsJson);
+  if (claim.prizeOptionsJson && !prizeOptions) return { state: "INVALID_CONFIGURATION" as const };
   return {
     state: "OPEN" as const,
     gameTitle: claim.game.title,
@@ -114,10 +126,11 @@ export async function getPublicPrizeClaim(token: string) {
     winnerDisplayName: claim.winnerDisplayName,
     wheelLabel: claim.wheelLabel,
     expiresAt: claim.expiresAt?.toISOString() ?? null,
+    prizeOptions,
   };
 }
 
-export async function submitPublicPrizeClaim(token: string, input: PrizeClaimSubmissionInput) {
+export async function submitPublicPrizeClaim(token: string, formData: FormData) {
   const tokenHash = hashPrizeClaimToken(token);
   return db.$transaction(async (transaction) => {
     const claim = await transaction.prizeClaim.findUnique({
@@ -135,16 +148,44 @@ export async function submitPublicPrizeClaim(token: string, input: PrizeClaimSub
     if (claim.status === "REVOKED") throw new Error("This prize claim link has been revoked. Contact the host.");
     if (claim.status !== "OPEN") throw new Error("This prize request has already been submitted.");
 
+    const options = parsePrizePackageOptions(claim.prizeOptionsJson);
+    if (claim.prizeOptionsJson && !options) throw new Error("The prize package configuration is invalid. Contact the host.");
+    let input: PrizeClaimSubmissionInput;
+    let structuredData: {
+      selectedPrizeOptionId: string;
+      selectedPrizeOptionLabel: string;
+      selectedPrizeOptionJson: string;
+      selectedBallsJson: string;
+    } | Record<string, never> = {};
+    if (options) {
+      const selection = validateStructuredPrizeSelection(formData, options);
+      if ("error" in selection) throw new Error(selection.error);
+      const validation = validatePrizeClaimSubmission(formData, selection.option.label);
+      if ("error" in validation) throw new Error(validation.error);
+      input = validation.input;
+      structuredData = {
+        selectedPrizeOptionId: selection.option.id,
+        selectedPrizeOptionLabel: selection.option.label,
+        selectedPrizeOptionJson: JSON.stringify(selection.option),
+        selectedBallsJson: JSON.stringify(selection.balls),
+      };
+    } else {
+      const validation = validatePrizeClaimSubmission(formData);
+      if ("error" in validation) throw new Error(validation.error);
+      input = validation.input;
+    }
+
     const submittedAt = new Date();
     const update = await transaction.prizeClaim.updateMany({
       where: { id: claim.id, status: "OPEN" },
-      data: { ...input, status: "SUBMITTED", submittedAt },
+      data: { ...input, ...structuredData, status: "SUBMITTED", submittedAt },
     });
     if (update.count !== 1) throw new Error("This prize request has already been submitted.");
     return {
       gameTitle: claim.game.title,
       raffleCode: formatRaffleCode(claim.game.raffleNumber),
       preferredPrize: input.preferredPrize,
+      selectedPrizeOptionLabel: "selectedPrizeOptionLabel" in structuredData ? structuredData.selectedPrizeOptionLabel : null,
       recipientName: input.recipientName,
       submittedAt: submittedAt.toISOString(),
     };
@@ -196,6 +237,11 @@ export async function getPrizeClaimForShop(id: string, shop: string) {
       fulfilledAt: true,
       revokedAt: true,
       preferredPrize: true,
+      prizeOptionsJson: true,
+      selectedPrizeOptionId: true,
+      selectedPrizeOptionLabel: true,
+      selectedPrizeOptionJson: true,
+      selectedBallsJson: true,
       recipientName: true,
       addressLine1: true,
       addressLine2: true,
@@ -221,6 +267,9 @@ export async function getPrizeClaimForShop(id: string, shop: string) {
   return {
     ...detail,
     hasReusableLink: encryptedToken !== null,
+    prizeOptions: parsePrizePackageOptions(detail.prizeOptionsJson),
+    selectedBalls: parseSelectedBalls(detail.selectedBallsJson),
+    selectedPrizeOption: parseSelectedPrizeOption(detail.selectedPrizeOptionJson),
   };
 }
 
@@ -284,6 +333,7 @@ export function toPrizeClaimSummary(claim: Awaited<ReturnType<typeof getPrizeCla
     submittedAt: claim.submittedAt?.toISOString() ?? null,
     fulfilledAt: claim.fulfilledAt?.toISOString() ?? null,
     preferredPrize: claim.preferredPrize,
+    selectedPrizeOptionLabel: claim.selectedPrizeOptionLabel,
   };
 }
 

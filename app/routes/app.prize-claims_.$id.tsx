@@ -159,7 +159,7 @@ export default function PrizeClaimDetail() {
   ]
     .filter(Boolean)
     .join("\n");
-  const shippingSummary = formatPrizeClaimShippingSummary(claim);
+  const shippingSummary = formatPrizeClaimShippingSummary({ ...claim, raffleCode: claim.game.raffleCode, gameTitle: claim.game.title });
   return (
     <main className="prize-admin-page">
       <div className="prize-admin-shell">
@@ -217,10 +217,19 @@ export default function PrizeClaimDetail() {
           <article>
             <h2>Prize request</h2>
             <dl>
+              {claim.prizeOptions && !claim.selectedPrizeOptionLabel ? (
+                <div><dt>Configured choices</dt><dd>{claim.prizeOptions.map((option) => `${option.label} (${option.ballCount} ${option.ballType.toLowerCase()} ${option.ballCount === 1 ? "ball" : "balls"})`).join(" OR ")}</dd></div>
+              ) : null}
               <div>
-                <dt>Prize requested</dt>
-                <dd>{show(claim.preferredPrize)}</dd>
+                <dt>Selected prize package</dt>
+                <dd>{show(claim.selectedPrizeOptionLabel ?? claim.preferredPrize)}</dd>
               </div>
+              {claim.selectedBalls.map((ball) => (
+                <div key={ball.position}>
+                  <dt>{claim.selectedPrizeOption ? `${claim.selectedPrizeOption.ballType.charAt(0)}${claim.selectedPrizeOption.ballType.slice(1).toLowerCase()}` : "Bowling"} ball {ball.position}</dt>
+                  <dd>{ball.name}{ball.productUrl ? <> · <a href={ball.productUrl} target="_blank" rel="noreferrer">Product link</a></> : null}</dd>
+                </div>
+              ))}
               <div>
                 <dt>Winner name</dt>
                 <dd>{claim.winnerDisplayName}</dd>

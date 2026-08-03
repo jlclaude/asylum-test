@@ -8,7 +8,7 @@ import {
   useRouteError,
 } from "react-router";
 import { AsylumLogo } from "../components/asylum/AsylumLogo";
-import { validatePrizeClaimSubmission } from "../lib/prize-claim";
+import { PublicPrizePackageSelector } from "../components/prize-claims/PublicPrizePackageSelector";
 import {
   getPublicPrizeClaim,
   submitPublicPrizeClaim,
@@ -31,6 +31,7 @@ type ActionData = {
     gameTitle: string;
     raffleCode: string;
     preferredPrize: string;
+    selectedPrizeOptionLabel: string | null;
     recipientName: string;
     submittedAt: string;
   };
@@ -40,13 +41,11 @@ export async function action({
   params,
 }: ActionFunctionArgs): Promise<ActionData> {
   if (!params.token) return { error: "This prize claim link is invalid." };
-  const validation = validatePrizeClaimSubmission(await request.formData());
-  if ("error" in validation) return { error: validation.error };
   try {
     return {
       confirmation: await submitPublicPrizeClaim(
         params.token,
-        validation.input,
+        await request.formData(),
       ),
     };
   } catch (error) {
@@ -64,6 +63,8 @@ const stateMessage = (state: string) =>
     ? "This prize claim link has expired. Contact the host."
     : state === "REVOKED"
       ? "This prize claim link has been revoked. Contact the host."
+      : state === "INVALID_CONFIGURATION"
+        ? "This prize package is unavailable. Contact the host."
       : ["SUBMITTED", "REVIEWED", "FULFILLED"].includes(state)
         ? "This prize request has already been submitted."
         : "This prize claim link is unavailable.";
@@ -86,7 +87,7 @@ export default function PublicPrizeClaimPage() {
           <dl>
             <div>
               <dt>Prize requested</dt>
-              <dd>{value.preferredPrize}</dd>
+              <dd>{value.selectedPrizeOptionLabel ?? value.preferredPrize}</dd>
             </div>
             <div>
               <dt>Recipient</dt>
@@ -161,10 +162,7 @@ export default function PublicPrizeClaimPage() {
           </p>
         ) : null}
         <Form className="prize-public-form" method="post">
-          <label>
-            Prize requested
-            <input name="preferredPrize" maxLength={200} required />
-          </label>
+          {claim.prizeOptions ? <PublicPrizePackageSelector options={claim.prizeOptions} /> : <label>Prize requested<input name="preferredPrize" maxLength={200} required /></label>}
           <label>
             Full name
             <input

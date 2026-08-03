@@ -56,6 +56,7 @@ import { authenticate } from "../shopify.server";
 import { formatRaffleCode } from "../lib/raffle-number";
 import { PRIZE_CLAIM_EXPIRATION_DAYS, type PrizeClaimExpirationDays } from "../lib/prize-claim";
 import { buildPrizeClaimUrl } from "../lib/prize-claim-token.server";
+import { validateAdminPrizePackageOptions } from "../lib/prize-packages";
 import { createWinnerPrizeClaim, getEligiblePrizeWheels, getPrizeClaimsForGame, toPrizeClaimSummary, updatePrizeClaimStatus } from "../models/prize-claim.server";
 
 import "../styles/asylum-brand.css";
@@ -304,7 +305,9 @@ export async function action({
     if (intent === "create-prize-claim") {
       const expirationDays = Number(formData.get("expirationDays"));
       if (!PRIZE_CLAIM_EXPIRATION_DAYS.includes(expirationDays as PrizeClaimExpirationDays)) return { intent, wheelId, error: "Select a valid expiration period." };
-      const result = await createWinnerPrizeClaim({ shop: session.shop, gameId: params.id, gameWheelId: wheelId, expirationDays: expirationDays as PrizeClaimExpirationDays });
+      const packageValidation = validateAdminPrizePackageOptions(formData.get("prizeOptionsJson"));
+      if ("error" in packageValidation) return { intent, wheelId, error: packageValidation.error };
+      const result = await createWinnerPrizeClaim({ shop: session.shop, gameId: params.id, gameWheelId: wheelId, expirationDays: expirationDays as PrizeClaimExpirationDays, prizeOptions: packageValidation.options });
       if (!result.created) return { intent, wheelId, success: "An active claim link already exists for this winner." };
       return data<WheelActionData>(
         { intent, wheelId, success: "Private prize claim link created.", privateUrl: buildPrizeClaimUrl(result.token, new URL(request.url).origin) },

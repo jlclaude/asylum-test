@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useFetcher } from "react-router";
+import { PrizePackageBuilder } from "./PrizePackageBuilder";
 
 type EligibleWheel = {
   id: string;
@@ -20,6 +21,7 @@ type ClaimSummary = {
   submittedAt: string | null;
   fulfilledAt: string | null;
   preferredPrize: string | null;
+  selectedPrizeOptionLabel?: string | null;
 };
 
 type ActionData = {
@@ -66,7 +68,7 @@ export function GamePrizeClaims({ eligibleWheels, claims }: { eligibleWheels: El
                 <div><dt>Generated</dt><dd>{formatDate(saved.generatedAt)}</dd></div>
                 <div><dt>Expiration</dt><dd>{formatDate(saved.expiresAt)}</dd></div>
                 <div><dt>Submitted</dt><dd>{formatDate(saved.submittedAt)}</dd></div>
-                {saved.preferredPrize ? <div><dt>Preferred prize</dt><dd>{saved.preferredPrize}</dd></div> : null}
+                {saved.selectedPrizeOptionLabel || saved.preferredPrize ? <div><dt>Prize package</dt><dd>{saved.selectedPrizeOptionLabel ?? saved.preferredPrize}</dd></div> : null}
               </dl>
             ) : null}
             {immediateUrl ? <div className="prize-private-link"><code>{immediateUrl}</code><button type="button" onClick={() => void copyImmediateLink()}>{copied ? "Copied" : "Copy Claim Link"}</button><a href={immediateUrl} target="_blank" rel="noreferrer">Open Claim Form</a></div> : null}
@@ -76,6 +78,7 @@ export function GamePrizeClaims({ eligibleWheels, claims }: { eligibleWheels: El
                 <fetcher.Form method="post">
                   <input type="hidden" name="intent" value="create-prize-claim" />
                   <input type="hidden" name="wheelId" value={wheel.id} />
+                  <PrizePackageBuilder />
                   <label>Expiration<select name="expirationDays" defaultValue="14"><option value="0">No expiration</option><option value="7">7 days</option><option value="14">14 days</option><option value="30">30 days</option></select></label>
                   <button disabled={busy}>CREATE PRIVATE CLAIM LINK</button>
                 </fetcher.Form>

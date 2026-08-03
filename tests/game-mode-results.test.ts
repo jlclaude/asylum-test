@@ -8,6 +8,7 @@ import { claimNameEditBlockReason, replaceClaimDisplayNameInEntries, validateCla
 import { formatPrizeClaimShippingSummary, isPrizeClaimExpired, prizeClaimExpirationDate, validatePrizeClaimSubmission } from "../app/lib/prize-claim.ts";
 import { buildPrizeClaimUrl, generatePrizeClaimToken, hashPrizeClaimToken } from "../app/lib/prize-claim-token.server.ts";
 import { decryptPrizeClaimToken, encryptPrizeClaimToken } from "../app/lib/prize-claim-encryption.server.ts";
+import { parsePrizePackageOptions, validateAdminPrizePackageOptions, validateStructuredPrizeSelection } from "../app/lib/prize-packages.ts";
 import { formatRaffleCode, parseRaffleSearch } from "../app/lib/raffle-number.ts";
 import { getContainmentLabel, getWheelDisplayLabel } from "../app/lib/wheel-labels.ts";
 import { idleRotationAt, remainingSpinSeconds, wheelPositionAt, wheelSpinTotalDegrees } from "../app/lib/wheel-effects.client.ts";
@@ -328,7 +329,9 @@ test("prize claim token encryption rejects tampering and invalid keys", () => {
   const key = Buffer.alloc(32, 9).toString("base64");
   const encrypted = encryptPrizeClaimToken("private-token", key);
   const parts = encrypted.split(".");
-  parts[2] = `${parts[2]?.slice(0, -1)}${parts[2]?.endsWith("A") ? "B" : "A"}`;
+  const ciphertext = Buffer.from(parts[2]!, "base64url");
+  ciphertext[0] = ciphertext[0]! ^ 1;
+  parts[2] = ciphertext.toString("base64url");
   assert.throws(
     () => decryptPrizeClaimToken(parts.join("."), key),
     /could not be decrypted/,
@@ -386,18 +389,90 @@ test("prize shipping summary includes only retained fields", () => {
   });
   assert.equal(summary, [
     "Winner: Jane Doe",
-    "Prize Requested: Signed game",
-    "Full Name: Jane Doe",
-    "Address: 123 Main St",
-    "City: Orlando",
-    "State: FL",
-    "Postal Code: 32801",
-    "Country: USA",
+    "Prize Package: Signed game",
+    "",
+    "Ship To:",
+    "Jane Doe",
+    "123 Main St",
+    "Orlando, FL, 32801",
+    "USA",
   ].join("\n"));
   assert.equal(summary.includes("Email"), false);
   assert.equal(summary.includes("Phone"), false);
   assert.equal(summary.includes("Backup"), false);
   assert.equal(summary.includes("Variant"), false);
+});
+
+test("admin prize package validation normalizes one or multiple bowling-ball options", () => {
+  const one = validateAdminPrizePackageOptions(JSON.stringify([{ label: "1 Overseas Ball", ballType: "OVERSEAS", ballCount: 1 }]));
+  assert.equal("options" in one, true);
+  if (one.options) {
+    assert.deepEqual(one.options[0], { id: "option-1", label: "1 Overseas Ball", ballType: "OVERSEAS", ballCount: 1, position: 1 });
+  }
+  const two = validateAdminPrizePackageOptions(JSON.stringify([
+    { label: "1 Overseas Ball", ballType: "OVERSEAS", ballCount: 1 },
+    { label: "2 Domestic Balls", ballType: "DOMESTIC", ballCount: 2 },
+  ]));
+  assert.equal(two.options?.length, 2);
+  assert.equal(parsePrizePackageOptions(two.json)?.[1]?.position, 2);
+});
+
+test("structured prize submission trusts the saved option and exact ball count", () => {
+  const options = parsePrizePackageOptions(JSON.stringify([
+    { id: "option-1", label: "1 Overseas Ball", ballType: "OVERSEAS", ballCount: 1, position: 1 },
+    { id: "option-2", label: "2 Domestic Balls", ballType: "DOMESTIC", ballCount: 2, position: 2 },
+  ]))!;
+  const valid = new FormData();
+  valid.set("selectedPrizeOptionId", "option-2");
+  valid.append("ballName", "Phaze II");
+  valid.append("ballName", "Black Widow 3.0");
+  valid.append("ballUrl", "https://example.com/phaze");
+  valid.append("ballUrl", "");
+  valid.set("ballCount", "1");
+  const result = validateStructuredPrizeSelection(valid, options);
+  assert.equal(result.option?.ballCount, 2);
+  assert.deepEqual(result.balls, [
+    { position: 1, name: "Phaze II", productUrl: "https://example.com/phaze" },
+    { position: 2, name: "Black Widow 3.0", productUrl: null },
+  ]);
+
+  const wrongCount = new FormData();
+  wrongCount.set("selectedPrizeOptionId", "option-2");
+  wrongCount.append("ballName", "Only one");
+  wrongCount.append("ballUrl", "");
+  assert.equal("error" in validateStructuredPrizeSelection(wrongCount, options), true);
+
+  const unknown = new FormData();
+  unknown.set("selectedPrizeOptionId", "option-999");
+  assert.equal("error" in validateStructuredPrizeSelection(unknown, options), true);
+});
+
+test("structured prize submission requires names and HTTPS product links", () => {
+  const options = [{ id: "option-1", label: "Custom Ball", ballType: "CUSTOM" as const, ballCount: 1, position: 1 }];
+  const missingName = new FormData();
+  missingName.set("selectedPrizeOptionId", "option-1");
+  missingName.append("ballName", "");
+  missingName.append("ballUrl", "https://example.com/ball");
+  assert.equal("error" in validateStructuredPrizeSelection(missingName, options), true);
+  const insecureUrl = new FormData();
+  insecureUrl.set("selectedPrizeOptionId", "option-1");
+  insecureUrl.append("ballName", "Ball");
+  insecureUrl.append("ballUrl", "http://example.com/ball");
+  assert.equal("error" in validateStructuredPrizeSelection(insecureUrl, options), true);
+});
+
+test("structured fulfillment summary includes package and balls in saved order", () => {
+  const summary = formatPrizeClaimShippingSummary({
+    raffleCode: "ASY-000123", gameTitle: "Friday Bowling Raffle", winnerDisplayName: "Jane Smith",
+    preferredPrize: "2 Domestic Balls", selectedPrizeOptionLabel: "2 Domestic Balls",
+    selectedPrizeOptionJson: JSON.stringify({ ballType: "DOMESTIC" }),
+    selectedBalls: [{ position: 1, name: "Phaze II", productUrl: "https://example.com/phaze" }, { position: 2, name: "Black Widow 3.0", productUrl: null }],
+    recipientName: "Jane Smith", addressLine1: "123 Main Street", addressLine2: null,
+    city: "Orlando", stateProvince: "FL", postalCode: "32801", country: "United States", winnerNotes: null,
+  });
+  assert.match(summary, /ASY-000123\nFriday Bowling Raffle/);
+  assert.match(summary, /Domestic Ball 1: Phaze II\nhttps:\/\/example.com\/phaze/);
+  assert.match(summary, /Domestic Ball 2: Black Widow 3.0/);
 });
 
 test("prize claim expiration supports none, 7, 14, and 30 days", () => {

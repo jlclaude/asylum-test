@@ -179,36 +179,41 @@ model GameWheel {
 }
 
 model PrizeClaim {
-  id                String           @id @default(cuid())
-  shop              String
-  gameId            String
-  gameWheelId       String
-  activeGameWheelId String?          @unique
-  winnerClaimId     String?
-  winnerDisplayName String
-  wheelLabel        String
-  tokenHash         String           @unique
-  tokenLastFour     String
-  encryptedToken    String?
-  status            PrizeClaimStatus @default(OPEN)
-  expiresAt         DateTime?
-  generatedAt       DateTime         @default(now())
-  submittedAt       DateTime?
-  reviewedAt        DateTime?
-  fulfilledAt       DateTime?
-  revokedAt         DateTime?
-  preferredPrize    String?
-  recipientName     String?
-  addressLine1      String?
-  addressLine2      String?
-  city              String?
-  stateProvince     String?
-  postalCode        String?
-  country           String?
-  winnerNotes       String?
-  adminNotes        String?
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
+  id                       String           @id @default(cuid())
+  shop                     String
+  gameId                   String
+  gameWheelId              String
+  activeGameWheelId        String?          @unique
+  winnerClaimId            String?
+  winnerDisplayName        String
+  wheelLabel               String
+  tokenHash                String           @unique
+  tokenLastFour            String
+  encryptedToken           String?
+  status                   PrizeClaimStatus @default(OPEN)
+  expiresAt                DateTime?
+  generatedAt              DateTime         @default(now())
+  submittedAt              DateTime?
+  reviewedAt               DateTime?
+  fulfilledAt              DateTime?
+  revokedAt                DateTime?
+  preferredPrize           String?
+  prizeOptionsJson         String?
+  selectedPrizeOptionId    String?
+  selectedPrizeOptionLabel String?
+  selectedPrizeOptionJson  String?
+  selectedBallsJson        String?
+  recipientName            String?
+  addressLine1             String?
+  addressLine2             String?
+  city                     String?
+  stateProvince            String?
+  postalCode               String?
+  country                  String?
+  winnerNotes              String?
+  adminNotes               String?
+  createdAt                DateTime         @default(now())
+  updatedAt                DateTime         @updatedAt
 
   game        Game      @relation(fields: [gameId], references: [id], onDelete: Cascade)
   gameWheel   GameWheel @relation(fields: [gameWheelId], references: [id], onDelete: Cascade)

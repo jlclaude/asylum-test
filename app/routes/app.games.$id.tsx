@@ -40,6 +40,7 @@ import { SecondChanceSummary } from "../components/second-chance/SecondChanceSum
 import { GamePrizeClaims } from "../components/prize-claims/GamePrizeClaims";
 import { PRIZE_CLAIM_EXPIRATION_DAYS, type PrizeClaimExpirationDays } from "../lib/prize-claim";
 import { buildPrizeClaimUrl } from "../lib/prize-claim-token.server";
+import { validateAdminPrizePackageOptions } from "../lib/prize-packages";
 import { createWinnerPrizeClaim, getEligiblePrizeWheels, getPrizeClaimsForGame, toPrizeClaimSummary, updatePrizeClaimStatus } from "../models/prize-claim.server";
 import { getSecondChanceResult } from "../models/second-chance.server";
 import { renderGameInstructionVariables } from "../lib/game-instruction-variables";
@@ -187,7 +188,9 @@ export async function action({
       const wheelId = String(formData.get("wheelId") ?? "").trim();
       const expirationDays = Number(formData.get("expirationDays"));
       if (!PRIZE_CLAIM_EXPIRATION_DAYS.includes(expirationDays as PrizeClaimExpirationDays)) return { error: "Select a valid expiration period.", intent, wheelId };
-      const result = await createWinnerPrizeClaim({ shop: session.shop, gameId: game.id, gameWheelId: wheelId, expirationDays: expirationDays as PrizeClaimExpirationDays });
+      const packageValidation = validateAdminPrizePackageOptions(formData.get("prizeOptionsJson"));
+      if ("error" in packageValidation) return { error: packageValidation.error, intent, wheelId };
+      const result = await createWinnerPrizeClaim({ shop: session.shop, gameId: game.id, gameWheelId: wheelId, expirationDays: expirationDays as PrizeClaimExpirationDays, prizeOptions: packageValidation.options });
       if (!result.created) return { success: "An active claim link already exists for this winner.", intent, wheelId };
       const privateUrl = buildPrizeClaimUrl(result.token, new URL(request.url).origin);
       return data<ActionData>(

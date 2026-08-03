@@ -4,6 +4,7 @@ import { Form, Link, useLoaderData } from "react-router";
 import { listPrizeClaims } from "../models/prize-claim.server";
 import { authenticate } from "../shopify.server";
 import { formatRaffleCode } from "../lib/raffle-number";
+import { parsePrizePackageOptions } from "../lib/prize-packages";
 import "../styles/prize-claims.css";
 const STATUSES = [
   "OPEN",
@@ -36,6 +37,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
       winnerDisplayName: claim.winnerDisplayName,
       wheelLabel: claim.wheelLabel,
       preferredPrize: claim.preferredPrize,
+      selectedPrizeOptionLabel: claim.selectedPrizeOptionLabel,
+      configuredPrizeOptions: parsePrizePackageOptions(claim.prizeOptionsJson)?.map((option) => option.label) ?? null,
       status: claim.status,
       generatedAt: claim.generatedAt.toISOString(),
       submittedAt: claim.submittedAt?.toISOString() ?? null,
@@ -96,8 +99,8 @@ export default function PrizeClaimsHistory() {
                 </header>
                 <dl>
                   <div>
-                    <dt>Preferred prize</dt>
-                    <dd>{claim.preferredPrize ?? "Awaiting submission"}</dd>
+                    <dt>Prize package</dt>
+                    <dd>{claim.selectedPrizeOptionLabel ?? claim.preferredPrize ?? claim.configuredPrizeOptions?.join(" OR ") ?? "Awaiting submission"}</dd>
                   </div>
                   <div>
                     <dt>Generated</dt>

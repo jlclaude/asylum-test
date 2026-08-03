@@ -40,6 +40,8 @@ export type PrizeClaimSubmissionInput = {
 };
 
 export function formatPrizeClaimShippingSummary(input: {
+  raffleCode?: string;
+  gameTitle?: string;
   winnerDisplayName: string;
   preferredPrize: string | null;
   recipientName: string | null;
@@ -50,25 +52,44 @@ export function formatPrizeClaimShippingSummary(input: {
   postalCode: string | null;
   country: string | null;
   winnerNotes: string | null;
+  selectedPrizeOptionLabel?: string | null;
+  selectedPrizeOptionJson?: string | null;
+  selectedBalls?: Array<{ position: number; name: string; productUrl: string | null }>;
 }) {
+  const packageLabel = input.selectedPrizeOptionLabel ?? input.preferredPrize ?? "—";
+  let ballType = "Bowling";
+  if (input.selectedPrizeOptionJson) {
+    try {
+      const option = JSON.parse(input.selectedPrizeOptionJson) as { ballType?: string };
+      if (option.ballType) ballType = option.ballType.charAt(0) + option.ballType.slice(1).toLowerCase();
+    } catch { /* Retain the generic label for malformed legacy data. */ }
+  }
+  const destination = [
+    input.recipientName,
+    input.addressLine1,
+    input.addressLine2,
+    [input.city, input.stateProvince, input.postalCode].filter(Boolean).join(", "),
+    input.country,
+  ].filter(Boolean) as string[];
   return [
+    ...(input.raffleCode ? [input.raffleCode] : []),
+    ...(input.gameTitle ? [input.gameTitle] : []),
+    ...(input.raffleCode || input.gameTitle ? [""] : []),
     `Winner: ${input.winnerDisplayName}`,
-    `Prize Requested: ${input.preferredPrize ?? "—"}`,
-    `Full Name: ${input.recipientName ?? "—"}`,
-    `Address: ${[input.addressLine1, input.addressLine2].filter(Boolean).join(", ") || "—"}`,
-    `City: ${input.city ?? "—"}`,
-    `State: ${input.stateProvince ?? "—"}`,
-    `Postal Code: ${input.postalCode ?? "—"}`,
-    `Country: ${input.country ?? "—"}`,
-    ...(input.winnerNotes ? [`Notes: ${input.winnerNotes}`] : []),
+    `Prize Package: ${packageLabel}`,
+    ...((input.selectedBalls?.length ?? 0) ? ["", ...input.selectedBalls!.map((ball) => `${ballType} Ball ${ball.position}: ${ball.name}${ball.productUrl ? `\n${ball.productUrl}` : ""}`)] : []),
+    "",
+    "Ship To:",
+    ...(destination.length ? destination : ["—"]),
+    ...(input.winnerNotes ? ["", `Notes: ${input.winnerNotes}`] : []),
   ].join("\n");
 }
 
-export function validatePrizeClaimSubmission(formData: FormData):
+export function validatePrizeClaimSubmission(formData: FormData, preferredPrizeOverride?: string):
   | { input: PrizeClaimSubmissionInput; error?: never }
   | { error: string; input?: never } {
   const fields = {
-    preferredPrize: singleLine(formData.get("preferredPrize"), "Prize requested", true),
+    preferredPrize: singleLine(preferredPrizeOverride ?? formData.get("preferredPrize"), "Prize requested", true),
     recipientName: singleLine(formData.get("recipientName"), "Full name", true),
     addressLine1: singleLine(formData.get("addressLine1"), "Address line 1", true),
     addressLine2: singleLine(formData.get("addressLine2"), "Address line 2"),
