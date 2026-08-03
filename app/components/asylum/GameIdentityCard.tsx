@@ -1,5 +1,6 @@
 type GameIdentityCardProps = {
   title: string;
+  raffleCode: string;
   status: string;
   nameWheelCount: number;
   totalEntries?: number;
@@ -8,6 +9,7 @@ type GameIdentityCardProps = {
 
 export function GameIdentityCard({
   title,
+  raffleCode,
   status,
   nameWheelCount,
   totalEntries,
@@ -21,6 +23,7 @@ export function GameIdentityCard({
         <div>
           <p className="asylum-identity-kicker">Authorized game session</p>
           <h2>{title}</h2>
+          <strong>Raffle Number: {raffleCode}</strong>
           <p className="asylum-identity-code">
             ASYLUM CONTROL PROTOCOL · {themeLabel.toUpperCase()}
           </p>
@@ -32,7 +35,7 @@ export function GameIdentityCard({
             <dd>{status.replace("_", " ")}</dd>
           </div>
           <div>
-            <dt>Name wheels</dt>
+            <dt>Containment wheels</dt>
             <dd>{nameWheelCount}</dd>
           </div>
           <div>

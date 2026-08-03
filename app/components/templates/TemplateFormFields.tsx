@@ -30,7 +30,7 @@ export function TemplateFormFields({ values, errors, idPrefix }: TemplateFormFie
       <div className="template-field-row">
         <div><label htmlFor={fieldId("totalSpots")}>Total spots</label><input id={fieldId("totalSpots")} name="totalSpots" type="number" min="1" max="100000" step="1" defaultValue={values?.totalSpots} required />{errors?.totalSpots ? <p className="template-error">{errors.totalSpots}</p> : null}</div>
         <div><label htmlFor={fieldId("pricePerSpot")}>Price per spot</label><input id={fieldId("pricePerSpot")} name="pricePerSpot" type="number" min="0" max="1000000" step="0.01" defaultValue={values?.pricePerSpot} required />{errors?.pricePerSpot ? <p className="template-error">{errors.pricePerSpot}</p> : null}</div>
-        <div><label htmlFor={fieldId("wheelCount")}>Name wheels</label><input id={fieldId("wheelCount")} name="wheelCount" type="number" min="1" max="20" step="1" defaultValue={values?.wheelCount ?? "2"} required />{errors?.wheelCount ? <p className="template-error">{errors.wheelCount}</p> : null}</div>
+        <div><label htmlFor={fieldId("wheelCount")}>Containment wheels</label><input id={fieldId("wheelCount")} name="wheelCount" type="number" min="1" max="20" step="1" defaultValue={values?.wheelCount ?? "2"} required />{errors?.wheelCount ? <p className="template-error">{errors.wheelCount}</p> : null}</div>
       </div>
 
       <label htmlFor={fieldId("initialStatus")}>Initial game status</label>

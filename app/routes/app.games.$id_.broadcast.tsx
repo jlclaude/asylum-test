@@ -113,7 +113,7 @@ export default function BroadcastModePage() {
   return (
     <main ref={fullscreenTarget} className="studio-page broadcast-page" style={variables}>
       <div className="broadcast-shell">
-        <BroadcastGameHeader title={game.title} status={game.status} />
+        <BroadcastGameHeader title={game.title} raffleCode={game.raffleCode} status={game.status} />
 
         <div className="broadcast-toolbar">
           <a href={`/app/games/${game.id}/play`}>← Normal Game Mode</a>

@@ -17,6 +17,7 @@ import { validateGameTemplate } from "../lib/game-template-validation";
 import { createGameTemplate, getGameTemplatesForShop } from "../models/game-template.server";
 import { createGame } from "../models/game.server";
 import { authenticate } from "../shopify.server";
+import { formatRaffleCode } from "../lib/raffle-number";
 
 export async function loader({
   request,
@@ -215,7 +216,7 @@ export async function action({
   }
 
   try {
-    await createGame({
+    const game = await createGame({
       shop: session.shop,
       title,
       description,
@@ -224,6 +225,7 @@ export async function action({
       wheelCount,
       status: statusValue as "OPEN" | "CLOSED",
     });
+    return redirect(`/app?created=${encodeURIComponent(formatRaffleCode(game.raffleNumber))}`);
   } catch (error) {
     console.error("Failed to create game:", error);
 
@@ -237,7 +239,6 @@ export async function action({
     };
   }
 
-  return redirect("/app");
 }
 
 const styles = `
@@ -618,7 +619,7 @@ export default function NewGamePage() {
 
             <p className="game-header-description">
               Configure the claim limits, pricing, and number
-              of independent name wheels for this game.
+              of independent containment wheels for this game.
             </p>
           </header>
 
@@ -751,7 +752,7 @@ export default function NewGamePage() {
                     className="game-label"
                     htmlFor="wheelCount"
                   >
-                    Name wheels{" "}
+                    Containment wheels{" "}
                     <span className="game-required">
                       *
                     </span>
@@ -792,7 +793,7 @@ export default function NewGamePage() {
                     wheelCount > 0
                       ? wheelCount
                       : 2}{" "}
-                    name{" "}
+                    containment{" "}
                     {(Number.isFinite(wheelCount) &&
                     wheelCount > 0
                       ? wheelCount
@@ -801,7 +802,7 @@ export default function NewGamePage() {
                       : "wheels"}
                   </strong>{" "}
                   plus the required{" "}
-                  <strong>value wheel</strong>. Each wheel
+                  <strong>Reward Chamber</strong>. Each wheel
                   shuffles and spins independently with its own
                   random duration between {SPIN_DURATION_RANGE_LABEL}.
                 </p>

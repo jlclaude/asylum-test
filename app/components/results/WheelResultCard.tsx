@@ -14,7 +14,7 @@ export function WheelResultCard({ result }: { result: WheelResult }) {
     <article className="game-result-card">
       <header>
         <div>
-          <p>{result.type === "NAME" ? "Name wheel" : "Value wheel"}</p>
+          <p>{result.type === "NAME" ? "Containment wheel" : "Reward Chamber"}</p>
           <h4>{result.label}</h4>
         </div>
         <span className={`game-result-status game-result-status-${result.status.toLowerCase()}`}>

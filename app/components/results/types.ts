@@ -19,6 +19,7 @@ export type RoundResults = {
 };
 
 export type GameResults = {
+  raffleCode: string;
   completedAt: string | null;
   rounds: RoundResults[];
 };

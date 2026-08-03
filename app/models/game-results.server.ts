@@ -1,11 +1,13 @@
 import db from "../db.server";
 import { toPublicGameResults } from "../lib/game-results";
 import type { GameResults } from "../components/results/types";
+import { formatRaffleCode } from "../lib/raffle-number";
 
 export async function getGameResults(gameId: string): Promise<GameResults | null> {
   const run = await db.gameRun.findUnique({
     where: { gameId },
     select: {
+      game: { select: { raffleNumber: true } },
       completedAt: true,
       rounds: {
         orderBy: { position: "asc" },
@@ -38,6 +40,7 @@ export async function getGameResults(gameId: string): Promise<GameResults | null
   if (!run) return null;
 
   return {
+    raffleCode: formatRaffleCode(run.game.raffleNumber),
     completedAt: run.completedAt?.toISOString() ?? null,
     rounds: run.rounds.map((round) => ({
       title: round.title ?? `Round ${round.position}`,

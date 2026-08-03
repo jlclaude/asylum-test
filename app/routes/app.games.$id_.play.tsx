@@ -52,6 +52,7 @@ import {
 import { getGameForShop } from "../models/game.server";
 import { getGameResults } from "../models/game-results.server";
 import { authenticate } from "../shopify.server";
+import { formatRaffleCode } from "../lib/raffle-number";
 import { PRIZE_CLAIM_EXPIRATION_DAYS, type PrizeClaimExpirationDays } from "../lib/prize-claim";
 import { createWinnerPrizeClaim, getEligiblePrizeWheels, getPrizeClaimsForGame, toPrizeClaimSummary, updatePrizeClaimStatus } from "../models/prize-claim.server";
 
@@ -100,6 +101,7 @@ export async function loader({
   return {
     game: {
       id: game.id,
+      raffleCode: formatRaffleCode(game.raffleNumber),
       title: game.title,
       description: game.description,
       secondChanceOffset: game.secondChanceOffset,
@@ -579,6 +581,7 @@ export default function GameModePage() {
 
         <GameIdentityCard
           title={game.title}
+          raffleCode={game.raffleCode}
           status={game.status}
           nameWheelCount={
             game.wheelCount
@@ -601,8 +604,8 @@ export default function GameModePage() {
             <span>
               Confirmed paid claims will be
               frozen into {game.wheelCount}{" "}
-              name wheels plus one weighted
-              value wheel.
+              containment wheels plus one weighted
+              Reward Chamber.
             </span>
 
             {beginFetcher.data?.error ? (

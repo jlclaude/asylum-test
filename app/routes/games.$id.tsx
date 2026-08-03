@@ -26,6 +26,7 @@ import { SecondChanceResult } from "../components/second-chance/SecondChanceResu
 import { renderGameInstructionVariables } from "../lib/game-instruction-variables";
 import { toPublicSecondChanceResult } from "../lib/second-chance";
 import { AsylumLogo } from "../components/asylum/AsylumLogo";
+import { formatRaffleCode } from "../lib/raffle-number";
 
 import "../styles/game-results.css";
 
@@ -62,6 +63,7 @@ export async function loader({
   return {
     game: {
       id: game.id,
+      raffleCode: formatRaffleCode(game.raffleNumber),
       title: game.title,
       description: game.description
         ? renderGameInstructionVariables(game.description, { secondChanceNumber: game.secondChanceOffset })
@@ -760,6 +762,8 @@ export default function PublicGamePage() {
                 <p className="public-eyebrow">
                   {game.status === "COMPLETED" ? "Official game record" : "Secure your spots"}
                 </p>
+
+                <strong>Raffle Number: {game.raffleCode}</strong>
 
                 <h2>{game.title}</h2>
 

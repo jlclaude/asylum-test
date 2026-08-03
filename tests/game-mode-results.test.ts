@@ -7,6 +7,8 @@ import { formatPublicName } from "../app/lib/public-name.ts";
 import { claimNameEditBlockReason, replaceClaimDisplayNameInEntries, validateClaimDisplayName } from "../app/lib/claim-display-name.ts";
 import { isPrizeClaimExpired, prizeClaimExpirationDate, validatePrizeClaimSubmission } from "../app/lib/prize-claim.ts";
 import { generatePrizeClaimToken, hashPrizeClaimToken } from "../app/lib/prize-claim-token.server.ts";
+import { formatRaffleCode, parseRaffleSearch } from "../app/lib/raffle-number.ts";
+import { getContainmentLabel, getWheelDisplayLabel } from "../app/lib/wheel-labels.ts";
 import { idleRotationAt, remainingSpinSeconds, wheelPositionAt, wheelSpinTotalDegrees } from "../app/lib/wheel-effects.client.ts";
 import { getWinningRestRotation, normalizeDegrees } from "../app/lib/wheel-geometry.ts";
 import {
@@ -45,6 +47,31 @@ test("template default game descriptions preserve spacing and raw variables", ()
   const validation = validateGameTemplate(values);
   assert.equal(values.defaultGameDescription, description);
   assert.equal(validation.input?.defaultGameDescription, description);
+});
+
+test("raffle codes use the permanent six-digit Asylum format", () => {
+  assert.equal(formatRaffleCode(1), "ASY-000001");
+  assert.equal(formatRaffleCode(12), "ASY-000012");
+  assert.equal(formatRaffleCode(347), "ASY-000347");
+  assert.equal(formatRaffleCode(999999), "ASY-999999");
+  assert.throws(() => formatRaffleCode(0));
+  assert.throws(() => formatRaffleCode(1.5));
+  assert.throws(() => formatRaffleCode(1000000));
+  assert.equal(parseRaffleSearch("ASY-000347"), 347);
+  assert.equal(parseRaffleSearch("000347"), 347);
+  assert.equal(parseRaffleSearch("347"), 347);
+  assert.equal(parseRaffleSearch("not-a-raffle"), null);
+});
+
+test("wheel labels use containment letters and Reward Chamber", () => {
+  assert.equal(getContainmentLabel(1), "Containment A");
+  assert.equal(getContainmentLabel(2), "Containment B");
+  assert.equal(getContainmentLabel(26), "Containment Z");
+  assert.equal(getContainmentLabel(27), "Containment AA");
+  assert.equal(getContainmentLabel(52), "Containment AZ");
+  assert.equal(getContainmentLabel(53), "Containment BA");
+  assert.equal(getWheelDisplayLabel("VALUE", 21), "Reward Chamber");
+  assert.throws(() => getContainmentLabel(0));
 });
 import {
   PAYMENT_INSTRUCTIONS_MAX_LENGTH,
@@ -318,18 +345,20 @@ test("public names use the existing privacy convention", () => {
 
 test("public results preserve order and omit private fields", () => {
   const publicResults = toPublicGameResults({
+    raffleCode: "ASY-000347",
     completedAt: "2026-01-01T00:00:00.000Z",
     rounds: [{
       title: "Round 1",
       status: "COMPLETED",
       wheels: [
-        { label: "Name Wheel 1", type: "NAME", status: "COMPLETED", winner: "John Smith", spinDurationSeconds: 40, completedAt: "2026-01-01T00:00:00.000Z", winningClaimQuantity: 3 },
-        { label: "Value Wheel", type: "VALUE", status: "COMPLETED", winner: "125", spinDurationSeconds: 60, completedAt: "2026-01-01T00:01:00.000Z", winningClaimQuantity: null },
+        { label: "Containment A", type: "NAME", status: "COMPLETED", winner: "John Smith", spinDurationSeconds: 40, completedAt: "2026-01-01T00:00:00.000Z", winningClaimQuantity: 3 },
+        { label: "Reward Chamber", type: "VALUE", status: "COMPLETED", winner: "125", spinDurationSeconds: 60, completedAt: "2026-01-01T00:01:00.000Z", winningClaimQuantity: null },
       ],
     }],
   });
 
-  assert.deepEqual(publicResults.rounds[0].wheels.map((wheel) => wheel.label), ["Name Wheel 1", "Value Wheel"]);
+  assert.equal(publicResults.raffleCode, "ASY-000347");
+  assert.deepEqual(publicResults.rounds[0].wheels.map((wheel) => wheel.label), ["Containment A", "Reward Chamber"]);
   assert.equal(publicResults.rounds[0].wheels[0].winner, "John S.");
   assert.equal(JSON.stringify(publicResults).includes("quantity"), false);
   assert.equal(JSON.stringify(publicResults).includes("claimId"), false);

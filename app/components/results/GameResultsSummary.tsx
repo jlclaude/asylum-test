@@ -13,6 +13,7 @@ export function GameResultsSummary({ results, heading = "Game results", action }
       <header className="game-results-heading">
         <div>
           <p>Permanent containment record</p>
+          <strong>Raffle Number: {results.raffleCode}</strong>
           <h2 id="game-results-heading">{heading}</h2>
         </div>
         {action}

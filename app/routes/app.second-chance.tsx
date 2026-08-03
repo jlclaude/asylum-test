@@ -3,19 +3,25 @@ import { Form, Link, useLoaderData } from "react-router";
 import { getSecondChanceEntriesForShop } from "../models/second-chance.server";
 import { authenticate } from "../shopify.server";
 import { formatOrdinal } from "../lib/ordinal";
+import { formatRaffleCode } from "../lib/raffle-number";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const { session } = await authenticate.admin(request);
   const url = new URL(request.url);
   const search = url.searchParams.get("search")?.trim() ?? "";
   const rawArchive = url.searchParams.get("archive");
-  const archive = rawArchive === "active" || rawArchive === "archived" ? rawArchive : "all";
-  const runs = await getSecondChanceEntriesForShop(session.shop, { search, archive });
+  const archive =
+    rawArchive === "active" || rawArchive === "archived" ? rawArchive : "all";
+  const runs = await getSecondChanceEntriesForShop(session.shop, {
+    search,
+    archive,
+  });
   return {
     filters: { search, archive },
     entries: runs.map((run) => ({
       gameId: run.game.id,
       gameTitle: run.game.title,
+      raffleCode: formatRaffleCode(run.game.raffleNumber),
       gameDate: run.game.createdAt.toISOString(),
       gameStatus: run.game.status,
       archived: run.game.archivedAt !== null,
@@ -34,10 +40,92 @@ const styles = `
 
 export default function SecondChancePage() {
   const { entries, filters } = useLoaderData<typeof loader>();
-  const formatDate = (value: string) => new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
-  return <><style dangerouslySetInnerHTML={{ __html: styles }} /><main className="sc-page"><div className="sc-shell">
-    <div className="sc-top"><div className="sc-heading"><p>Current drawing ledger</p><h1>Second Chance Entries</h1></div><Link to="/app">Back to dashboard</Link></div>
-    <Form className="sc-filter" method="get"><input name="search" type="search" defaultValue={filters.search} placeholder="Search game or winner" aria-label="Search by game title or winner name"/><select name="archive" defaultValue={filters.archive} aria-label="Filter by archive state"><option value="all">Active and archived</option><option value="active">Active games</option><option value="archived">Archived games</option></select><button className="sc-button" type="submit">Filter</button></Form>
-    <section className="sc-list" aria-label="Second Chance free entries">{entries.length ? entries.map((entry) => <article className="sc-card" key={entry.gameId}><header><h2>{entry.gameTitle}</h2><strong>{entry.archived ? "ARCHIVED" : entry.gameStatus.replace("_", " ")}</strong></header><div className="sc-meta"><span>Game: {formatDate(entry.gameDate)}</span><span>Offset: {formatOrdinal(entry.offset)}</span><span>Calculated: {formatDate(entry.calculatedAt)}</span></div><div className="sc-results"><div><small>Main winner</small><strong>{entry.mainWinner}</strong></div><div><small>Before free entry</small><strong>{entry.beforeWinner ?? "No eligible entry"}</strong></div><div><small>After free entry</small><strong>{entry.afterWinner ?? "No eligible entry"}</strong></div></div><Link to={`/app/games/${entry.gameId}`}>Open Game Control Center</Link></article>) : <div className="sc-empty">No Second Chance entries match these filters.</div>}</section>
-  </div></main></>;
+  const formatDate = (value: string) =>
+    new Intl.DateTimeFormat("en-US", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    }).format(new Date(value));
+  return (
+    <>
+      <style dangerouslySetInnerHTML={{ __html: styles }} />
+      <main className="sc-page">
+        <div className="sc-shell">
+          <div className="sc-top">
+            <div className="sc-heading">
+              <p>Current drawing ledger</p>
+              <h1>Second Chance Entries</h1>
+            </div>
+            <Link to="/app">Back to dashboard</Link>
+          </div>
+          <Form className="sc-filter" method="get">
+            <input
+              name="search"
+              type="search"
+              defaultValue={filters.search}
+              placeholder="Search raffle, game, or winner"
+              aria-label="Search by raffle number, game title, or winner name"
+            />
+            <select
+              name="archive"
+              defaultValue={filters.archive}
+              aria-label="Filter by archive state"
+            >
+              <option value="all">Active and archived</option>
+              <option value="active">Active games</option>
+              <option value="archived">Archived games</option>
+            </select>
+            <button className="sc-button" type="submit">
+              Filter
+            </button>
+          </Form>
+          <section className="sc-list" aria-label="Second Chance free entries">
+            {entries.length ? (
+              entries.map((entry) => (
+                <article className="sc-card" key={entry.gameId}>
+                  <header>
+                    <div><strong>{entry.raffleCode}</strong><h2>{entry.gameTitle}</h2></div>
+                    <strong>
+                      {entry.archived
+                        ? "ARCHIVED"
+                        : entry.gameStatus.replace("_", " ")}
+                    </strong>
+                  </header>
+                  <div className="sc-meta">
+                    <span>Game: {formatDate(entry.gameDate)}</span>
+                    <span>Offset: {formatOrdinal(entry.offset)}</span>
+                    <span>Calculated: {formatDate(entry.calculatedAt)}</span>
+                  </div>
+                  <div className="sc-results">
+                    <div>
+                      <small>Main winner</small>
+                      <strong>{entry.mainWinner}</strong>
+                    </div>
+                    <div>
+                      <small>Before free entry</small>
+                      <strong>
+                        {entry.beforeWinner ?? "No eligible entry"}
+                      </strong>
+                    </div>
+                    <div>
+                      <small>After free entry</small>
+                      <strong>
+                        {entry.afterWinner ?? "No eligible entry"}
+                      </strong>
+                    </div>
+                  </div>
+                  <Link to={`/app/games/${entry.gameId}`}>
+                    Open Game Control Center
+                  </Link>
+                </article>
+              ))
+            ) : (
+              <div className="sc-empty">
+                No Second Chance entries match these filters.
+              </div>
+            )}
+          </section>
+        </div>
+      </main>
+    </>
+  );
 }

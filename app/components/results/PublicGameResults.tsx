@@ -1,4 +1,5 @@
 type PublicResults = {
+  raffleCode: string;
   completedAt: string | null;
   rounds: Array<{
     title: string;
@@ -11,6 +12,7 @@ export function PublicGameResults({ gameTitle, results }: { gameTitle: string; r
     <section className="public-results" aria-labelledby="public-results-heading">
       <p>Official saved results</p>
       <h2 id="public-results-heading">CONTAINMENT COMPLETE</h2>
+      <strong>Raffle Number: {results.raffleCode}</strong>
       <h3>{gameTitle}</h3>
       {results.completedAt ? <time dateTime={results.completedAt}>{new Intl.DateTimeFormat("en-US", { dateStyle: "long", timeStyle: "short" }).format(new Date(results.completedAt))}</time> : null}
 

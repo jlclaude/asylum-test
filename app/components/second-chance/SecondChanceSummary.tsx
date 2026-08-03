@@ -11,7 +11,7 @@ export function SecondChanceSummary({ offset, result }: Props) {
     <section className="control-card second-chance-summary" aria-labelledby="second-chance-summary-heading">
       <div className="control-section-head">
         <h2 id="second-chance-summary-heading">Second Chance</h2>
-        <p>Two free entries are taken from the persisted first name-wheel order.</p>
+        <p>Two free entries are taken from the persisted Containment A order.</p>
       </div>
       {!result ? (
         <dl><div><dt>Second Chance offset</dt><dd>{formatOrdinal(offset)}</dd></div><div><dt>Status</dt><dd>Winners pending</dd></div></dl>

@@ -22,10 +22,11 @@ export function GameCompletionCard({ gameId, gameTitle, results, secondChance = 
     <section className="game-completion-card" aria-labelledby="containment-complete-heading">
       <p>Permanent result verified</p>
       <h2 id="containment-complete-heading">CONTAINMENT COMPLETE</h2>
+      <strong>Raffle Number: {results.raffleCode}</strong>
       <h3>{gameTitle}</h3>
       <dl>
         <div><dt>Completed</dt><dd>{results.completedAt ? new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(new Date(results.completedAt)) : "Saved"}</dd></div>
-        <div><dt>Name wheels</dt><dd>{names.length}</dd></div>
+        <div><dt>Containment wheels</dt><dd>{names.length}</dd></div>
         <div><dt>Final value</dt><dd>{value?.winner ?? "—"}</dd></div>
       </dl>
       <ul>

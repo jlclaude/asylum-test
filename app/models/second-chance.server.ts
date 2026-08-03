@@ -4,6 +4,7 @@ import {
   selectSecondChanceEntries,
   type SecondChanceEntry,
 } from "../lib/second-chance";
+import { parseRaffleSearch } from "../lib/raffle-number";
 
 export type SavedSecondChanceResult = {
   calculatedAt: string;
@@ -56,7 +57,7 @@ export async function ensureSecondChanceForCompletedWheel(
     return run;
   }
   if (sourceWheel.winnerEntryIndex === null || !sourceWheel.winnerDisplayName) {
-    throw new Error("The first name wheel has no persisted winner.");
+    throw new Error("Containment A has no persisted winner.");
   }
 
   const entries = parseNameEntries(sourceWheel.shuffledEntriesJson);
@@ -123,6 +124,7 @@ export function getSecondChanceEntriesForShop(
   options: { search?: string; archive?: "all" | "active" | "archived" } = {},
 ) {
   const search = options.search?.trim();
+  const raffleNumber = search ? parseRaffleSearch(search) : null;
   return db.gameRun.findMany({
     where: {
       secondChanceCalculatedAt: { not: null },
@@ -134,6 +136,7 @@ export function getSecondChanceEntriesForShop(
       ...(search ? {
         OR: [
           { game: { title: { contains: search } } },
+          ...(raffleNumber ? [{ game: { raffleNumber } }] : []),
           { secondChanceBeforeDisplayName: { contains: search } },
           { secondChanceAfterDisplayName: { contains: search } },
         ],

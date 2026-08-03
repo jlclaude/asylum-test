@@ -2,6 +2,7 @@ import { randomInt } from "node:crypto";
 import db from "../db.server";
 import { MAX_SPIN_DURATION_SECONDS, MIN_SPIN_DURATION_SECONDS } from "../lib/spin-duration";
 import { ensureSecondChanceForCompletedWheel } from "./second-chance.server";
+import { getContainmentLabel, REWARD_CHAMBER_LABEL } from "../lib/wheel-labels";
 
 export type NameWheelEntry = {
   claimId: string;
@@ -157,7 +158,7 @@ export async function beginGameRun(gameId: string, shop: string) {
           gameRoundId: round.id,
           position: index + 1,
           type: "NAME",
-          label: `Name Wheel ${index + 1}`,
+          label: getContainmentLabel(index + 1),
           originalEntriesJson: namesJson,
           shuffledEntriesJson: namesJson,
         },
@@ -171,7 +172,7 @@ export async function beginGameRun(gameId: string, shop: string) {
         gameRoundId: round.id,
         position: game.wheelCount + 1,
         type: "VALUE",
-        label: "Value Wheel",
+        label: REWARD_CHAMBER_LABEL,
         originalEntriesJson: valuesJson,
         shuffledEntriesJson: valuesJson,
       },

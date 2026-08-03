@@ -3,6 +3,7 @@ import type { GameResults } from "../components/results/types";
 
 export function toPublicGameResults(results: GameResults) {
   return {
+    raffleCode: results.raffleCode,
     completedAt: results.completedAt,
     rounds: results.rounds.map((round) => ({
       title: round.title,

@@ -42,6 +42,7 @@ import { createWinnerPrizeClaim, getEligiblePrizeWheels, getPrizeClaimsForGame, 
 import { getSecondChanceResult } from "../models/second-chance.server";
 import { renderGameInstructionVariables } from "../lib/game-instruction-variables";
 import { authenticate } from "../shopify.server";
+import { formatRaffleCode } from "../lib/raffle-number";
 
 import "../styles/game-results.css";
 import "../styles/prize-claims.css";
@@ -78,6 +79,7 @@ export async function loader({
   return {
     game: {
       id: game.id,
+      raffleCode: formatRaffleCode(game.raffleNumber),
       title: game.title,
       description: game.description,
       totalSpots: game.totalSpots,
@@ -515,6 +517,7 @@ export default function GameControlCenter() {
           <header className="control-header">
             <div>
               <p className="control-eyebrow">Game control center</p>
+              <strong>{game.raffleCode}</strong>
               <h1>{game.title}</h1>
               <p className="control-description">{game.description ? renderGameInstructionVariables(game.description, { secondChanceNumber: game.secondChanceOffset }) : "Manage claims, payments, availability, and public access."}</p>
             </div>
@@ -536,7 +539,7 @@ export default function GameControlCenter() {
           </section>
 
           {game.archivedAt ? <div className="control-message control-message-error">Archived {formatDate(game.archivedAt)}. Gameplay and standard claim changes are disabled until restored.</div> : null}
-          {duplicated ? <div className="control-message control-message-success">Game duplicated. This new copy is OPEN and contains setup only.</div> : null}
+          {duplicated ? <div className="control-message control-message-success">Game duplicated as {game.raffleCode}. This new copy is OPEN and contains setup only.</div> : null}
           {actionData?.error ? <div className="control-message control-message-error">{actionData.error}</div> : null}
           {actionData?.success ? <div className="control-message control-message-success">{actionData.success}</div> : null}
 
