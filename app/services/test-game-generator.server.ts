@@ -74,7 +74,7 @@ export async function createDevelopmentTestGame(input: {
     : await runGameReadinessCheck(game.id, input.shop);
   const saved = await db.game.findFirstOrThrow({ where: { id: game.id, shop: input.shop } });
   return {
-    game: { id: saved.id, title: saved.title, raffleNumber: saved.raffleNumber, status: saved.status },
+    game: { id: saved.id, title: saved.title, raffleYear: saved.raffleYear, raffleNumber: saved.raffleNumber, status: saved.status },
     claimCount: claims.length,
     paidSpotCount: claims.filter((claim) => claim.status === "CONFIRMED" && claim.externalPayment)
       .reduce((total, claim) => total + claim.quantity, 0),

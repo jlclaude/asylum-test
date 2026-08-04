@@ -11,7 +11,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const { session } = await authenticate.admin(request);
   const games = await listBackupGames(session.shop);
   return { games: games.map((game) => ({
-    id: game.id, raffleCode: formatRaffleCode(game.raffleNumber), title: game.title,
+    id: game.id, raffleCode: formatRaffleCode({ year: game.raffleYear, number: game.raffleNumber }), title: game.title,
     status: game.status, archived: Boolean(game.archivedAt),
   })) };
 }

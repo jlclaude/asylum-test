@@ -124,7 +124,7 @@ export function getSecondChanceEntriesForShop(
   options: { search?: string; archive?: "all" | "active" | "archived" } = {},
 ) {
   const search = options.search?.trim();
-  const raffleNumber = search ? parseRaffleSearch(search) : null;
+  const raffle = search ? parseRaffleSearch(search) : null;
   return db.gameRun.findMany({
     where: {
       secondChanceCalculatedAt: { not: null },
@@ -136,7 +136,7 @@ export function getSecondChanceEntriesForShop(
       ...(search ? {
         OR: [
           { game: { title: { contains: search } } },
-          ...(raffleNumber ? [{ game: { raffleNumber } }] : []),
+          ...(raffle ? [{ game: { raffleNumber: raffle.number, ...(raffle.year ? { raffleYear: raffle.year } : {}) } }] : []),
           { secondChanceBeforeDisplayName: { contains: search } },
           { secondChanceAfterDisplayName: { contains: search } },
         ],

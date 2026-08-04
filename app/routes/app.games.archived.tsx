@@ -16,13 +16,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
     ? requestedStatus as GameStatus
     : "ALL";
   const sort = url.searchParams.get("sort") === "oldest" ? "oldest" : "newest";
-  const games = await getArchivedGamesForShop(session.shop, { search, status, sort });
+  const requestedYear = Number(url.searchParams.get("year"));
+  const year = Number.isInteger(requestedYear) && requestedYear >= 1000 && requestedYear <= 9999 ? requestedYear : undefined;
+  const games = await getArchivedGamesForShop(session.shop, { search, status, sort, year });
   return {
-    filters: { search, status, sort },
+    filters: { search, status, sort, year: year?.toString() ?? "" },
     deleted: url.searchParams.get("deleted") === "1",
     games: games.map((game) => ({
       id: game.id,
-      raffleCode: formatRaffleCode(game.raffleNumber),
+      raffleCode: formatRaffleCode({ year: game.raffleYear, number: game.raffleNumber }),
       title: game.title,
       status: game.status,
       totalSpots: game.totalSpots,
@@ -76,7 +78,7 @@ export default function ArchivedGamesPage() {
   return <><style dangerouslySetInnerHTML={{ __html: styles }} /><main className="archive-page"><div className="archive-shell">
     <Link className="archive-back" to="/app">← Active games</Link><header className="archive-header"><p>Preserved records</p><h1>Archived Games</h1><p>Archived games retain claims, payment status, wheels, winners, and results.</p></header>
     {deleted ? <p className="archive-message" role="status">Game permanently deleted.</p> : null}{actionData?.success ? <p className="archive-message" role="status">{actionData.success}</p> : null}{actionData?.error ? <p className="archive-message archive-error" role="alert">{actionData.error}</p> : null}
-    <Form className="archive-filters" method="get"><input type="search" name="search" defaultValue={filters.search} placeholder="Search title or raffle number" aria-label="Search archived games by title or raffle number" /><select name="status" defaultValue={filters.status} aria-label="Filter archived games by status"><option value="ALL">All statuses</option>{GAME_STATUSES.map((status) => <option key={status} value={status}>{status.replace("_", " ")}</option>)}</select><select name="sort" defaultValue={filters.sort} aria-label="Sort by archived date"><option value="newest">Recently archived</option><option value="oldest">Oldest archived</option></select><button>Apply</button></Form>
+    <Form className="archive-filters" method="get"><input type="search" name="search" defaultValue={filters.search} placeholder="Search title or raffle number" aria-label="Search archived games by title or raffle number" /><input type="number" name="year" min="1000" max="9999" defaultValue={filters.year} placeholder="Year" aria-label="Filter archived games by raffle year" /><select name="status" defaultValue={filters.status} aria-label="Filter archived games by status"><option value="ALL">All statuses</option>{GAME_STATUSES.map((status) => <option key={status} value={status}>{status.replace("_", " ")}</option>)}</select><select name="sort" defaultValue={filters.sort} aria-label="Sort by archived date"><option value="newest">Recently archived</option><option value="oldest">Oldest archived</option></select><button>Apply</button></Form>
     <section className="archive-list" aria-label="Archived games">{games.length === 0 ? <div className="archive-card">No archived games match this view.</div> : games.map((game) => <article className="archive-card" key={game.id}><header><div><strong>{game.raffleCode}</strong><h2>{game.title}</h2><p>Gameplay status: {game.status.replace("_", " ")}</p></div><Link className="archive-button" aria-label={`Open ${game.raffleCode} ${game.title}`} to={`/app/games/${game.id}`}>Open / View</Link></header><div className="archive-meta"><span>Archived {formatDate(game.archivedAt)}</span><span>Created {formatDate(game.createdAt)}</span><span>Updated {formatDate(game.updatedAt)}</span><span>{game.totalSpots} spots</span><span>{game.confirmedQuantity} confirmed</span><span>{game.wheelCount} name wheels</span></div>{game.results.length ? <div><strong>Saved results</strong><ul className="archive-results">{game.results.map((result, index) => <li key={`${result}-${index}`}>{result}</li>)}</ul></div> : null}<div className="archive-actions"><Form method="post"><input type="hidden" name="intent" value="restore-game" /><input type="hidden" name="gameId" value={game.id} /><button className="archive-button" disabled={busy}>Restore</button></Form></div><details className="archive-danger"><summary>Permanent Delete</summary><p>This permanently deletes claims, payments, wheel history, and results. Raffle numbers are never reused.</p><Form method="post"><input type="hidden" name="intent" value="delete-game" /><input type="hidden" name="gameId" value={game.id} /><label htmlFor={`confirm-${game.id}`}>Type “{game.title}” or DELETE</label><input id={`confirm-${game.id}`} name="deleteConfirmation" required /><button className="archive-button archive-delete" disabled={busy}>Permanently Delete</button></Form></details></article>)}</section>
   </div></main></>;
 }

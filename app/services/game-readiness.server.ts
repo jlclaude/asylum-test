@@ -74,6 +74,7 @@ async function loadSnapshot(gameId: string, shop: string): Promise<ReadinessSnap
       totalSpots: game.totalSpots,
       wheelCount: game.wheelCount,
       secondChanceOffset: game.secondChanceOffset,
+      raffleYear: game.raffleYear,
       raffleNumber: game.raffleNumber,
       status: game.status,
       archivedAt: game.archivedAt?.toISOString() ?? null,

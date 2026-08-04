@@ -66,6 +66,7 @@ export type ReadinessSnapshot = {
     totalSpots: number;
     wheelCount: number;
     secondChanceOffset: number;
+    raffleYear: number;
     raffleNumber: number;
     status: string;
     archivedAt: string | null;
@@ -151,10 +152,10 @@ export function evaluateGameReadiness(snapshot: ReadinessSnapshot): GameReadines
     ? check("PASS", "game.status", "GAME", "Game status supports wheel operations", `Current status is ${game.status}.`)
     : check("BLOCKING", "game.status", "GAME", "Game must be closed first", "Close the game before initializing wheels."));
   try {
-    const code = formatRaffleCode(game.raffleNumber);
+    const code = formatRaffleCode({ year: game.raffleYear, number: game.raffleNumber });
     checks.push(check("PASS", "raffle.valid", "RAFFLE", "Raffle identity is valid", code));
   } catch {
-    checks.push(check("BLOCKING", "raffle.valid", "RAFFLE", "Raffle identity is invalid", "The persisted raffle number is missing or outside the valid range."));
+    checks.push(check("BLOCKING", "raffle.valid", "RAFFLE", "Raffle identity is invalid", "The persisted raffle year or number is missing or outside the valid range."));
   }
   checks.push(Number.isInteger(game.secondChanceOffset) && game.secondChanceOffset >= 2 && game.secondChanceOffset <= 10
     ? check("PASS", "second-chance.offset", "SECOND_CHANCE", "Second Chance offset is valid", `${game.secondChanceOffset} is within the saved 2–10 range.`)

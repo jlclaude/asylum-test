@@ -7,7 +7,7 @@ type TestGameActionData = {
   error?: string;
   message?: string;
   created?: {
-    game: { id: string; title: string; raffleNumber: number; status: string };
+    game: { id: string; title: string; raffleYear: number; raffleNumber: number; status: string };
     claimCount: number;
     paidSpotCount: number;
     initializationError: string | null;
@@ -88,7 +88,7 @@ export function TestGameGenerator() {
       {created ? (
         <div className="test-game-tools__result">
           <h4>{created.game.title}</h4>
-          <p>{formatRaffleCode(created.game.raffleNumber)} · {created.game.status} · {created.claimCount} claims · {created.paidSpotCount} paid spots</p>
+          <p>{formatRaffleCode({ year: created.game.raffleYear, number: created.game.raffleNumber })} · {created.game.status} · {created.claimCount} claims · {created.paidSpotCount} paid spots</p>
           {created.readiness ? (
             <div>
               <p>Readiness: {created.readiness.isReady ? "Ready" : "Needs attention"} · {created.readiness.blockingCount} blocking · {created.readiness.warningCount} warnings</p>

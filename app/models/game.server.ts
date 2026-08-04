@@ -8,6 +8,7 @@ import {
   duplicateGameTitle,
 } from "../lib/game-administration";
 import { parseRaffleSearch } from "../lib/raffle-number";
+import { allocateNextRaffleIdentity } from "./raffle-number.server";
 
 export type CreateGameInput = {
   shop: string;
@@ -23,25 +24,16 @@ export function generateSecondChanceOffset() {
   return randomInt(2, 11);
 }
 
-async function allocateRaffleNumber(transaction: Prisma.TransactionClient, shop: string) {
-  const sequence = await transaction.shopRaffleSequence.upsert({
-    where: { shop },
-    create: { shop, nextValue: 2 },
-    update: { nextValue: { increment: 1 } },
-  });
-  const raffleNumber = sequence.nextValue - 1;
-  if (raffleNumber > 999999) throw new Error("This shop has exhausted its raffle-number range.");
-  return raffleNumber;
-}
-
 export async function createGameWithTransaction(
   transaction: Prisma.TransactionClient,
   input: CreateGameInput,
+  now = new Date(),
 ) {
-  const raffleNumber = await allocateRaffleNumber(transaction, input.shop);
+  const { raffleYear, raffleNumber } = await allocateNextRaffleIdentity({ tx: transaction, shop: input.shop, now });
   return transaction.game.create({
     data: {
       shop: input.shop,
+      raffleYear,
       raffleNumber,
       title: input.title,
       description: input.description || null,
@@ -62,19 +54,21 @@ export async function createGame(input: CreateGameInput) {
 
 type GameListOptions = {
   search?: string;
+  year?: number;
   status?: GameStatus | "ALL";
   sort?: "newest" | "oldest";
 };
 
 export async function getGamesForShop(shop: string, options: GameListOptions = {}) {
-  const raffleNumber = options.search ? parseRaffleSearch(options.search) : null;
+  const raffle = options.search ? parseRaffleSearch(options.search) : null;
   return db.game.findMany({
     where: {
       shop,
       archivedAt: null,
+      ...(options.year ? { raffleYear: options.year } : {}),
       ...(options.search ? { OR: [
         { title: { contains: options.search } },
-        ...(raffleNumber ? [{ raffleNumber }] : []),
+        ...(raffle ? [{ raffleNumber: raffle.number, ...(raffle.year ? { raffleYear: raffle.year } : {}) }] : []),
       ] } : {}),
       ...(options.status && options.status !== "ALL" ? { status: options.status } : {}),
     },
@@ -86,19 +80,21 @@ export async function getGamesForShop(shop: string, options: GameListOptions = {
 
 type ArchivedGameListOptions = {
   search?: string;
+  year?: number;
   status?: GameStatus | "ALL";
   sort?: "newest" | "oldest";
 };
 
 export function getArchivedGamesForShop(shop: string, options: ArchivedGameListOptions = {}) {
-  const raffleNumber = options.search ? parseRaffleSearch(options.search) : null;
+  const raffle = options.search ? parseRaffleSearch(options.search) : null;
   return db.game.findMany({
     where: {
       shop,
       archivedAt: { not: null },
+      ...(options.year ? { raffleYear: options.year } : {}),
       ...(options.search ? { OR: [
         { title: { contains: options.search } },
-        ...(raffleNumber ? [{ raffleNumber }] : []),
+        ...(raffle ? [{ raffleNumber: raffle.number, ...(raffle.year ? { raffleYear: raffle.year } : {}) }] : []),
       ] } : {}),
       ...(options.status && options.status !== "ALL" ? { status: options.status } : {}),
     },
@@ -219,10 +215,11 @@ export async function duplicateGameSetup(id: string, shop: string) {
   return db.$transaction(async (transaction) => {
     const source = await transaction.game.findFirst({ where: { id, shop } });
     if (!source) throw new Error("Game not found.");
-    const raffleNumber = await allocateRaffleNumber(transaction, shop);
+    const { raffleYear, raffleNumber } = await allocateNextRaffleIdentity({ tx: transaction, shop });
     return transaction.game.create({
       data: {
         shop,
+        raffleYear,
         raffleNumber,
         title: duplicateGameTitle(source.title),
         description: source.description,

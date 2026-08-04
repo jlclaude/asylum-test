@@ -44,6 +44,7 @@ model Game {
   pricePerSpot       Decimal
   wheelCount         Int        @default(2)
   secondChanceOffset Int        @default(2)
+  raffleYear         Int
   raffleNumber       Int
   status             GameStatus @default(OPEN)
   archivedAt         DateTime?
@@ -54,18 +55,24 @@ model Game {
   run         GameRun?
   prizeClaims PrizeClaim[]
 
-  @@unique([shop, raffleNumber])
+  @@unique([shop, raffleYear, raffleNumber])
   @@index([shop])
+  @@index([shop, raffleYear])
+  @@index([shop, raffleYear, raffleNumber])
   @@index([shop, status])
   @@index([shop, archivedAt])
 }
 
 model ShopRaffleSequence {
   id        String   @id @default(cuid())
-  shop      String   @unique
+  shop      String
+  year      Int
   nextValue Int      @default(1)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@unique([shop, year])
+  @@index([shop, year])
 }
 
 model GameTemplate {

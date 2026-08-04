@@ -32,7 +32,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       id: claim.id,
       gameId: claim.gameId,
       gameTitle: claim.game.title,
-      raffleCode: formatRaffleCode(claim.game.raffleNumber),
+      raffleCode: formatRaffleCode({ year: claim.game.raffleYear, number: claim.game.raffleNumber }),
       archived: Boolean(claim.game.archivedAt),
       winnerDisplayName: claim.winnerDisplayName,
       wheelLabel: claim.wheelLabel,

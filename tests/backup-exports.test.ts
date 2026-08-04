@@ -6,11 +6,12 @@ import {
   BACKUP_VERSION,
   MAX_BACKUP_BYTES,
   backupPreview,
+  backupChecksum,
   canonicalJson,
   createBackupDocument,
   parseBackupJson,
   restoredPrizeClaimStatus,
-  restoredRaffleNextValue,
+  restoredRaffleSequences,
   type BackupPayload,
 } from "../app/lib/backup-format.ts";
 import { claimsCsv, prizeClaimsCsv, winnersCsv } from "../app/lib/csv-export.ts";
@@ -27,13 +28,13 @@ function payload(): BackupPayload {
     data: {
       shopSettings: { id: "settings-1", paymentInstructions: "Pay safely", createdAt: date, updatedAt: date },
       templates: [{ id: "template-1", name: "Default", description: null, defaultGameTitle: "Friday", defaultGameDescription: null, totalSpots: 20, pricePerSpot: "10.50", wheelCount: 1, initialStatus: "OPEN", isDefault: true, createdAt: date, updatedAt: date }],
-      games: [{ id: "game-1", title: "Friday", description: null, totalSpots: 20, pricePerSpot: "10.50", wheelCount: 1, secondChanceOffset: 7, raffleNumber: 8, status: "COMPLETED", archivedAt: null, createdAt: date, updatedAt: date }],
+      games: [{ id: "game-1", title: "Friday", description: null, totalSpots: 20, pricePerSpot: "10.50", wheelCount: 1, secondChanceOffset: 7, raffleYear: 2026, raffleNumber: 8, raffleCode: "ASY-2026-000008", status: "COMPLETED", archivedAt: null, createdAt: date, updatedAt: date }],
       claims: [{ id: "claim-1", gameId: "game-1", displayName: "Alex Smith", facebookHandle: null, quantity: 2, comment: null, status: "CONFIRMED", externalPayment: true, expiresAt: null, createdAt: date, updatedAt: date }],
       runs: [{ id: "run-1", gameId: "game-1", startedAt: date, completedAt: date, secondChanceCalculatedAt: date, secondChanceSourceWheelId: "wheel-1", secondChanceBeforeClaimId: "claim-1", secondChanceBeforeDisplayName: "Alex Smith", secondChanceBeforeEntryIndex: 0, secondChanceAfterClaimId: "claim-1", secondChanceAfterDisplayName: "Alex Smith", secondChanceAfterEntryIndex: 1 }],
       rounds: [{ id: "round-1", gameRunId: "run-1", position: 1, title: "Round 1", status: "COMPLETED", startedAt: date, completedAt: date, createdAt: date, updatedAt: date }],
       wheels: [{ id: "wheel-1", gameRoundId: "round-1", position: 1, type: "NAME", status: "COMPLETED", label: "Containment A", originalEntries: [{ claimId: "claim-1", displayName: "Alex Smith" }], shuffledEntries: [{ claimId: "claim-1", displayName: "Alex Smith" }], spinDurationSeconds: 25, winnerEntryIndex: 0, winnerClaimId: "claim-1", winnerDisplayName: "Alex Smith", winnerValue: null, shuffledAt: date, spunAt: date, completedAt: date, resultAcceptedAt: date, createdAt: date, updatedAt: date }],
       prizeClaims: [{ id: "prize-1", gameId: "game-1", gameWheelId: "wheel-1", winnerClaimId: "claim-1", winnerDisplayName: "Alex Smith", wheelLabel: "Containment A", status: "OPEN", expiresAt: null, generatedAt: date, submittedAt: null, reviewedAt: null, fulfilledAt: null, revokedAt: null, preferredPrize: null, prizeOptions: [{ id: "one", label: "Ball" }], selectedPrizeOptionId: null, selectedPrizeOptionLabel: null, selectedPrizeOption: null, selectedBalls: null, recipientName: null, addressLine1: null, addressLine2: null, city: null, stateProvince: null, postalCode: null, country: null, winnerNotes: null, adminNotes: null, createdAt: date, updatedAt: date }],
-      raffleSequence: { id: "sequence-1", nextValue: 12, createdAt: date, updatedAt: date },
+      raffleSequences: [{ id: "sequence-1", year: 2026, nextValue: 12, createdAt: date, updatedAt: date }],
     },
   };
 }
@@ -48,6 +49,27 @@ test("versioned backup validates checksum, dates, decimals, JSON entries, and pr
     exportedAt: date, games: 1, claims: 1, runs: 1, rounds: 1, wheels: 1,
     templates: 1, prizeClaims: 1, raffleSequenceNextValue: 12, openPrizeLinksRevoked: 1,
   });
+});
+
+test("version 1 backup validates its original checksum and derives UTC raffle years", () => {
+  const current = payload();
+  const legacyGames = current.data.games.map((game) =>
+    Object.fromEntries(Object.entries(game).filter(([key]) => key !== "raffleYear" && key !== "raffleCode")),
+  );
+  const legacySequence = current.data.raffleSequences[0];
+  const sequence = Object.fromEntries(Object.entries(legacySequence).filter(([key]) => key !== "year"));
+  const legacyData = Object.fromEntries(Object.entries(current.data).filter(([key]) => key !== "raffleSequences"));
+  const legacyPayload = {
+    ...current,
+    version: 1,
+    data: { ...legacyData, games: legacyGames, raffleSequence: sequence },
+  };
+  const legacyDocument = { ...legacyPayload, checksum: backupChecksum(legacyPayload) };
+  const restored = parseBackupJson(JSON.stringify(legacyDocument), current.shop);
+  assert.equal(restored.data.games[0].raffleYear, 2026);
+  assert.equal(restored.data.games[0].raffleNumber, 8);
+  assert.equal(restored.data.games[0].raffleCode, "ASY-2026-000008");
+  assert.deepEqual(restoredRaffleSequences(restored.data.games, restored.data.raffleSequences), [{ year: 2026, nextValue: 12 }]);
 });
 
 test("checksum detects modified payload", () => {
@@ -66,6 +88,13 @@ test("duplicate IDs and broken relations are rejected after a valid checksum", (
   relationPayload.data.claims[0].gameId = "missing-game";
   const relation = createBackupDocument(relationPayload);
   assert.throws(() => parseBackupJson(JSON.stringify(relation), relation.shop), /missing game/i);
+});
+
+test("backup restore rejects duplicate shop-year-number identities", () => {
+  const duplicateIdentity = payload();
+  duplicateIdentity.data.games.push({ ...duplicateIdentity.data.games[0], id: "game-2" });
+  const document = createBackupDocument(duplicateIdentity);
+  assert.throws(() => parseBackupJson(JSON.stringify(document), document.shop), /duplicate raffle identity/i);
 });
 
 test("wrong shop, unsupported version, malformed JSON, unsafe keys, and oversized uploads are rejected", () => {
@@ -91,15 +120,15 @@ test("canonical serialization converts BigInt to a stable string", () => {
   assert.equal(canonicalJson({ userId: 1234567890123456789n }), '{"userId":"1234567890123456789"}');
 });
 
-test("restore safety revokes open prize links and advances raffle sequence past restored numbers", () => {
+test("restore safety revokes open prize links and advances yearly raffle sequences", () => {
   assert.equal(restoredPrizeClaimStatus("OPEN"), "REVOKED");
   assert.equal(restoredPrizeClaimStatus("FULFILLED"), "FULFILLED");
-  assert.equal(restoredRaffleNextValue(payload().data.games, 2), 9);
-  assert.equal(restoredRaffleNextValue(payload().data.games, 20), 20);
+  assert.deepEqual(restoredRaffleSequences(payload().data.games, []), [{ year: 2026, nextValue: 9 }]);
+  assert.deepEqual(restoredRaffleSequences(payload().data.games, payload().data.raffleSequences), [{ year: 2026, nextValue: 12 }]);
 });
 
 test("claims CSV is chronological and omits internal IDs", () => {
-  const csv = claimsCsv([{ raffleCode: "ASY-000008", gameTitle: "Friday", claims: [
+  const csv = claimsCsv([{ raffleCode: "ASY-2026-000008", gameTitle: "Friday", claims: [
     { id: "later-private", displayName: "Later", quantity: 1, status: "PENDING", externalPayment: false, createdAt: "2026-02-01T00:00:00.000Z" },
     { id: "earlier-private", displayName: "Earlier", quantity: 2, status: "CONFIRMED", externalPayment: true, createdAt: "2026-01-01T00:00:00.000Z" },
   ] }]);
@@ -109,7 +138,7 @@ test("claims CSV is chronological and omits internal IDs", () => {
 });
 
 test("winners CSV uses only persisted winner fields", () => {
-  const csv = winnersCsv([{ raffleCode: "ASY-000008", gameTitle: "Friday", archived: false, secondChanceOffset: 7, run: {
+  const csv = winnersCsv([{ raffleCode: "ASY-2026-000008", gameTitle: "Friday", archived: false, secondChanceOffset: 7, run: {
     secondChanceBeforeDisplayName: "Before Saved", secondChanceAfterDisplayName: "After Saved",
     rounds: [{ position: 1, title: "Round 1", wheels: [{ position: 1, label: "Containment A", type: "NAME", winnerDisplayName: "Persisted Winner", winnerValue: null, completedAt: date, spinDurationSeconds: 25 }] }],
   } }]);
@@ -119,7 +148,7 @@ test("winners CSV uses only persisted winner fields", () => {
 });
 
 test("private prize CSV contains fulfillment fields but no tokens", () => {
-  const csv = prizeClaimsCsv([{ raffleCode: "ASY-000008", gameTitle: "Friday", winnerDisplayName: "Alex", wheelLabel: "Containment A", status: "SUBMITTED", selectedPrizeOptionLabel: "Two balls", selectedBalls: [{ productTitle: "Ball One", weight: 15 }, { productTitle: "Ball Two", weight: 16 }], recipientName: "Alex Smith", addressLine1: "1 Main St", addressLine2: null, city: "Town", stateProvince: "NY", postalCode: "10001", country: "US", winnerNotes: "Door", generatedAt: date, submittedAt: date, reviewedAt: null, fulfilledAt: null }]);
+  const csv = prizeClaimsCsv([{ raffleCode: "ASY-2026-000008", gameTitle: "Friday", winnerDisplayName: "Alex", wheelLabel: "Containment A", status: "SUBMITTED", selectedPrizeOptionLabel: "Two balls", selectedBalls: [{ productTitle: "Ball One", weight: 15 }, { productTitle: "Ball Two", weight: 16 }], recipientName: "Alex Smith", addressLine1: "1 Main St", addressLine2: null, city: "Town", stateProvince: "NY", postalCode: "10001", country: "US", winnerNotes: "Door", generatedAt: date, submittedAt: date, reviewedAt: null, fulfilledAt: null }]);
   assert.match(csv, /Ball One/);
   assert.match(csv, /1 Main St/);
   assert.equal(csv.includes("tokenHash"), false);

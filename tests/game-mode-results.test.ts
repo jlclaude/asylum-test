@@ -58,17 +58,17 @@ test("template default game descriptions preserve spacing and raw variables", ()
   assert.equal(validation.input?.defaultGameDescription, description);
 });
 
-test("raffle codes use the permanent six-digit Asylum format", () => {
-  assert.equal(formatRaffleCode(1), "ASY-000001");
-  assert.equal(formatRaffleCode(12), "ASY-000012");
-  assert.equal(formatRaffleCode(347), "ASY-000347");
-  assert.equal(formatRaffleCode(999999), "ASY-999999");
-  assert.throws(() => formatRaffleCode(0));
-  assert.throws(() => formatRaffleCode(1.5));
-  assert.throws(() => formatRaffleCode(1000000));
-  assert.equal(parseRaffleSearch("ASY-000347"), 347);
-  assert.equal(parseRaffleSearch("000347"), 347);
-  assert.equal(parseRaffleSearch("347"), 347);
+test("raffle codes use the permanent year-based Asylum format", () => {
+  assert.equal(formatRaffleCode({ year: 2026, number: 1 }), "ASY-2026-000001");
+  assert.equal(formatRaffleCode({ year: 2026, number: 347 }), "ASY-2026-000347");
+  assert.equal(formatRaffleCode({ year: 2027, number: 999999 }), "ASY-2027-999999");
+  assert.throws(() => formatRaffleCode({ year: 26, number: 1 }));
+  assert.throws(() => formatRaffleCode({ year: 2026, number: 0 }));
+  assert.throws(() => formatRaffleCode({ year: 2026, number: 1000000 }));
+  assert.deepEqual(parseRaffleSearch("ASY-2026-000347"), { year: 2026, number: 347 });
+  assert.deepEqual(parseRaffleSearch("2026-000347"), { year: 2026, number: 347 });
+  assert.deepEqual(parseRaffleSearch("000347"), { year: null, number: 347 });
+  assert.deepEqual(parseRaffleSearch("347"), { year: null, number: 347 });
   assert.equal(parseRaffleSearch("not-a-raffle"), null);
 });
 
@@ -551,21 +551,21 @@ test("structured prize submission requires names and HTTPS product links", () =>
 
 test("structured fulfillment summary includes package and balls in saved order", () => {
   const summary = formatPrizeClaimShippingSummary({
-    raffleCode: "ASY-000123", gameTitle: "Friday Bowling Raffle", winnerDisplayName: "Jane Smith",
+    raffleCode: "ASY-2026-000123", gameTitle: "Friday Bowling Raffle", winnerDisplayName: "Jane Smith",
     preferredPrize: "2 Domestic Balls", selectedPrizeOptionLabel: "2 Domestic Balls",
     selectedPrizeOptionJson: JSON.stringify({ ballType: "DOMESTIC" }),
     selectedBalls: [{ position: 1, name: "Phaze II", productUrl: "https://example.com/phaze" }, { position: 2, name: "Black Widow 3.0", productUrl: null }],
     recipientName: "Jane Smith", addressLine1: "123 Main Street", addressLine2: null,
     city: "Orlando", stateProvince: "FL", postalCode: "32801", country: "United States", winnerNotes: null,
   });
-  assert.match(summary, /ASY-000123\nFriday Bowling Raffle/);
+  assert.match(summary, /ASY-2026-000123\nFriday Bowling Raffle/);
   assert.match(summary, /Domestic Ball 1: Phaze II\nhttps:\/\/example.com\/phaze/);
   assert.match(summary, /Domestic Ball 2: Black Widow 3.0/);
 });
 
 test("product fulfillment summary shows domestic weights and no product URL", () => {
   const summary = formatPrizeClaimShippingSummary({
-    raffleCode: "ASY-000123", gameTitle: "Friday Bowling Raffle", winnerDisplayName: "Jane Smith", preferredPrize: "2 Domestic Balls",
+    raffleCode: "ASY-2026-000123", gameTitle: "Friday Bowling Raffle", winnerDisplayName: "Jane Smith", preferredPrize: "2 Domestic Balls",
     selectedPrizeOptionLabel: "2 Domestic Balls", selectedPrizeOptionJson: JSON.stringify({ ballType: "DOMESTIC" }),
     selectedBalls: [{ position: 1, productId: "gid://shopify/Product/1", productTitle: "Phaze II", productHandle: "phaze-ii", productImageUrl: null, productImageAlt: null, collectionId: "gid://shopify/Collection/2", collectionTitle: "Domestic", weightPounds: 15 }],
     recipientName: "Jane Smith", addressLine1: "123 Main", addressLine2: null, city: "Orlando", stateProvince: "FL", postalCode: "32801", country: "USA", winnerNotes: null,
@@ -589,7 +589,7 @@ test("public names use the existing privacy convention", () => {
 
 test("public results preserve order and omit private fields", () => {
   const publicResults = toPublicGameResults({
-    raffleCode: "ASY-000347",
+    raffleCode: "ASY-2026-000347",
     completedAt: "2026-01-01T00:00:00.000Z",
     rounds: [{
       title: "Round 1",
@@ -601,7 +601,7 @@ test("public results preserve order and omit private fields", () => {
     }],
   });
 
-  assert.equal(publicResults.raffleCode, "ASY-000347");
+  assert.equal(publicResults.raffleCode, "ASY-2026-000347");
   assert.deepEqual(publicResults.rounds[0].wheels.map((wheel) => wheel.label), ["Containment A", "Reward Chamber"]);
   assert.equal(publicResults.rounds[0].wheels[0].winner, "John S.");
   assert.equal(JSON.stringify(publicResults).includes("quantity"), false);

@@ -41,7 +41,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       updatedAt: claim.updatedAt.toISOString(),
         game: {
           ...claim.game,
-          raffleCode: formatRaffleCode(claim.game.raffleNumber),
+          raffleCode: formatRaffleCode({ year: claim.game.raffleYear, number: claim.game.raffleNumber }),
         archivedAt: claim.game.archivedAt?.toISOString() ?? null,
       },
     },

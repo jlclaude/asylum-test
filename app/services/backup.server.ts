@@ -9,7 +9,7 @@ import {
   createBackupDocument,
   parseBackupJson,
   restoredPrizeClaimStatus,
-  restoredRaffleNextValue,
+  restoredRaffleSequences,
   type BackupData,
   type BackupDocument,
   type JsonValue,
@@ -17,7 +17,7 @@ import {
 import { claimsCsv, prizeClaimsCsv, winnersCsv } from "../lib/csv-export";
 import { formatRaffleCode } from "../lib/raffle-number";
 
-const SCHEMA_VERSION = "asylum-games-prisma-2026-08-04";
+const SCHEMA_VERSION = "asylum-games-prisma-year-raffles-2026-08-04";
 const iso = (value: Date | null) => value?.toISOString() ?? null;
 
 function parseStoredJson(value: string | null, label: string): JsonValue | null {
@@ -30,7 +30,7 @@ function parseStoredJson(value: string | null, label: string): JsonValue | null 
 }
 
 async function loadShopData(shop: string): Promise<BackupData> {
-  const [shopSettings, templates, games, prizeClaims, raffleSequence] = await Promise.all([
+  const [shopSettings, templates, games, prizeClaims, raffleSequences] = await Promise.all([
     db.shopSettings.findUnique({ where: { shop } }),
     db.gameTemplate.findMany({ where: { shop }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] }),
     db.game.findMany({
@@ -42,7 +42,7 @@ async function loadShopData(shop: string): Promise<BackupData> {
       },
     }),
     db.prizeClaim.findMany({ where: { shop }, orderBy: [{ generatedAt: "asc" }, { id: "asc" }] }),
-    db.shopRaffleSequence.findUnique({ where: { shop } }),
+    db.shopRaffleSequence.findMany({ where: { shop }, orderBy: { year: "asc" } }),
   ]);
 
   const gameIds = new Set(games.map((game) => game.id));
@@ -67,7 +67,9 @@ async function loadShopData(shop: string): Promise<BackupData> {
     games: games.map((item) => ({
       id: item.id, title: item.title, description: item.description, totalSpots: item.totalSpots,
       pricePerSpot: item.pricePerSpot.toString(), wheelCount: item.wheelCount,
-      secondChanceOffset: item.secondChanceOffset, raffleNumber: item.raffleNumber,
+      secondChanceOffset: item.secondChanceOffset, raffleYear: item.raffleYear,
+      raffleNumber: item.raffleNumber,
+      raffleCode: formatRaffleCode({ year: item.raffleYear, number: item.raffleNumber }),
       status: item.status, archivedAt: iso(item.archivedAt), createdAt: item.createdAt.toISOString(),
       updatedAt: item.updatedAt.toISOString(),
     })),
@@ -121,10 +123,10 @@ async function loadShopData(shop: string): Promise<BackupData> {
       country: item.country, winnerNotes: item.winnerNotes, adminNotes: item.adminNotes,
       createdAt: item.createdAt.toISOString(), updatedAt: item.updatedAt.toISOString(),
     })),
-    raffleSequence: raffleSequence ? {
-      id: raffleSequence.id, nextValue: raffleSequence.nextValue,
-      createdAt: raffleSequence.createdAt.toISOString(), updatedAt: raffleSequence.updatedAt.toISOString(),
-    } : null,
+    raffleSequences: raffleSequences.map((sequence) => ({
+      id: sequence.id, year: sequence.year, nextValue: sequence.nextValue,
+      createdAt: sequence.createdAt.toISOString(), updatedAt: sequence.updatedAt.toISOString(),
+    })),
   };
 }
 
@@ -142,7 +144,7 @@ export async function createEmergencyBackup(shop: string) {
 export async function listBackupGames(shop: string) {
   return db.game.findMany({
     where: { shop },
-    select: { id: true, raffleNumber: true, title: true, status: true, archivedAt: true },
+    select: { id: true, raffleYear: true, raffleNumber: true, title: true, status: true, archivedAt: true },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
   });
 }
@@ -167,10 +169,11 @@ export async function createRaffleJson(shop: string, gameId: string) {
   const game = (await exportGames(shop, gameId))[0];
   return {
     format: "asylum-games-raffle-export",
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString(),
     raffle: {
-      raffleCode: formatRaffleCode(game.raffleNumber), title: game.title, description: game.description,
+      raffleYear: game.raffleYear, raffleNumber: game.raffleNumber,
+      raffleCode: formatRaffleCode({ year: game.raffleYear, number: game.raffleNumber }), title: game.title, description: game.description,
       totalSpots: game.totalSpots, pricePerSpot: game.pricePerSpot.toString(), status: game.status,
       archivedAt: iso(game.archivedAt), createdAt: game.createdAt.toISOString(), updatedAt: game.updatedAt.toISOString(),
       claims: game.claims.map((claim, index) => ({
@@ -205,7 +208,7 @@ export async function createRaffleJson(shop: string, gameId: string) {
 export async function createClaimsCsv(shop: string, gameId?: string) {
   const games = await exportGames(shop, gameId);
   return claimsCsv(games.map((game) => ({
-    raffleCode: formatRaffleCode(game.raffleNumber), gameTitle: game.title,
+    raffleCode: formatRaffleCode({ year: game.raffleYear, number: game.raffleNumber }), gameTitle: game.title,
     claims: game.claims.map((claim) => ({ ...claim, createdAt: claim.createdAt.toISOString() })),
   })));
 }
@@ -213,7 +216,7 @@ export async function createClaimsCsv(shop: string, gameId?: string) {
 export async function createWinnersCsv(shop: string, gameId?: string) {
   const games = await exportGames(shop, gameId);
   return winnersCsv(games.map((game) => ({
-    raffleCode: formatRaffleCode(game.raffleNumber), gameTitle: game.title,
+    raffleCode: formatRaffleCode({ year: game.raffleYear, number: game.raffleNumber }), gameTitle: game.title,
     archived: Boolean(game.archivedAt), secondChanceOffset: game.secondChanceOffset,
     run: game.run ? {
       secondChanceBeforeDisplayName: game.run.secondChanceBeforeDisplayName,
@@ -232,13 +235,13 @@ export async function createWinnersCsv(shop: string, gameId?: string) {
 
 export async function createPrizeClaimsCsv(shop: string) {
   const claims = await db.prizeClaim.findMany({
-    where: { shop }, include: { game: { select: { raffleNumber: true, title: true } } },
+    where: { shop }, include: { game: { select: { raffleYear: true, raffleNumber: true, title: true } } },
     orderBy: [{ generatedAt: "asc" }, { id: "asc" }],
   });
   return prizeClaimsCsv(claims.map((claim) => {
     const selected = parseStoredJson(claim.selectedBallsJson, "Selected balls");
     return {
-      raffleCode: formatRaffleCode(claim.game.raffleNumber), gameTitle: claim.game.title,
+      raffleCode: formatRaffleCode({ year: claim.game.raffleYear, number: claim.game.raffleNumber }), gameTitle: claim.game.title,
       winnerDisplayName: claim.winnerDisplayName, wheelLabel: claim.wheelLabel, status: claim.status,
       selectedPrizeOptionLabel: claim.selectedPrizeOptionLabel,
       selectedBalls: Array.isArray(selected) ? selected as Array<{ title?: string; productTitle?: string; weight?: string | number | null }> : [],
@@ -280,7 +283,7 @@ async function conflictingIds(document: BackupDocument) {
     data.rounds.length ? db.gameRound.count({ where: { id: { in: data.rounds.map((item) => String(item.id)) } } }) : 0,
     data.wheels.length ? db.gameWheel.count({ where: { id: { in: data.wheels.map((item) => String(item.id)) } } }) : 0,
     data.prizeClaims.length ? db.prizeClaim.count({ where: { id: { in: data.prizeClaims.map((item) => String(item.id)) } } }) : 0,
-    data.raffleSequence ? db.shopRaffleSequence.count({ where: { id: String(data.raffleSequence.id) } }) : 0,
+    data.raffleSequences.length ? db.shopRaffleSequence.count({ where: { id: { in: data.raffleSequences.map((item) => String(item.id)) } } }) : 0,
   ]);
   return checks.reduce((sum, count) => sum + count, 0);
 }
@@ -331,7 +334,8 @@ export async function restoreEmergencyBackup(input: { text: string; shop: string
       id: stringValue(item, "id"), shop: input.shop, title: stringValue(item, "title"),
       description: nullableString(item, "description"), totalSpots: numberValue(item, "totalSpots"),
       pricePerSpot: stringValue(item, "pricePerSpot"), wheelCount: numberValue(item, "wheelCount"),
-      secondChanceOffset: numberValue(item, "secondChanceOffset"), raffleNumber: numberValue(item, "raffleNumber"),
+      secondChanceOffset: numberValue(item, "secondChanceOffset"), raffleYear: numberValue(item, "raffleYear"),
+      raffleNumber: numberValue(item, "raffleNumber"),
       status: stringValue(item, "status") as GameStatus,
       archivedAt: nullableDate(item, "archivedAt"), createdAt: dateValue(item, "createdAt"), updatedAt: dateValue(item, "updatedAt"),
     } });
@@ -393,13 +397,16 @@ export async function restoreEmergencyBackup(input: { text: string; shop: string
         adminNotes: nullableString(item, "adminNotes"), createdAt: dateValue(item, "createdAt"), updatedAt: dateValue(item, "updatedAt"),
       } });
     }
-    const nextValue = restoredRaffleNextValue(data.games, data.raffleSequence ? numberValue(data.raffleSequence, "nextValue") : 1);
-    await transaction.shopRaffleSequence.create({ data: {
-      id: data.raffleSequence ? stringValue(data.raffleSequence, "id") : `restored_sequence_${randomBytes(12).toString("hex")}`,
-      shop: input.shop, nextValue,
-      createdAt: data.raffleSequence ? dateValue(data.raffleSequence, "createdAt") : new Date(),
-      updatedAt: data.raffleSequence ? dateValue(data.raffleSequence, "updatedAt") : new Date(),
-    } });
+    const restoredSequences = restoredRaffleSequences(data.games, data.raffleSequences);
+    for (const restored of restoredSequences) {
+      const saved = data.raffleSequences.find((sequence) => numberValue(sequence, "year") === restored.year);
+      await transaction.shopRaffleSequence.create({ data: {
+        id: saved ? stringValue(saved, "id") : `restored_sequence_${randomBytes(12).toString("hex")}`,
+        shop: input.shop, year: restored.year, nextValue: restored.nextValue,
+        createdAt: saved ? dateValue(saved, "createdAt") : new Date(),
+        updatedAt: saved ? dateValue(saved, "updatedAt") : new Date(),
+      } });
+    }
   }, { maxWait: 5_000, timeout: 60_000 });
   return backupPreview(checked.document);
 }

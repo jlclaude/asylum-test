@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 export { BACKUP_FORMAT, BACKUP_VERSION, MAX_BACKUP_BYTES, RESTORE_CONFIRMATION } from "./backup-constants.ts";
-import { BACKUP_FORMAT, BACKUP_VERSION, MAX_BACKUP_BYTES } from "./backup-constants.ts";
+import { BACKUP_FORMAT, BACKUP_VERSION, LEGACY_BACKUP_VERSION, MAX_BACKUP_BYTES } from "./backup-constants.ts";
+import { formatRaffleCode, getCurrentRaffleYear, isValidRaffleYear } from "./raffle-number.ts";
 
 type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
@@ -14,7 +15,7 @@ export type BackupData = {
   rounds: Array<Record<string, JsonValue>>;
   wheels: Array<Record<string, JsonValue>>;
   prizeClaims: Array<Record<string, JsonValue>>;
-  raffleSequence: null | Record<string, JsonValue>;
+  raffleSequences: Array<Record<string, JsonValue>>;
 };
 
 export type BackupPayload = {
@@ -30,8 +31,10 @@ export type BackupDocument = BackupPayload & { checksum: string };
 
 const FORBIDDEN_KEYS = new Set(["__proto__", "prototype", "constructor"]);
 const ROOT_KEYS = ["checksum", "data", "exportedAt", "format", "schemaVersion", "shop", "version"];
-const DATA_KEYS = ["claims", "games", "prizeClaims", "raffleSequence", "rounds", "runs", "shopSettings", "templates", "wheels"];
-const GAME_KEYS = ["archivedAt", "createdAt", "description", "id", "pricePerSpot", "raffleNumber", "secondChanceOffset", "status", "title", "totalSpots", "updatedAt", "wheelCount"];
+const DATA_KEYS = ["claims", "games", "prizeClaims", "raffleSequences", "rounds", "runs", "shopSettings", "templates", "wheels"];
+const LEGACY_DATA_KEYS = ["claims", "games", "prizeClaims", "raffleSequence", "rounds", "runs", "shopSettings", "templates", "wheels"];
+const GAME_KEYS = ["archivedAt", "createdAt", "description", "id", "pricePerSpot", "raffleCode", "raffleNumber", "raffleYear", "secondChanceOffset", "status", "title", "totalSpots", "updatedAt", "wheelCount"];
+const LEGACY_GAME_KEYS = ["archivedAt", "createdAt", "description", "id", "pricePerSpot", "raffleNumber", "secondChanceOffset", "status", "title", "totalSpots", "updatedAt", "wheelCount"];
 const TEMPLATE_KEYS = ["createdAt", "defaultGameDescription", "defaultGameTitle", "description", "id", "initialStatus", "isDefault", "name", "pricePerSpot", "totalSpots", "updatedAt", "wheelCount"];
 const CLAIM_KEYS = ["comment", "createdAt", "displayName", "expiresAt", "externalPayment", "facebookHandle", "gameId", "id", "quantity", "status", "updatedAt"];
 const RUN_KEYS = ["completedAt", "gameId", "id", "secondChanceAfterClaimId", "secondChanceAfterDisplayName", "secondChanceAfterEntryIndex", "secondChanceBeforeClaimId", "secondChanceBeforeDisplayName", "secondChanceBeforeEntryIndex", "secondChanceCalculatedAt", "secondChanceSourceWheelId", "startedAt"];
@@ -64,7 +67,7 @@ export function canonicalJson(value: unknown): string {
     `${JSON.stringify(key)}:${canonicalJson((value as Record<string, unknown>)[key])}`).join(",")}}`;
 }
 
-export function backupChecksum(payload: BackupPayload) {
+export function backupChecksum(payload: unknown) {
   return createHash("sha256").update(canonicalJson(payload)).digest("hex");
 }
 
@@ -149,13 +152,14 @@ export function parseBackupJson(text: string, expectedShop: string): BackupDocum
   if (!isRecord(input)) throw new Error("Backup root must be an object.");
   exactKeys(input, ROOT_KEYS, "Backup root");
   if (input.format !== BACKUP_FORMAT) throw new Error("Unsupported backup format.");
-  if (input.version !== BACKUP_VERSION) throw new Error("Unsupported backup version.");
+  if (input.version !== BACKUP_VERSION && input.version !== LEGACY_BACKUP_VERSION) throw new Error("Unsupported backup version.");
   if (input.shop !== expectedShop) throw new Error("This backup belongs to a different Shopify shop.");
   requiredString(input, "schemaVersion", "backup");
   dateString(input.exportedAt, "backup.exportedAt");
   if (typeof input.checksum !== "string" || !/^[a-f0-9]{64}$/.test(input.checksum)) throw new Error("Backup checksum is missing or malformed.");
   if (!isRecord(input.data)) throw new Error("Backup data must be an object.");
-  exactKeys(input.data, DATA_KEYS, "Backup data");
+  const version = input.version as number;
+  exactKeys(input.data, version === LEGACY_BACKUP_VERSION ? LEGACY_DATA_KEYS : DATA_KEYS, "Backup data");
   const payload = {
     format: input.format,
     version: input.version,
@@ -163,13 +167,16 @@ export function parseBackupJson(text: string, expectedShop: string): BackupDocum
     shop: input.shop,
     schemaVersion: input.schemaVersion,
     data: input.data,
-  } as BackupPayload;
+  };
   if (backupChecksum(payload) !== input.checksum) throw new Error("Backup checksum does not match its contents.");
-  validateBackupData(input.data);
-  return { ...payload, checksum: input.checksum };
+  validateBackupData(input.data, version);
+  const data = version === LEGACY_BACKUP_VERSION
+    ? normalizeLegacyBackupData(input.data, String(input.exportedAt))
+    : input.data as BackupData;
+  return { ...payload, version: BACKUP_VERSION, data, checksum: input.checksum } as BackupDocument;
 }
 
-export function validateBackupData(data: Record<string, unknown>) {
+export function validateBackupData(data: Record<string, unknown>, version = BACKUP_VERSION) {
   const games = recordArray(data, "games");
   const templates = recordArray(data, "templates");
   const claims = recordArray(data, "claims");
@@ -185,17 +192,25 @@ export function validateBackupData(data: Record<string, unknown>) {
   const wheelIds = validateRecordBasics(wheels, "wheels");
   validateRecordBasics(prizeClaims, "prizeClaims");
 
-  const raffleNumbers = new Set<number>();
+  const raffleNumbers = new Set<string>();
   const claimGameIds = new Map<string, string>();
   const runGameIds = new Map<string, string>();
   const roundRunIds = new Map<string, string>();
   const wheelRoundIds = new Map<string, string>();
   games.forEach((game, index) => {
     const label = `games[${index}]`;
-    exactKeys(game, GAME_KEYS, label);
+    exactKeys(game, version === LEGACY_BACKUP_VERSION ? LEGACY_GAME_KEYS : GAME_KEYS, label);
+    const raffleYear = version === LEGACY_BACKUP_VERSION
+      ? getCurrentRaffleYear(new Date(requiredString(game, "createdAt", label)))
+      : requiredInteger(game, "raffleYear", label);
     const raffle = requiredInteger(game, "raffleNumber", label);
-    if (raffleNumbers.has(raffle)) throw new Error(`Duplicate raffle number ${raffle}.`);
-    raffleNumbers.add(raffle);
+    const raffleKey = `${raffleYear}:${raffle}`;
+    if (raffleNumbers.has(raffleKey)) throw new Error(`Duplicate raffle identity ${raffleYear}-${raffle}.`);
+    raffleNumbers.add(raffleKey);
+    if (!isValidRaffleYear(raffleYear) || raffle < 1 || raffle > 999999) throw new Error(`${label} has an invalid raffle identity.`);
+    if (version !== LEGACY_BACKUP_VERSION && game.raffleCode !== formatRaffleCode({ year: raffleYear, number: raffle })) {
+      throw new Error(`${label}.raffleCode does not match its structured identity.`);
+    }
     requiredString(game, "title", label); optionalString(game, "description", label);
     requiredInteger(game, "totalSpots", label); decimalString(game.pricePerSpot, `${label}.pricePerSpot`);
     requiredInteger(game, "wheelCount", label); requiredInteger(game, "secondChanceOffset", label);
@@ -317,11 +332,27 @@ export function validateBackupData(data: Record<string, unknown>) {
     requiredString(data.shopSettings, "id", "shopSettings"); optionalString(data.shopSettings, "paymentInstructions", "shopSettings");
     dateString(data.shopSettings.createdAt, "shopSettings.createdAt"); dateString(data.shopSettings.updatedAt, "shopSettings.updatedAt");
   }
-  if (data.raffleSequence !== null) {
-    if (!isRecord(data.raffleSequence)) throw new Error("data.raffleSequence must be an object or null.");
-    exactKeys(data.raffleSequence, ["createdAt", "id", "nextValue", "updatedAt"], "raffleSequence");
-    requiredString(data.raffleSequence, "id", "raffleSequence"); requiredInteger(data.raffleSequence, "nextValue", "raffleSequence");
-    dateString(data.raffleSequence.createdAt, "raffleSequence.createdAt"); dateString(data.raffleSequence.updatedAt, "raffleSequence.updatedAt");
+  if (version === LEGACY_BACKUP_VERSION) {
+    const sequence = data.raffleSequence;
+    if (sequence !== null) {
+      if (!isRecord(sequence)) throw new Error("data.raffleSequence must be an object or null.");
+      exactKeys(sequence, ["createdAt", "id", "nextValue", "updatedAt"], "raffleSequence");
+      requiredString(sequence, "id", "raffleSequence"); requiredInteger(sequence, "nextValue", "raffleSequence");
+      dateString(sequence.createdAt, "raffleSequence.createdAt"); dateString(sequence.updatedAt, "raffleSequence.updatedAt");
+    }
+  } else {
+    const sequences = recordArray(data, "raffleSequences");
+    validateRecordBasics(sequences, "raffleSequences");
+    const years = new Set<number>();
+    sequences.forEach((sequence, index) => {
+      const label = `raffleSequences[${index}]`;
+      exactKeys(sequence, ["createdAt", "id", "nextValue", "updatedAt", "year"], label);
+      const year = requiredInteger(sequence, "year", label);
+      const nextValue = requiredInteger(sequence, "nextValue", label);
+      if (!isValidRaffleYear(year) || nextValue < 1 || nextValue > 1000000) throw new Error(`${label} is invalid.`);
+      if (years.has(year)) throw new Error(`Duplicate raffle sequence year ${year}.`);
+      years.add(year);
+    });
   }
 }
 
@@ -336,14 +367,47 @@ export function backupPreview(document: BackupDocument) {
     wheels: data.wheels.length,
     templates: data.templates.length,
     prizeClaims: data.prizeClaims.length,
-    raffleSequenceNextValue: restoredRaffleNextValue(data.games, Number(data.raffleSequence?.nextValue ?? 1)),
+    raffleSequenceNextValue: data.raffleSequences.reduce((highest, sequence) => Math.max(highest, Number(sequence.nextValue)), 1),
     openPrizeLinksRevoked: data.prizeClaims.filter((claim) => claim.status === "OPEN").length,
   };
 }
 
-export function restoredRaffleNextValue(games: Array<Record<string, JsonValue>>, backedUpNext: number) {
-  const highestRaffle = games.reduce((highest, game) => Math.max(highest, Number(game.raffleNumber)), 0);
-  return Math.max(backedUpNext, highestRaffle + 1);
+export function restoredRaffleSequences(games: Array<Record<string, JsonValue>>, sequences: Array<Record<string, JsonValue>>) {
+  const nextByYear = new Map<number, number>();
+  for (const game of games) {
+    const year = Number(game.raffleYear);
+    nextByYear.set(year, Math.max(nextByYear.get(year) ?? 1, Number(game.raffleNumber) + 1));
+  }
+  for (const sequence of sequences) {
+    const year = Number(sequence.year);
+    nextByYear.set(year, Math.max(nextByYear.get(year) ?? 1, Number(sequence.nextValue)));
+  }
+  return [...nextByYear.entries()].sort(([left], [right]) => left - right).map(([year, nextValue]) => ({ year, nextValue }));
+}
+
+function normalizeLegacyBackupData(data: Record<string, unknown>, exportedAt: string): BackupData {
+  const legacy = data as Record<string, JsonValue>;
+  const games = (legacy.games as Array<Record<string, JsonValue>>).map((game) => {
+    const year = getCurrentRaffleYear(new Date(String(game.createdAt)));
+    const number = Number(game.raffleNumber);
+    return { ...game, raffleYear: year, raffleCode: formatRaffleCode({ year, number }) };
+  });
+  const legacySequence = isRecord(legacy.raffleSequence)
+    ? legacy.raffleSequence as Record<string, JsonValue>
+    : null;
+  const exportedYear = getCurrentRaffleYear(new Date(exportedAt));
+  const rebuilt = restoredRaffleSequences(games, legacySequence ? [{ ...legacySequence, year: exportedYear }] : []);
+  const raffleSequences = rebuilt.map(({ year, nextValue }) => ({
+    id: legacySequence && year === exportedYear
+      ? String(legacySequence.id)
+      : `${legacySequence ? String(legacySequence.id) : "restored_sequence"}_${year}`,
+    year,
+    nextValue,
+    createdAt: legacySequence && year === exportedYear ? legacySequence.createdAt : exportedAt,
+    updatedAt: legacySequence && year === exportedYear ? legacySequence.updatedAt : exportedAt,
+  }));
+  const remaining = Object.fromEntries(Object.entries(legacy).filter(([key]) => key !== "raffleSequence"));
+  return { ...remaining, games, raffleSequences } as unknown as BackupData;
 }
 
 export function restoredPrizeClaimStatus(status: string) {

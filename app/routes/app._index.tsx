@@ -53,22 +53,24 @@ export async function loader({ request }: LoaderFunctionArgs) {
     ? requestedStatus as GameStatus
     : "ALL";
   const sort = url.searchParams.get("sort") === "oldest" ? "oldest" : "newest";
-  const createdNumber = parseRaffleSearch(url.searchParams.get("created") ?? "");
+  const requestedYear = Number(url.searchParams.get("year"));
+  const year = Number.isInteger(requestedYear) && requestedYear >= 1000 && requestedYear <= 9999 ? requestedYear : undefined;
+  const createdIdentity = parseRaffleSearch(url.searchParams.get("created") ?? "");
   const [games, counts, templateSummary] = await Promise.all([
-    getGamesForShop(session.shop, { search, status, sort }),
+    getGamesForShop(session.shop, { search, status, sort, year }),
     getDashboardGameCountsForShop(session.shop),
     getGameTemplateSummaryForShop(session.shop),
   ]);
 
   return {
     counts,
-    filters: { search, status, sort },
+    filters: { search, status, sort, year: year?.toString() ?? "" },
     templateSummary,
-    createdRaffleCode: createdNumber ? formatRaffleCode(createdNumber) : null,
+    createdRaffleCode: createdIdentity?.year ? formatRaffleCode({ year: createdIdentity.year, number: createdIdentity.number }) : null,
     testGameToolsEnabled: testGameToolsEnabled(),
     games: games.map((game) => ({
       id: game.id,
-      raffleCode: formatRaffleCode(game.raffleNumber),
+      raffleCode: formatRaffleCode({ year: game.raffleYear, number: game.raffleNumber }),
       title: game.title,
       description: game.description,
       totalSpots: game.totalSpots,
@@ -520,7 +522,7 @@ const styles = `
 
   .asylum-game-filters {
     display: grid;
-    grid-template-columns: minmax(180px, 1fr) auto auto auto;
+    grid-template-columns: minmax(180px, 1fr) 100px auto auto auto;
     gap: 9px;
     margin: 16px 0;
   }
@@ -717,6 +719,7 @@ export default function AppIndex() {
 
               <Form className="asylum-game-filters" method="get">
                 <input type="search" name="search" defaultValue={filters.search} placeholder="Search title or raffle number" aria-label="Search games by title or raffle number" />
+                <input type="number" name="year" min="1000" max="9999" defaultValue={filters.year} placeholder="Year" aria-label="Filter games by raffle year" />
                 <select name="status" defaultValue={filters.status} aria-label="Filter by gameplay status"><option value="ALL">All statuses</option><option value="OPEN">Open</option><option value="CLOSED">Closed</option><option value="READY">Ready</option><option value="IN_PROGRESS">In progress</option><option value="COMPLETED">Completed</option></select>
                 <select name="sort" defaultValue={filters.sort} aria-label="Sort games by created date"><option value="newest">Newest created</option><option value="oldest">Oldest created</option></select>
                 <button type="submit">Apply</button>

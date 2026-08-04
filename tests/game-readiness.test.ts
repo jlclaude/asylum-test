@@ -22,6 +22,7 @@ function snapshot(overrides: Partial<ReadinessSnapshot> = {}): ReadinessSnapshot
       totalSpots: 20,
       wheelCount: 2,
       secondChanceOffset: 7,
+      raffleYear: 2026,
       raffleNumber: 12,
       status: "CLOSED",
       archivedAt: null,
@@ -100,6 +101,13 @@ test("no confirmed paid claims and archived games are blocking", () => {
   assert.equal(report.isReady, false);
   assert.equal(report.checks.some((item) => item.id === "archive.active" && item.severity === "BLOCKING"), true);
   assert.equal(report.checks.some((item) => item.id === "claims.eligible" && item.severity === "BLOCKING"), true);
+});
+
+test("malformed raffle years block readiness while historical years remain valid", () => {
+  const malformed = evaluateGameReadiness(snapshot({ game: { ...snapshot().game, raffleYear: 26 } }));
+  assert.equal(malformed.checks.find((item) => item.id === "raffle.valid")?.severity, "BLOCKING");
+  const historical = evaluateGameReadiness(snapshot({ game: { ...snapshot().game, raffleYear: 2024 } }));
+  assert.equal(historical.checks.find((item) => item.id === "raffle.valid")?.severity, "PASS");
 });
 
 test("duplicate eligible display names remain valid and repeated", () => {

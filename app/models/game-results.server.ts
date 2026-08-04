@@ -7,7 +7,7 @@ export async function getGameResults(gameId: string): Promise<GameResults | null
   const run = await db.gameRun.findUnique({
     where: { gameId },
     select: {
-      game: { select: { raffleNumber: true } },
+      game: { select: { raffleYear: true, raffleNumber: true } },
       completedAt: true,
       rounds: {
         orderBy: { position: "asc" },
@@ -40,7 +40,7 @@ export async function getGameResults(gameId: string): Promise<GameResults | null
   if (!run) return null;
 
   return {
-    raffleCode: formatRaffleCode(run.game.raffleNumber),
+    raffleCode: formatRaffleCode({ year: run.game.raffleYear, number: run.game.raffleNumber }),
     completedAt: run.completedAt?.toISOString() ?? null,
     rounds: run.rounds.map((round) => ({
       title: round.title ?? `Round ${round.position}`,

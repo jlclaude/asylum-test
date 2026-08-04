@@ -116,7 +116,7 @@ export async function loader({
   return {
     game: {
       id: game.id,
-      raffleCode: formatRaffleCode(game.raffleNumber),
+      raffleCode: formatRaffleCode({ year: game.raffleYear, number: game.raffleNumber }),
       title: game.title,
       description: game.description,
       secondChanceOffset: game.secondChanceOffset,

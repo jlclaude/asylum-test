@@ -109,7 +109,7 @@ export async function getPublicPrizeClaim(token: string) {
   if (!token || token.length > 200) return null;
   const claim = await db.prizeClaim.findUnique({
     where: { tokenHash: hashPrizeClaimToken(token) },
-    include: { game: { select: { title: true, raffleNumber: true } } },
+    include: { game: { select: { title: true, raffleYear: true, raffleNumber: true } } },
   });
   if (!claim) return null;
   if (claim.status === "OPEN" && isPrizeClaimExpired(claim.expiresAt)) {
@@ -125,7 +125,7 @@ export async function getPublicPrizeClaim(token: string) {
   return {
     state: "OPEN" as const,
     gameTitle: claim.game.title,
-    raffleCode: formatRaffleCode(claim.game.raffleNumber),
+    raffleCode: formatRaffleCode({ year: claim.game.raffleYear, number: claim.game.raffleNumber }),
     winnerDisplayName: claim.winnerDisplayName,
     wheelLabel: claim.wheelLabel,
     expiresAt: claim.expiresAt?.toISOString() ?? null,
@@ -139,7 +139,7 @@ export async function submitPublicPrizeClaim(token: string, formData: FormData, 
   return db.$transaction(async (transaction) => {
     const claim = await transaction.prizeClaim.findUnique({
       where: { tokenHash },
-      include: { game: { select: { title: true, raffleNumber: true } } },
+      include: { game: { select: { title: true, raffleYear: true, raffleNumber: true } } },
     });
     if (!claim) throw new Error("This prize claim link is invalid.");
     if (isPrizeClaimExpired(claim.expiresAt)) {
@@ -200,7 +200,7 @@ export async function submitPublicPrizeClaim(token: string, formData: FormData, 
     if (update.count !== 1) throw new Error("This prize request has already been submitted.");
     return {
       gameTitle: claim.game.title,
-      raffleCode: formatRaffleCode(claim.game.raffleNumber),
+      raffleCode: formatRaffleCode({ year: claim.game.raffleYear, number: claim.game.raffleNumber }),
       preferredPrize: input.preferredPrize,
       selectedPrizeOptionLabel: "selectedPrizeOptionLabel" in structuredData ? structuredData.selectedPrizeOptionLabel : null,
       recipientName: input.recipientName,
@@ -215,7 +215,7 @@ export async function listPrizeClaims(shop: string, options: { search?: string; 
     data: { status: "EXPIRED", activeGameWheelId: null },
   });
   const search = options.search?.trim();
-  const raffleNumber = search ? parseRaffleSearch(search) : null;
+  const raffle = search ? parseRaffleSearch(search) : null;
   return db.prizeClaim.findMany({
     where: {
       shop,
@@ -224,10 +224,10 @@ export async function listPrizeClaims(shop: string, options: { search?: string; 
         { winnerDisplayName: { contains: search } },
         { preferredPrize: { contains: search } },
         { game: { title: { contains: search } } },
-        ...(raffleNumber ? [{ game: { raffleNumber } }] : []),
+        ...(raffle ? [{ game: { raffleNumber: raffle.number, ...(raffle.year ? { raffleYear: raffle.year } : {}) } }] : []),
       ] } : {}),
     },
-    include: { game: { select: { title: true, raffleNumber: true, archivedAt: true } } },
+    include: { game: { select: { title: true, raffleYear: true, raffleNumber: true, archivedAt: true } } },
     orderBy: { generatedAt: "desc" },
   });
 }
@@ -273,6 +273,7 @@ export async function getPrizeClaimForShop(id: string, shop: string) {
       game: {
         select: {
           title: true,
+          raffleYear: true,
           raffleNumber: true,
           archivedAt: true,
         },

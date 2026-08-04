@@ -21,7 +21,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     entries: runs.map((run) => ({
       gameId: run.game.id,
       gameTitle: run.game.title,
-      raffleCode: formatRaffleCode(run.game.raffleNumber),
+      raffleCode: formatRaffleCode({ year: run.game.raffleYear, number: run.game.raffleNumber }),
       gameDate: run.game.createdAt.toISOString(),
       gameStatus: run.game.status,
       archived: run.game.archivedAt !== null,

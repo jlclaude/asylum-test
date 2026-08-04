@@ -225,7 +225,7 @@ export async function action({
       wheelCount,
       status: statusValue as "OPEN" | "CLOSED",
     });
-    return redirect(`/app?created=${encodeURIComponent(formatRaffleCode(game.raffleNumber))}`);
+    return redirect(`/app?created=${encodeURIComponent(formatRaffleCode({ year: game.raffleYear, number: game.raffleNumber }))}`);
   } catch (error) {
     console.error("Failed to create game:", error);
 
