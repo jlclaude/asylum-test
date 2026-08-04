@@ -985,9 +985,16 @@ body {
 }
 
 .studio-console-message {
+  min-height: 34px;
   padding: 10px;
   border-radius: 6px;
   font-size: 11px;
+}
+
+.studio-console-message-region {
+  display: grid;
+  min-height: 34px;
+  align-content: start;
 }
 
 .studio-console-message-error {

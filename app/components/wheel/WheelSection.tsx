@@ -95,6 +95,7 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
   const revealActive = useRef(false);
   const revealDismissTimer = useRef<number | null>(null);
   const countdownTimers = useRef<number[]>([]);
+  const submittedControl = useRef<HTMLButtonElement | null>(null);
 
   const completedRestRotation = wheel.status === "COMPLETED" &&
     wheel.winnerEntryIndex !== null
@@ -155,6 +156,21 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
     idleController.current?.cancel();
     idleController.current = null;
   }, []);
+
+  const submitReadyAction = useCallback((event: React.FormEvent<HTMLFormElement>) => {
+    stopIdle();
+    const submitter = (event.nativeEvent as SubmitEvent).submitter;
+    submittedControl.current = submitter instanceof HTMLButtonElement ? submitter : null;
+  }, [stopIdle]);
+
+  useEffect(() => {
+    if (fetcher.state !== "idle" || !submittedControl.current) return;
+    const control = submittedControl.current;
+    submittedControl.current = null;
+    if (document.activeElement === document.body && !control.disabled) {
+      control.focus({ preventScroll: true });
+    }
+  }, [fetcher.state]);
 
   useEffect(() => {
     stopIdle();
@@ -616,7 +632,7 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
           </div>
 
           <div className="studio-console-controls">
-            <fetcher.Form method="post" onSubmit={stopIdle}>
+            <fetcher.Form method="post" preventScrollReset onSubmit={submitReadyAction}>
               <input
                 type="hidden"
                 name="intent"
@@ -643,7 +659,7 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
               </button>
             </fetcher.Form>
 
-            <fetcher.Form method="post" onSubmit={stopIdle}>
+            <fetcher.Form method="post" preventScrollReset onSubmit={submitReadyAction}>
               <input
                 type="hidden"
                 name="intent"
@@ -666,7 +682,7 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
               </button>
             </fetcher.Form>
 
-            <fetcher.Form method="post" onSubmit={(event) => {
+            <fetcher.Form method="post" preventScrollReset onSubmit={(event) => {
               if (!broadcastCountdown) return;
               event.preventDefault();
               submitSpin();
@@ -741,24 +757,21 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
             </button>
           ) : null}
 
-          {actionMessage?.error ? (
-            <div className="studio-console-message studio-console-message-error">
-              {actionMessage.error}
-            </div>
-          ) : null}
-
-          {actionMessage?.success &&
-          actionMessage.intent !== "spin-wheel" ? (
-            <div className="studio-console-message studio-console-message-success">
-              {actionMessage.success}
-            </div>
-          ) : null}
-
-          {systemMessage ? (
-            <div className="studio-console-message studio-console-message-success" role="status">
-              {systemMessage}
-            </div>
-          ) : null}
+          <div className="studio-console-message-region" aria-live="polite" aria-atomic="true">
+            {actionMessage?.error ? (
+              <div className="studio-console-message studio-console-message-error">
+                {actionMessage.error}
+              </div>
+            ) : systemMessage ? (
+              <div className="studio-console-message studio-console-message-success">
+                {systemMessage}
+              </div>
+            ) : actionMessage?.success && actionMessage.intent !== "spin-wheel" ? (
+              <div className="studio-console-message studio-console-message-success">
+                {actionMessage.success}
+              </div>
+            ) : null}
+          </div>
 
           <details className="studio-entry-preview">
             <summary>
