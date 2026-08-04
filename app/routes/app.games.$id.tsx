@@ -694,6 +694,9 @@ export default function GameControlCenter() {
                 <fetcher.Form method="post"><button className="control-button control-button-primary control-button-full" type="submit" name="intent" value="open-wheels" disabled={isSubmitting}>{wheelButtonLabel}</button></fetcher.Form>
                 {results ? <fetcher.Form method="post"><button className="control-button control-button-full" type="submit" name="intent" value="open-broadcast" disabled={isSubmitting}>OPEN BROADCAST MODE</button></fetcher.Form> : null}
                 <button className="control-button control-button-secondary control-button-full" type="button" onClick={copyPublicLink}>Copy public claim link</button>
+                <a className="control-button control-button-secondary control-button-full" href={`/app/backups/export?type=raffle-json&gameId=${encodeURIComponent(game.id)}`}>Export Raffle JSON</a>
+                <a className="control-button control-button-secondary control-button-full" href={`/app/backups/export?type=claims-csv&gameId=${encodeURIComponent(game.id)}`}>Export Claims CSV</a>
+                <a className="control-button control-button-secondary control-button-full" href={`/app/backups/export?type=winners-csv&gameId=${encodeURIComponent(game.id)}`}>Export Winners CSV</a>
                 <fetcher.Form className="control-form" method="post">
                   <input type="hidden" name="intent" value="save-game-template" />
                   <div className="control-field"><label htmlFor="setupTemplateName">Template name</label><input className="control-input" id="setupTemplateName" name="templateName" maxLength={100} required placeholder="Reusable setup name" /></div>
