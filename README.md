@@ -96,7 +96,7 @@ For more information on the Shopify Dev MCP please read [the documentation](http
 Asylum Games uses separate Prisma histories for local development and production:
 
 - `prisma/schema.prisma` and `prisma/migrations/` remain the SQLite development schema and history.
-- `prisma/postgresql/schema.prisma` and `prisma/postgresql/migrations/` are the clean PostgreSQL production schema and history.
+- `prisma/postgresql/schema.prisma` and `prisma/postgresql/migrations/` are the clean PostgreSQL production schema and history. `prisma.config.ts` makes this the safe default for unqualified production Prisma commands.
 
 The model and enum definitions in both schemas must remain identical. Database generation and deployment commands verify this automatically.
 
@@ -116,7 +116,7 @@ npm run setup:local
 npm run dev
 ```
 
-Create local migrations only against `prisma/schema.prisma`. After changing models, apply the identical model change to `prisma/postgresql/schema.prisma`, verify parity, and add the corresponding PostgreSQL migration to its separate history.
+Always use the `db:local:*` scripts for SQLite; unqualified `npx prisma` commands intentionally target PostgreSQL. Create local migrations only against `prisma/schema.prisma`. After changing models, apply the identical model change to `prisma/postgresql/schema.prisma`, verify parity, and add the corresponding PostgreSQL migration to its separate history.
 
 #### Production PostgreSQL workflow
 
@@ -126,7 +126,29 @@ Production must provide a PostgreSQL connection through `DATABASE_URL`:
 DATABASE_URL="postgresql://user:password@host:5432/database"
 ```
 
-Deploy committed migrations without resetting the database:
+For Render or another managed host, use these exact commands:
+
+Build:
+
+```shell
+npm ci
+npx prisma generate
+npm run build
+```
+
+Pre-deploy:
+
+```shell
+npx prisma migrate deploy
+```
+
+Start:
+
+```shell
+npm run start
+```
+
+The default Prisma configuration points both unqualified Prisma commands at the PostgreSQL schema. The equivalent explicit repository scripts are:
 
 ```shell
 npm run db:production:generate
@@ -140,6 +162,8 @@ npm run setup:production
 ```
 
 Production commands reject missing, SQLite, and non-PostgreSQL URLs. Never run `prisma migrate dev`, `prisma db push`, or a database reset against production. The PostgreSQL baseline is for a clean production database and does not import local SQLite data.
+
+The committed PostgreSQL baseline has not been applied to production and represents the complete current schema. After the first production deployment, never edit or replace that baseline; add provider-specific forward migrations instead.
 
 The production schema specifically requires PostgreSQL. Common hosting references include:
 

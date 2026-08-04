@@ -63,6 +63,7 @@ CREATE TABLE "Game" (
     "pricePerSpot" DECIMAL(65,30) NOT NULL,
     "wheelCount" INTEGER NOT NULL DEFAULT 2,
     "secondChanceOffset" INTEGER NOT NULL DEFAULT 2,
+    "raffleYear" INTEGER NOT NULL,
     "raffleNumber" INTEGER NOT NULL,
     "status" "GameStatus" NOT NULL DEFAULT 'OPEN',
     "archivedAt" TIMESTAMP(3),
@@ -76,6 +77,7 @@ CREATE TABLE "Game" (
 CREATE TABLE "ShopRaffleSequence" (
     "id" TEXT NOT NULL,
     "shop" TEXT NOT NULL,
+    "year" INTEGER NOT NULL,
     "nextValue" INTEGER NOT NULL DEFAULT 1,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
@@ -225,16 +227,25 @@ CREATE UNIQUE INDEX "ShopSettings_shop_key" ON "ShopSettings"("shop");
 CREATE INDEX "Game_shop_idx" ON "Game"("shop");
 
 -- CreateIndex
+CREATE INDEX "Game_shop_raffleYear_idx" ON "Game"("shop", "raffleYear");
+
+-- CreateIndex
+CREATE INDEX "Game_shop_raffleYear_raffleNumber_idx" ON "Game"("shop", "raffleYear", "raffleNumber");
+
+-- CreateIndex
 CREATE INDEX "Game_shop_status_idx" ON "Game"("shop", "status");
 
 -- CreateIndex
 CREATE INDEX "Game_shop_archivedAt_idx" ON "Game"("shop", "archivedAt");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Game_shop_raffleNumber_key" ON "Game"("shop", "raffleNumber");
+CREATE UNIQUE INDEX "Game_shop_raffleYear_raffleNumber_key" ON "Game"("shop", "raffleYear", "raffleNumber");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "ShopRaffleSequence_shop_key" ON "ShopRaffleSequence"("shop");
+CREATE INDEX "ShopRaffleSequence_shop_year_idx" ON "ShopRaffleSequence"("shop", "year");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ShopRaffleSequence_shop_year_key" ON "ShopRaffleSequence"("shop", "year");
 
 -- CreateIndex
 CREATE INDEX "GameTemplate_shop_idx" ON "GameTemplate"("shop");

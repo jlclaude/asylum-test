@@ -1,8 +1,11 @@
 import { PrismaClient } from "@prisma/client";
+import { assertProductionDatabaseUrl } from "./lib/database-url.server";
+
+assertProductionDatabaseUrl();
 
 declare global {
   // eslint-disable-next-line no-var
-  var prismaGlobal: PrismaClient;
+  var prismaGlobal: PrismaClient | undefined;
 }
 
 if (process.env.NODE_ENV !== "production") {

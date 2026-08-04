@@ -1,4 +1,4 @@
-import type { ClaimStatus, Prisma } from "@prisma/client";
+import { Prisma, type ClaimStatus } from "@prisma/client";
 import db from "../db.server";
 import {
   claimNameEditBlockReason,
@@ -9,6 +9,7 @@ import {
   deserializeWheelEntries,
   serializeWheelEntries,
 } from "./game-run.server";
+import { retrySerializableTransaction } from "../lib/prisma-transaction.server";
 
 export type CreateClaimInput = {
   gameId: string;
@@ -47,7 +48,7 @@ export async function createClaim(input: CreateClaimInput) {
 }
 
 export async function createPublicClaim(input: CreateClaimInput) {
-  return db.$transaction(async (transaction) => {
+  return retrySerializableTransaction(() => db.$transaction(async (transaction) => {
     const game = await transaction.game.findUnique({
       where: {
         id: input.gameId,
@@ -116,7 +117,7 @@ export async function createPublicClaim(input: CreateClaimInput) {
       success: true as const,
       claim,
     };
-  });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }));
 }
 
 export async function getClaimsForGame(gameId: string) {

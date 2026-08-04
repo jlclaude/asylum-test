@@ -17,4 +17,4 @@ COPY . .
 # startup requires the real PostgreSQL DATABASE_URL before migrations deploy.
 RUN DATABASE_URL="postgresql://build:build@localhost:5432/asylum_build" npm run db:production:generate && npm run build
 
-CMD ["npm", "run", "docker-start"]
+CMD ["npm", "run", "start"]
