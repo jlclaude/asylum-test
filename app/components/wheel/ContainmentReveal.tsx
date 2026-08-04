@@ -23,6 +23,7 @@ export function ContainmentReveal({
   onRevealRef.current = onReveal;
 
   useEffect(() => {
+    const revealSequenceStartedAt = window.performance.now();
     const reducedMotion = window.matchMedia(
       "(prefers-reduced-motion: reduce)",
     ).matches;
@@ -33,6 +34,7 @@ export function ContainmentReveal({
 
       if (!revealed.current) {
         revealed.current = true;
+        if (import.meta.env.DEV) console.debug("[Asylum wheel] reduced-motion winner reveal", { elapsedMilliseconds: 0 });
         onRevealRef.current();
       }
 
@@ -40,6 +42,7 @@ export function ContainmentReveal({
     }
 
     const lockTimer = window.setTimeout(() => {
+      if (import.meta.env.DEV) console.debug("[Asylum wheel] winner reveal started", { elapsedMilliseconds: window.performance.now() - revealSequenceStartedAt });
       setPhase("lock");
     }, timing.lockAt);
 
@@ -52,6 +55,7 @@ export function ContainmentReveal({
 
       if (!revealed.current) {
         revealed.current = true;
+        if (import.meta.env.DEV) console.debug("[Asylum wheel] celebration started", { elapsedMilliseconds: window.performance.now() - revealSequenceStartedAt, durationMilliseconds: 5000 });
         onRevealRef.current();
       }
     }, timing.revealAt);

@@ -12,7 +12,7 @@ import { parsePrizePackageOptions, validateAdminPrizePackageOptions, validateStr
 import { listPrizeCollections, loadPublicPrizeProducts, resolveSubmittedPrizeProducts, verifyPrizeOptionCollections } from "../app/lib/shopify-prize-products.server.ts";
 import { formatRaffleCode, parseRaffleSearch } from "../app/lib/raffle-number.ts";
 import { getContainmentLabel, getWheelDisplayLabel } from "../app/lib/wheel-labels.ts";
-import { idleRotationAt, remainingSpinSeconds, wheelPositionAt, wheelSpinTotalDegrees } from "../app/lib/wheel-effects.client.ts";
+import { getWheelSpinTiming, idleRotationAt, remainingSpinSeconds, wheelPositionAt, wheelSpinTotalDegrees } from "../app/lib/wheel-effects.client.ts";
 import { getWinningRestRotation, normalizeDegrees } from "../app/lib/wheel-geometry.ts";
 import {
   beginWheelMusicSession,
@@ -694,9 +694,10 @@ function profileVelocity(progress: number, duration = 30, step = 0.0001) {
 }
 
 test("wheel velocity accelerates once, cruises steadily, then decelerates", () => {
-  const acceleration = [0.3, 0.8, 1.4, 2, 2.7].map((seconds) => profileVelocity(seconds / 30));
-  const cruise = [4, 9, 14, 19].map((seconds) => profileVelocity(seconds / 30));
-  const deceleration = [20.5, 22, 24, 26, 28, 29.5].map((seconds) => profileVelocity(seconds / 30));
+  const timing = getWheelSpinTiming(30);
+  const acceleration = [0.1, 0.3, 0.5, 0.7, 0.9].map((fraction) => profileVelocity((timing.acceleration * fraction) / 30));
+  const cruise = [timing.accelerationEnd + 0.5, 8, 14, timing.cruiseEnd - 0.5].map((seconds) => profileVelocity(seconds / 30));
+  const deceleration = [0.05, 0.2, 0.4, 0.6, 0.8, 0.95].map((fraction) => profileVelocity((timing.decelerationStart + timing.deceleration * fraction) / 30));
 
   assert.equal(acceleration.every((velocity, index) => index === 0 || velocity > acceleration[index - 1]), true);
   assert.equal(Math.max(...cruise) - Math.min(...cruise) < 0.00001, true);
@@ -704,7 +705,8 @@ test("wheel velocity accelerates once, cruises steadily, then decelerates", () =
 });
 
 test("wheel position and velocity remain continuous at phase boundaries", () => {
-  for (const boundary of [3 / 30, 20 / 30]) {
+  const timing = getWheelSpinTiming(30);
+  for (const boundary of [timing.accelerationEnd / 30, timing.decelerationStart / 30]) {
     assert.equal(Math.abs(wheelPositionAt(boundary - 0.000001, 30) - wheelPositionAt(boundary + 0.000001, 30)) < 0.00001, true);
     assert.equal(Math.abs(profileVelocity(boundary - 0.0002) - profileVelocity(boundary + 0.0002)) < 0.01, true);
   }
@@ -761,10 +763,22 @@ test("live spins and restored completed wheels share the same resting angle", ()
 });
 
 test("reload progress resumes the original acceleration, cruise, or deceleration phase", () => {
-  assert.equal(profileVelocity(1 / 30) < profileVelocity(2 / 30), true);
+  const timing = getWheelSpinTiming(30);
+  assert.equal(profileVelocity((timing.acceleration * 0.3) / 30) < profileVelocity((timing.acceleration * 0.7) / 30), true);
   assert.equal(Math.abs(profileVelocity(8 / 30) - profileVelocity(18 / 30)) < 0.00001, true);
-  assert.equal(profileVelocity(22 / 30) > profileVelocity(26 / 30), true);
-  assert.equal(profileVelocity(26 / 30) > profileVelocity(29 / 30), true);
+  assert.equal(profileVelocity((timing.decelerationStart + 1) / 30) > profileVelocity((timing.decelerationStart + 4) / 30), true);
+  assert.equal(profileVelocity((timing.decelerationStart + 4) / 30) > profileVelocity(29 / 30), true);
+});
+
+test("short and long spins use proportional dramatic timing", () => {
+  const short = getWheelSpinTiming(25);
+  const long = getWheelSpinTiming(75);
+  assert.equal(short.accelerationEnd, 2.25);
+  assert.equal(short.deceleration, 5);
+  assert.equal(short.finalSlowdownStart, 23);
+  assert.equal(long.accelerationEnd, 6.75);
+  assert.equal(long.deceleration, 10);
+  assert.equal(long.finalSlowdownStart, 71);
 });
 
 test("idle rotation is constant and completes one silent visual turn in 28 seconds", () => {

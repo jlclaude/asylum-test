@@ -88,19 +88,38 @@ type AnimateWheelSpinOptions = {
   onComplete: () => void;
 };
 
-export const WHEEL_ACCELERATION_SECONDS = 3;
-export const WHEEL_DECELERATION_SECONDS = 10;
+export const WHEEL_ACCELERATION_RATIO = 0.09;
+export const WHEEL_MIN_DECELERATION_SECONDS = 5;
+export const WHEEL_MAX_DECELERATION_SECONDS = 10;
 
-function profileDurations(durationSeconds: number) {
-  const duration = Math.max(durationSeconds, WHEEL_ACCELERATION_SECONDS + WHEEL_DECELERATION_SECONDS);
-  const acceleration = Math.min(WHEEL_ACCELERATION_SECONDS, duration * 0.2);
-  const deceleration = Math.min(WHEEL_DECELERATION_SECONDS, duration - acceleration);
+export function getWheelSpinTiming(durationSeconds: number) {
+  const duration = Math.max(durationSeconds, 1);
+  const acceleration = Math.min(
+    Math.max(duration * WHEEL_ACCELERATION_RATIO, 1),
+    duration * 0.2,
+  );
+  const rangedDuration = Math.min(Math.max(duration, 25), 75);
+  const decelerationTarget = WHEEL_MIN_DECELERATION_SECONDS +
+    ((rangedDuration - 25) / 50) *
+      (WHEEL_MAX_DECELERATION_SECONDS - WHEEL_MIN_DECELERATION_SECONDS);
+  const deceleration = Math.min(decelerationTarget, duration - acceleration);
+  const finalSlowdown = Math.min(
+    2 + ((rangedDuration - 25) / 50) * 2,
+    deceleration,
+  );
+  const cruise = Math.max(0, duration - acceleration - deceleration);
+
   return {
     duration,
     acceleration,
-    cruise: Math.max(0, duration - acceleration - deceleration),
+    accelerationEnd: acceleration,
+    cruise,
+    cruiseEnd: acceleration + cruise,
+    decelerationStart: acceleration + cruise,
     deceleration,
-    distance: acceleration * 0.5 + Math.max(0, duration - acceleration - deceleration) + deceleration * 0.5,
+    finalSlowdownStart: duration - finalSlowdown,
+    nearStopStart: Math.max(0, duration - 1),
+    distance: acceleration * 0.5 + cruise + deceleration * 0.5,
   };
 }
 
@@ -110,7 +129,7 @@ function smootherStep(value: number) {
 
 export function wheelVelocityAt(progress: number, durationSeconds = 30) {
   const clamped = Math.min(Math.max(progress, 0), 1);
-  const profile = profileDurations(durationSeconds);
+  const profile = getWheelSpinTiming(durationSeconds);
   const elapsed = clamped * profile.duration;
 
   if (elapsed <= profile.acceleration) {
@@ -125,7 +144,7 @@ export function wheelVelocityAt(progress: number, durationSeconds = 30) {
 
 export function wheelPositionAt(progress: number, durationSeconds = 30) {
   const clamped = Math.min(Math.max(progress, 0), 1);
-  const profile = profileDurations(durationSeconds);
+  const profile = getWheelSpinTiming(durationSeconds);
   const elapsed = clamped * profile.duration;
 
   if (elapsed <= profile.acceleration) {
@@ -150,7 +169,10 @@ export function wheelSpinTotalDegrees(
   winnerEntryIndex: number,
   durationSeconds: number,
 ) {
-  const turns = 14 + Math.ceil(durationSeconds / 4.5);
+  const turns = Math.max(
+    14,
+    Math.ceil(getWheelSpinTiming(durationSeconds).distance * 0.9),
+  );
   const currentNormalized = normalizeDegrees(startRotation);
   const targetNormalized = getWinningRestRotation({
     entryCount,
@@ -321,6 +343,19 @@ export function animateWheelSpin(
     winnerEntryIndex,
     durationSeconds,
   );
+  const timing = getWheelSpinTiming(durationSeconds);
+  if (import.meta.env?.DEV) {
+    console.debug("[Asylum wheel] spin profile", {
+      totalDurationSeconds: durationSeconds,
+      accelerationEndSeconds: timing.accelerationEnd,
+      cruiseEndSeconds: timing.cruiseEnd,
+      decelerationStartSeconds: timing.decelerationStart,
+      finalSlowdownStartSeconds: timing.finalSlowdownStart,
+      nearStopStartSeconds: timing.nearStopStart,
+      resumedAtSeconds: elapsedSeconds,
+      totalRotationDegrees: totalDegrees,
+    });
+  }
   const resumedRotation = startRotation + totalDegrees *
     wheelPositionAt(elapsedSeconds / durationSeconds, durationSeconds);
   const segmentAtPointer = (rotation: number) => Math.floor(
@@ -347,7 +382,7 @@ export function animateWheelSpin(
     const currentSegment = segmentAtPointer(rotation);
 
     if (currentSegment !== previousSegment) {
-      const decelerationStart = Math.max(0, durationSeconds - WHEEL_DECELERATION_SECONDS) / durationSeconds;
+      const decelerationStart = timing.decelerationStart / durationSeconds;
       const velocity = wheelVelocityAt(rawProgress, durationSeconds);
       const intensity = rawProgress >= decelerationStart
         ? 0.4 + (1 - velocity) * 0.6
@@ -362,6 +397,12 @@ export function animateWheelSpin(
       return;
     }
 
+    if (import.meta.env?.DEV) {
+      console.debug("[Asylum wheel] trajectory complete", {
+        totalDurationSeconds: durationSeconds,
+        completedAtSeconds: durationSeconds,
+      });
+    }
     onComplete();
   }
 

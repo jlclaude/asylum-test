@@ -606,6 +606,7 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
                 });
 
                 revealDismissTimer.current = window.setTimeout(() => {
+                  if (import.meta.env.DEV) console.debug("[Asylum wheel] celebration ended", { durationMilliseconds: 5000 });
                   revealActive.current = false;
                   setRevealResult(null);
                   setCelebrating(false);
