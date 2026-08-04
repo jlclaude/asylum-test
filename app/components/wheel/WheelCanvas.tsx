@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type CSSProperties } from "react";
 import {
   ASYLUM_THEMES,
   type AsylumThemeKey,
@@ -14,6 +14,9 @@ type WheelCanvasProps = {
   spinning: boolean;
   duration: number | null;
   pointerTick: number;
+  pointerIntensity: number;
+  winnerEntryIndex?: number | null;
+  celebrating?: boolean;
 };
 
 function entryLabel(entry: WheelEntry) {
@@ -32,6 +35,31 @@ function segmentCenterPosition(index: number, segmentCount: number) {
     x: centerX + Math.cos(centerAngle) * dotRadius,
     y: centerY + Math.sin(centerAngle) * dotRadius,
   };
+}
+
+function drawWinnerHighlight(canvas: HTMLCanvasElement, entryCount: number, winnerEntryIndex: number) {
+  const context = canvas.getContext("2d");
+  if (!context || entryCount <= 0 || winnerEntryIndex < 0 || winnerEntryIndex >= entryCount) return;
+  const center = canvas.width / 2;
+  const radius = center - 35;
+  const segmentAngle = (Math.PI * 2) / entryCount;
+  const startAngle = winnerEntryIndex * segmentAngle - Math.PI / 2;
+
+  context.clearRect(0, 0, canvas.width, canvas.height);
+  context.save();
+  context.beginPath();
+  context.moveTo(center, center);
+  context.arc(center, center, radius, startAngle, startAngle + segmentAngle);
+  context.closePath();
+  const glow = context.createRadialGradient(center, center, center * 0.2, center, center, radius);
+  glow.addColorStop(0, "rgba(255,220,115,.08)");
+  glow.addColorStop(0.55, "rgba(255,203,72,.25)");
+  glow.addColorStop(1, "rgba(255,236,164,.72)");
+  context.fillStyle = glow;
+  context.shadowColor = "rgba(255,205,72,.9)";
+  context.shadowBlur = 30;
+  context.fill();
+  context.restore();
 }
 
 function drawWheel(
@@ -149,8 +177,12 @@ export function WheelCanvas({
   spinning,
   duration,
   pointerTick,
+  pointerIntensity,
+  winnerEntryIndex = null,
+  celebrating = false,
 }: WheelCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const winnerCanvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     if (!canvasRef.current) {
@@ -160,9 +192,19 @@ export function WheelCanvas({
     drawWheel(canvasRef.current, entries, type, themeKey);
   }, [entries, themeKey, type]);
 
+  useEffect(() => {
+    const canvas = winnerCanvasRef.current;
+    if (!canvas) return;
+    const context = canvas.getContext("2d");
+    context?.clearRect(0, 0, canvas.width, canvas.height);
+    if (celebrating && winnerEntryIndex !== null) {
+      drawWinnerHighlight(canvas, entries.length, winnerEntryIndex);
+    }
+  }, [celebrating, entries.length, winnerEntryIndex]);
+
   return (
     <div
-      className={`studio-wheel-machine${spinning ? " studio-wheel-machine-spinning" : ""}`}
+      className={`studio-wheel-machine${spinning ? " studio-wheel-machine-spinning" : ""}${celebrating ? " studio-wheel-machine-celebrating" : ""}`}
     >
       <div className="studio-wheel-frame-inset" aria-hidden="true" />
 
@@ -170,6 +212,11 @@ export function WheelCanvas({
         className={`studio-wheel-pointer${pointerTick > 0 ? " studio-wheel-pointer-recoil" : ""}`}
         aria-hidden="true"
         key={pointerTick}
+        style={{
+          "--pointer-recoil": `${2.5 + pointerIntensity * 4.5}px`,
+          "--pointer-recoil-angle": `${3 + pointerIntensity * 5}deg`,
+          "--pointer-recoil-duration": `${105 + pointerIntensity * 95}ms`,
+        } as CSSProperties}
       >
         <i />
         <span />
@@ -201,6 +248,15 @@ export function WheelCanvas({
         style={{
           transform: `rotate(${rotation}deg)`,
         }}
+      />
+
+      <canvas
+        ref={winnerCanvasRef}
+        width={1200}
+        height={1200}
+        className="studio-wheel-winner-highlight"
+        aria-hidden="true"
+        style={{ transform: `rotate(${rotation}deg)` }}
       />
 
       <div className="studio-wheel-center-relief" aria-hidden="true" />

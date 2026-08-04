@@ -689,14 +689,14 @@ test("broadcast countdown is one three-step sequence and respects reduced motion
   assert.equal(shouldAnimateBroadcastCountdown(true), false);
 });
 
-function profileVelocity(progress: number, step = 0.0001) {
-  return (wheelPositionAt(progress + step) - wheelPositionAt(progress - step)) / (2 * step);
+function profileVelocity(progress: number, duration = 30, step = 0.0001) {
+  return (wheelPositionAt(progress + step, duration) - wheelPositionAt(progress - step, duration)) / (2 * step);
 }
 
 test("wheel velocity accelerates once, cruises steadily, then decelerates", () => {
-  const acceleration = [0.01, 0.03, 0.05, 0.07, 0.09].map((point) => profileVelocity(point));
-  const cruise = [0.2, 0.4, 0.6, 0.75].map((point) => profileVelocity(point));
-  const deceleration = [0.82, 0.86, 0.9, 0.94, 0.98].map((point) => profileVelocity(point));
+  const acceleration = [0.3, 0.8, 1.4, 2, 2.7].map((seconds) => profileVelocity(seconds / 30));
+  const cruise = [4, 9, 14, 19].map((seconds) => profileVelocity(seconds / 30));
+  const deceleration = [20.5, 22, 24, 26, 28, 29.5].map((seconds) => profileVelocity(seconds / 30));
 
   assert.equal(acceleration.every((velocity, index) => index === 0 || velocity > acceleration[index - 1]), true);
   assert.equal(Math.max(...cruise) - Math.min(...cruise) < 0.00001, true);
@@ -704,8 +704,8 @@ test("wheel velocity accelerates once, cruises steadily, then decelerates", () =
 });
 
 test("wheel position and velocity remain continuous at phase boundaries", () => {
-  for (const boundary of [0.1, 0.8]) {
-    assert.equal(Math.abs(wheelPositionAt(boundary - 0.000001) - wheelPositionAt(boundary + 0.000001)) < 0.00001, true);
+  for (const boundary of [3 / 30, 20 / 30]) {
+    assert.equal(Math.abs(wheelPositionAt(boundary - 0.000001, 30) - wheelPositionAt(boundary + 0.000001, 30)) < 0.00001, true);
     assert.equal(Math.abs(profileVelocity(boundary - 0.0002) - profileVelocity(boundary + 0.0002)) < 0.01, true);
   }
   assert.equal(Math.abs(wheelPositionAt(1) - 1) < 1e-12, true);
@@ -715,7 +715,7 @@ test("25 and 75 second trajectories land on the saved segment center", () => {
   for (const duration of [25, 75]) {
     const entries = 19;
     const winner = 7;
-    const finalRotation = wheelSpinTotalDegrees(0, entries, winner, duration) * wheelPositionAt(1);
+    const finalRotation = wheelSpinTotalDegrees(0, entries, winner, duration) * wheelPositionAt(1, duration);
     const expected = (90 - (winner + 0.5) * (360 / entries) + 360) % 360;
     assert.equal(Math.abs(((finalRotation % 360) + 360) % 360 - expected) < 1e-9, true);
     const renderedWinnerAngle = -90 + (winner + 0.5) * (360 / entries) + finalRotation;
@@ -761,10 +761,10 @@ test("live spins and restored completed wheels share the same resting angle", ()
 });
 
 test("reload progress resumes the original acceleration, cruise, or deceleration phase", () => {
-  assert.equal(profileVelocity(0.05) < profileVelocity(0.1), true);
-  assert.equal(Math.abs(profileVelocity(0.5) - profileVelocity(0.7)) < 0.00001, true);
-  assert.equal(profileVelocity(0.9) > profileVelocity(0.95), true);
-  assert.equal(profileVelocity(0.95) > profileVelocity(0.99), true);
+  assert.equal(profileVelocity(1 / 30) < profileVelocity(2 / 30), true);
+  assert.equal(Math.abs(profileVelocity(8 / 30) - profileVelocity(18 / 30)) < 0.00001, true);
+  assert.equal(profileVelocity(22 / 30) > profileVelocity(26 / 30), true);
+  assert.equal(profileVelocity(26 / 30) > profileVelocity(29 / 30), true);
 });
 
 test("idle rotation is constant and completes one silent visual turn in 28 seconds", () => {

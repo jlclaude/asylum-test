@@ -432,6 +432,31 @@ body {
   will-change: transform;
 }
 
+.studio-wheel-winner-highlight {
+  position: absolute;
+  z-index: 4;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+  pointer-events: none;
+  transform-origin: 50% 50%;
+}
+
+.studio-wheel-machine-celebrating .studio-wheel-winner-highlight {
+  animation: studio-winning-slice-flash 900ms ease-out 2;
+}
+
+.studio-wheel-machine-celebrating .studio-wheel-hub {
+  animation: studio-winner-ring-glow 1.2s ease-in-out 4 alternate;
+}
+
+.studio-wheel-machine-celebrating .studio-wheel-pointer {
+  filter: drop-shadow(-8px 7px 6px rgba(0,0,0,.72)) drop-shadow(0 0 12px rgba(255,211,76,.95));
+}
+
 .studio-wheel-center-relief {
   position: absolute;
   z-index: 6;
@@ -516,7 +541,7 @@ body {
 }
 
 .studio-wheel-pointer-recoil {
-  animation: studio-pointer-recoil 115ms cubic-bezier(.2,.8,.25,1);
+  animation: studio-pointer-recoil var(--pointer-recoil-duration,115ms) cubic-bezier(.2,.8,.25,1);
 }
 
 .studio-wheel-pointer span {
@@ -646,6 +671,10 @@ body {
   animation: studio-reveal-arrive 180ms ease-out both;
 }
 
+.studio-containment-reveal-settling {
+  visibility: hidden;
+}
+
 .studio-containment-reveal::before,
 .studio-containment-reveal::after {
   position: absolute;
@@ -721,6 +750,33 @@ body {
     inset 0 0 45px rgba(0,0,0,.85),
     0 0 0 7px rgba(8,8,10,.8),
     0 0 46px rgba(77,202,98,.48);
+}
+
+.studio-containment-reveal-revealed > strong {
+  animation: studio-winner-banner-arrive 520ms cubic-bezier(.16,.84,.26,1) both;
+}
+
+.confetti-layer {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.confetti-piece {
+  position: absolute;
+  top: -18px;
+  width: 7px;
+  height: 13px;
+  box-shadow: 0 0 5px rgba(255,214,82,.28);
+  animation: studio-confetti-fall var(--fall-duration,4.5s) cubic-bezier(.18,.65,.35,1) both;
+}
+
+.confetti-spark {
+  width: 4px;
+  height: 4px;
+  box-shadow: 0 0 10px 3px rgba(255,222,112,.72);
 }
 
 .studio-console {
@@ -1190,9 +1246,31 @@ body {
 
 @keyframes studio-pointer-recoil {
   0% { transform: translateY(-50%) rotate(0); }
-  38% { transform: translateY(-50%) translateX(3px) rotate(-5deg); }
+  38% { transform: translateY(-50%) translateX(var(--pointer-recoil,3px)) rotate(calc(-1 * var(--pointer-recoil-angle,5deg))); }
   72% { transform: translateY(-50%) rotate(1.5deg); }
   100% { transform: translateY(-50%) rotate(0); }
+}
+
+@keyframes studio-winning-slice-flash {
+  0% { opacity: 0; }
+  28% { opacity: 1; }
+  100% { opacity: .28; }
+}
+
+@keyframes studio-winner-ring-glow {
+  to { box-shadow: inset 0 0 22px rgba(255,255,255,.18),0 0 34px rgba(255,205,66,.74),0 12px 28px rgba(0,0,0,.72); }
+}
+
+@keyframes studio-winner-banner-arrive {
+  from { opacity: 0; transform: translateY(14px) scale(.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes studio-confetti-fall {
+  0% { opacity: 0; transform: translate3d(0,-2vh,0) rotate(0); }
+  10% { opacity: .95; }
+  88% { opacity: .9; }
+  100% { opacity: 0; transform: translate3d(var(--drift,0),105vh,0) rotate(var(--spin,720deg)); }
 }
 
 @keyframes studio-bearing-turn {
@@ -1336,6 +1414,9 @@ body {
   .studio-console-status i,
   .studio-wheel-bearing,
   .studio-wheel-pointer-recoil,
+  .studio-wheel-winner-highlight,
+  .studio-wheel-machine-celebrating .studio-wheel-hub,
+  .studio-containment-reveal-revealed > strong,
   .studio-containment-reveal,
   .studio-containment-reveal-warning i,
   .studio-containment-reveal-verifying > strong::after,

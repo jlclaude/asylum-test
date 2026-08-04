@@ -88,40 +88,60 @@ type AnimateWheelSpinOptions = {
   onComplete: () => void;
 };
 
-const ACCELERATION_END = 0.1;
-const DECELERATION_START = 0.8;
-const CRUISE_DURATION = DECELERATION_START - ACCELERATION_END;
-const DECELERATION_DURATION = 1 - DECELERATION_START;
-const PROFILE_DISTANCE =
-  ACCELERATION_END * (2 / 3) +
-  CRUISE_DURATION +
-  DECELERATION_DURATION * (1 / 3);
-const CRUISE_VELOCITY = 1 / PROFILE_DISTANCE;
+export const WHEEL_ACCELERATION_SECONDS = 3;
+export const WHEEL_DECELERATION_SECONDS = 10;
 
-export function wheelPositionAt(progress: number) {
+function profileDurations(durationSeconds: number) {
+  const duration = Math.max(durationSeconds, WHEEL_ACCELERATION_SECONDS + WHEEL_DECELERATION_SECONDS);
+  const acceleration = Math.min(WHEEL_ACCELERATION_SECONDS, duration * 0.2);
+  const deceleration = Math.min(WHEEL_DECELERATION_SECONDS, duration - acceleration);
+  return {
+    duration,
+    acceleration,
+    cruise: Math.max(0, duration - acceleration - deceleration),
+    deceleration,
+    distance: acceleration * 0.5 + Math.max(0, duration - acceleration - deceleration) + deceleration * 0.5,
+  };
+}
+
+function smootherStep(value: number) {
+  return value * value * value * (value * (value * 6 - 15) + 10);
+}
+
+export function wheelVelocityAt(progress: number, durationSeconds = 30) {
   const clamped = Math.min(Math.max(progress, 0), 1);
+  const profile = profileDurations(durationSeconds);
+  const elapsed = clamped * profile.duration;
 
-  if (clamped <= ACCELERATION_END) {
-    const local = clamped / ACCELERATION_END;
-    return CRUISE_VELOCITY * ACCELERATION_END *
-      (local * local - (local * local * local) / 3);
+  if (elapsed <= profile.acceleration) {
+    return smootherStep(elapsed / profile.acceleration);
   }
 
-  const accelerationDistance =
-    CRUISE_VELOCITY * ACCELERATION_END * (2 / 3);
+  if (elapsed <= profile.acceleration + profile.cruise) return 1;
 
-  if (clamped <= DECELERATION_START) {
-    return accelerationDistance +
-      CRUISE_VELOCITY * (clamped - ACCELERATION_END);
+  const local = (elapsed - profile.acceleration - profile.cruise) / profile.deceleration;
+  return 1 - smootherStep(local);
+}
+
+export function wheelPositionAt(progress: number, durationSeconds = 30) {
+  const clamped = Math.min(Math.max(progress, 0), 1);
+  const profile = profileDurations(durationSeconds);
+  const elapsed = clamped * profile.duration;
+
+  if (elapsed <= profile.acceleration) {
+    const local = elapsed / profile.acceleration;
+    const accelerationIntegral = local ** 4 * (2.5 - 3 * local + local * local);
+    return profile.acceleration * accelerationIntegral / profile.distance;
   }
 
-  const cruiseDistance = CRUISE_VELOCITY * CRUISE_DURATION;
-  const local = (clamped - DECELERATION_START) / DECELERATION_DURATION;
-  const decelerationDistance =
-    CRUISE_VELOCITY * DECELERATION_DURATION *
-    (local - local * local + (local * local * local) / 3);
+  const accelerationDistance = profile.acceleration * 0.5;
+  if (elapsed <= profile.acceleration + profile.cruise) {
+    return (accelerationDistance + elapsed - profile.acceleration) / profile.distance;
+  }
 
-  return accelerationDistance + cruiseDistance + decelerationDistance;
+  const local = (elapsed - profile.acceleration - profile.cruise) / profile.deceleration;
+  const decelerationIntegral = local - 2.5 * local ** 4 + 3 * local ** 5 - local ** 6;
+  return (accelerationDistance + profile.cruise + profile.deceleration * decelerationIntegral) / profile.distance;
 }
 
 export function wheelSpinTotalDegrees(
@@ -302,7 +322,7 @@ export function animateWheelSpin(
     durationSeconds,
   );
   const resumedRotation = startRotation + totalDegrees *
-    wheelPositionAt(elapsedSeconds / durationSeconds);
+    wheelPositionAt(elapsedSeconds / durationSeconds, durationSeconds);
   const segmentAtPointer = (rotation: number) => Math.floor(
     (((90 - rotation) % 360) + 360) % 360 / segmentDegrees,
   );
@@ -319,7 +339,7 @@ export function animateWheelSpin(
       (elapsedMs + now - startedAt) / durationMs,
       1,
     );
-    const easedProgress = wheelPositionAt(rawProgress);
+    const easedProgress = wheelPositionAt(rawProgress, durationSeconds);
     const rotation = startRotation + totalDegrees * easedProgress;
 
     onFrame(rotation);
@@ -327,7 +347,11 @@ export function animateWheelSpin(
     const currentSegment = segmentAtPointer(rotation);
 
     if (currentSegment !== previousSegment) {
-      const intensity = Math.max(0.15, 1 - rawProgress);
+      const decelerationStart = Math.max(0, durationSeconds - WHEEL_DECELERATION_SECONDS) / durationSeconds;
+      const velocity = wheelVelocityAt(rawProgress, durationSeconds);
+      const intensity = rawProgress >= decelerationStart
+        ? 0.4 + (1 - velocity) * 0.6
+        : 0.3;
       playTick(intensity);
       onTick?.(intensity);
       previousSegment = currentSegment;
@@ -357,22 +381,22 @@ type ConfettiOptions = {
 };
 
 export function createConfettiBurst(options: ConfettiOptions) {
-  if (typeof document === "undefined") return;
+  if (typeof document === "undefined" || typeof window === "undefined") return () => undefined;
 
   const layer = document.createElement("div");
   layer.className = "confetti-layer";
   layer.setAttribute("aria-hidden", "true");
 
   const colors = [
+    "#f5d76e",
+    "#d6a928",
     options.primary,
     options.secondary,
-    "#f2f2f2",
-    "#171719",
   ];
 
-  for (let index = 0; index < 110; index += 1) {
+  for (let index = 0; index < 90; index += 1) {
     const piece = document.createElement("span");
-    piece.className = "confetti-piece";
+    piece.className = index % 5 === 0 ? "confetti-piece confetti-spark" : "confetti-piece";
     piece.style.left = `${Math.random() * 100}%`;
     piece.style.background = colors[index % colors.length];
     piece.style.setProperty(
@@ -395,7 +419,12 @@ export function createConfettiBurst(options: ConfettiOptions) {
 
   document.body.appendChild(layer);
 
-  window.setTimeout(() => {
+  const removalTimer = window.setTimeout(() => {
     layer.remove();
-  }, 6500);
+  }, 5200);
+
+  return () => {
+    window.clearTimeout(removalTimer);
+    layer.remove();
+  };
 }

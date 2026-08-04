@@ -94,6 +94,7 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
   const idleController = useRef<WheelAnimationController | null>(null);
   const revealActive = useRef(false);
   const revealDismissTimer = useRef<number | null>(null);
+  const celebrationCleanup = useRef<(() => void) | null>(null);
   const countdownTimers = useRef<number[]>([]);
   const submittedControl = useRef<HTMLButtonElement | null>(null);
 
@@ -107,7 +108,9 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
   const [rotation, setRotation] = useState(completedRestRotation);
   const rotationRef = useRef(rotation);
   const [pointerTick, setPointerTick] = useState(0);
+  const [pointerIntensity, setPointerIntensity] = useState(0.3);
   const [revealResult, setRevealResult] = useState<string | null>(null);
+  const [celebrating, setCelebrating] = useState(false);
   const [recoveryError, setRecoveryError] = useState<string | null>(null);
   const [countdownLabel, setCountdownLabel] = useState<string | null>(null);
   const [spinning, setSpinning] = useState(
@@ -131,6 +134,7 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
       if (revealDismissTimer.current !== null) {
         window.clearTimeout(revealDismissTimer.current);
       }
+      celebrationCleanup.current?.();
       timers.current.forEach((timer) => window.clearTimeout(timer));
     };
   }, [stopMusic, wheel.id]);
@@ -353,6 +357,8 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
     const completeRecoveredSpin = () => {
       finishMusic(wheel.id);
       setSpinning(false);
+      setPointerIntensity(1);
+      setPointerTick((tick) => tick + 1);
       revealActive.current = true;
       setRevealResult(finalResult);
       playContainmentLock();
@@ -374,6 +380,7 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
     setResult(null);
     setRecoveryError(null);
     setRevealResult(null);
+    setCelebrating(false);
     revealActive.current = false;
     setSpinning(true);
     stopIdle();
@@ -399,7 +406,8 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
         rotationRef.current = nextRotation;
         setRotation(nextRotation);
       },
-      onTick: () => {
+      onTick: (intensity) => {
+        setPointerIntensity(intensity);
         setPointerTick((tick) => tick + 1);
       },
       onComplete: completeRecoveredSpin,
@@ -445,6 +453,7 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
 
     setResult(null);
     setRevealResult(null);
+    setCelebrating(false);
     revealActive.current = false;
     setSpinning(true);
 
@@ -461,12 +470,15 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
         rotationRef.current = nextRotation;
         setRotation(nextRotation);
       },
-      onTick: () => {
+      onTick: (intensity) => {
+        setPointerIntensity(intensity);
         setPointerTick((tick) => tick + 1);
       },
       onComplete: () => {
         finishMusic(wheel.id);
         setSpinning(false);
+        setPointerIntensity(1);
+        setPointerTick((tick) => tick + 1);
         revealActive.current = true;
         setRevealResult(finalResult);
         playContainmentLock();
@@ -562,6 +574,9 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
             spinning={spinning}
             duration={selectedDuration}
             pointerTick={pointerTick}
+            pointerIntensity={pointerIntensity}
+            winnerEntryIndex={wheel.winnerEntryIndex ?? fetcher.data?.winnerEntryIndex ?? null}
+            celebrating={celebrating}
           />
 
           {countdownLabel ? (
@@ -576,11 +591,13 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
               result={revealResult}
               onReveal={() => {
                 setResult(revealResult);
+                setCelebrating(true);
                 playWinnerTone();
 
                 const theme = ASYLUM_THEMES[themeKey];
 
-                createConfettiBurst({
+                celebrationCleanup.current?.();
+                celebrationCleanup.current = createConfettiBurst({
                   primary: theme.primary,
                   secondary:
                     wheel.type === "VALUE"
@@ -591,7 +608,10 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(f
                 revealDismissTimer.current = window.setTimeout(() => {
                   revealActive.current = false;
                   setRevealResult(null);
-                }, 1600);
+                  setCelebrating(false);
+                  celebrationCleanup.current?.();
+                  celebrationCleanup.current = null;
+                }, 5000);
               }}
             />
           ) : null}
