@@ -3,6 +3,7 @@ import db from "../db.server";
 import { MAX_SPIN_DURATION_SECONDS, MIN_SPIN_DURATION_SECONDS } from "../lib/spin-duration";
 import { ensureSecondChanceForCompletedWheel } from "./second-chance.server";
 import { getContainmentLabel, REWARD_CHAMBER_LABEL } from "../lib/wheel-labels";
+import { rewardChamberEntries } from "../lib/reward-chamber";
 
 export type NameWheelEntry = {
   claimId: string;
@@ -14,16 +15,6 @@ export type ValueWheelEntry = {
 };
 
 export type WheelEntry = NameWheelEntry | ValueWheelEntry;
-
-const VALUE_WHEEL_ENTRIES: ValueWheelEntry[] = [
-  { value: "12.5" }, { value: "12.5" }, { value: "12.5" },
-  { value: "12.5" }, { value: "12.5" }, { value: "12.5" },
-  { value: "25" }, { value: "25" }, { value: "25" },
-  { value: "25" }, { value: "25" }, { value: "25" },
-  { value: "37.5" }, { value: "37.5" },
-  { value: "50" }, { value: "75" }, { value: "100" },
-  { value: "125" }, { value: "250" },
-];
 
 export function serializeWheelEntries(entries: WheelEntry[]) {
   return JSON.stringify(entries);
@@ -165,7 +156,7 @@ export async function beginGameRun(gameId: string, shop: string) {
       });
     }
 
-    const valuesJson = serializeWheelEntries(VALUE_WHEEL_ENTRIES);
+    const valuesJson = serializeWheelEntries(rewardChamberEntries());
 
     await transaction.gameWheel.create({
       data: {

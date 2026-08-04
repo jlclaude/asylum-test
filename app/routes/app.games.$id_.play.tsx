@@ -61,6 +61,7 @@ import { buildPrizeClaimUrl } from "../lib/prize-claim-token.server";
 import { validateAdminPrizePackageOptions } from "../lib/prize-packages";
 import { verifyPrizeOptionCollections } from "../lib/shopify-prize-products.server";
 import { createWinnerPrizeClaim, getEligiblePrizeWheels, getPrizeClaimsForGame, toPrizeClaimSummary, updatePrizeClaimStatus } from "../models/prize-claim.server";
+import { runGameReadinessCheck } from "../services/game-readiness.server";
 
 import "../styles/asylum-brand.css";
 import "../styles/game-results.css";
@@ -93,6 +94,14 @@ export async function loader({
       {
         status: 404,
       },
+    );
+  }
+
+  const readiness = await runGameReadinessCheck(game.id, session.shop);
+  if (!readiness.isReady) {
+    throw new Response(
+      `${readiness.blockingCount} blocking readiness issues must be resolved in the Game Control Center.`,
+      { status: 409, statusText: "Game readiness check failed" },
     );
   }
 
@@ -200,6 +209,13 @@ export async function action({
 
   try {
     if (intent === "begin-game") {
+      const readiness = await runGameReadinessCheck(params.id, session.shop);
+      if (!readiness.isReady) {
+        return {
+          intent,
+          error: `${readiness.blockingCount} blocking readiness issues must be resolved in the Game Control Center.`,
+        };
+      }
       await beginGameRun(
         params.id,
         session.shop,

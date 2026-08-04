@@ -36,6 +36,7 @@ import { getGameResults } from "../models/game-results.server";
 import { getShopSettings } from "../models/shop-settings.server";
 import { GameResultsSummary } from "../components/results/GameResultsSummary";
 import { GameAdministration } from "../components/games/GameAdministration";
+import { GameReadinessPanel } from "../components/games/GameReadinessPanel";
 import { SecondChanceSummary } from "../components/second-chance/SecondChanceSummary";
 import { GamePrizeClaims } from "../components/prize-claims/GamePrizeClaims";
 import { PRIZE_CLAIM_EXPIRATION_DAYS, type PrizeClaimExpirationDays } from "../lib/prize-claim";
@@ -47,6 +48,8 @@ import { getSecondChanceResult } from "../models/second-chance.server";
 import { renderGameInstructionVariables } from "../lib/game-instruction-variables";
 import { authenticate } from "../shopify.server";
 import { formatRaffleCode } from "../lib/raffle-number";
+import type { GameReadinessReport } from "../lib/game-readiness";
+import { repairGameReadiness, runGameReadinessCheck, type ReadinessRepairIntent } from "../services/game-readiness.server";
 
 import "../styles/game-results.css";
 import "../styles/prize-claims.css";
@@ -124,6 +127,7 @@ type ActionData = {
   claimId?: string;
   wheelId?: string;
   privateUrl?: string;
+  readiness?: GameReadinessReport;
 };
 
 export async function action({
@@ -141,6 +145,26 @@ export async function action({
   const intent = String(formData.get("intent") ?? "");
 
   try {
+    if (["run-readiness", "open-wheels", "open-broadcast"].includes(intent)) {
+      const readiness = await runGameReadinessCheck(game.id, session.shop);
+      if (readiness.isReady && intent === "open-wheels") return redirect(`/app/games/${game.id}/play`);
+      if (readiness.isReady && intent === "open-broadcast") return redirect(`/app/games/${game.id}/broadcast`);
+      return {
+        intent,
+        readiness,
+        ...(readiness.isReady ? { success: "Game readiness checks passed." } : { error: `${readiness.blockingCount} blocking issues must be resolved before opening wheels.` }),
+      };
+    }
+
+    if (intent === "repair-readiness") {
+      const repairIntent = String(formData.get("repairIntent") ?? "") as ReadinessRepairIntent;
+      const allowed: ReadinessRepairIntent[] = ["repair-wheel-labels", "repair-name-snapshots", "repair-reward-chamber", "reconcile-elapsed-spin"];
+      if (!allowed.includes(repairIntent)) return { error: "Unknown readiness repair.", intent };
+      const result = await repairGameReadiness({ gameId: game.id, shop: session.shop, intent: repairIntent, affectedId: String(formData.get("affectedId") ?? "").trim() || undefined });
+      const readiness = await runGameReadinessCheck(game.id, session.shop);
+      return { intent, success: result.message, readiness };
+    }
+
     if (intent === "duplicate-game") {
       const duplicate = await duplicateGameSetup(game.id, session.shop);
       return redirect(`/app/games/${duplicate.id}?duplicated=1`);
@@ -339,7 +363,7 @@ export async function action({
 
     return { error: "Unknown action.", intent };
   } catch (error) {
-    console.error("Game action failed:", error);
+    console.error("Game action failed:", { intent, gameId: game.id, error });
     return {
       error: error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002"
         ? "A template with this name already exists for this shop."
@@ -395,6 +419,27 @@ const styles = `
   .control-message-error { border:1px solid #73313a; color:#ffabb3; background:rgba(106,28,39,.3); }
   .control-message-success { border:1px solid #305c40; color:#a7e8ba; background:rgba(29,92,51,.25); }
   .control-grid { display:grid; grid-template-columns:minmax(0,1.55fr) minmax(300px,.7fr); gap:18px; }
+  .readiness-panel { margin-bottom:18px; }
+  .readiness-head { display:flex;align-items:center;justify-content:space-between;gap:16px;border-bottom:1px solid #35353a;padding-bottom:15px }
+  .readiness-head h2 { margin:0;font-size:24px }
+  .readiness-head>strong { padding:9px 12px;border:1px solid;font-size:12px;letter-spacing:.12em }
+  .readiness-ready { color:#a7e8ba;border-color:#305c40!important;background:rgba(29,92,51,.25) }
+  .readiness-required { color:#ffabb3;border-color:#73313a!important;background:rgba(106,28,39,.3) }
+  .readiness-unchecked { margin:22px 0;color:#999aa0 }
+  .readiness-counts { display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin:18px 0 }
+  .readiness-counts div { padding:12px;border:1px solid #35353a;background:#111113 }
+  .readiness-counts dt { color:#87888e;font-size:9px;font-weight:850;text-transform:uppercase }
+  .readiness-counts dd { margin:6px 0 0;font-size:18px;font-weight:900 }
+  .readiness-groups { display:grid;gap:8px }
+  .readiness-groups details { border:1px solid #35353a;background:#111113 }
+  .readiness-groups summary { padding:11px 13px;cursor:pointer;font-size:11px;font-weight:900;letter-spacing:.08em }
+  .readiness-groups summary span { float:right;color:#87888e }
+  .readiness-groups ul { display:grid;gap:1px;margin:0;padding:0;list-style:none }
+  .readiness-check { display:grid;grid-template-columns:25px 1fr auto;gap:10px;align-items:start;padding:11px 13px;border-top:1px solid #29292d }
+  .readiness-check>span { display:grid;place-items:center;width:22px;height:22px;border:1px solid;border-radius:50%;font-weight:950 }
+  .readiness-check strong { font-size:12px }.readiness-check p { margin:4px 0 0;color:#999aa0;font-size:11px;line-height:1.45 }.readiness-check small { color:#6f7076 }.readiness-check>b { font-size:9px;letter-spacing:.07em }
+  .readiness-check-pass>span,.readiness-check-pass>b { color:#97e3b0 }.readiness-check-warning>span,.readiness-check-warning>b { color:#e5cc82 }.readiness-check-blocking>span,.readiness-check-blocking>b { color:#ff8996 }
+  .readiness-actions { display:flex;flex-wrap:wrap;gap:9px;margin-top:16px }.readiness-repairs { margin-top:18px;padding-top:16px;border-top:1px solid #35353a }.readiness-repairs h3 { margin:0 0 5px;font-size:14px }.readiness-repairs>p { margin:0 0 12px;color:#87888e;font-size:11px }.readiness-repairs form { display:inline-block;margin:0 8px 8px 0 }
   .control-card { padding:22px; }
   .control-section-head { margin-bottom:18px; }
   .control-section-head h2 { margin:0 0 5px; font-size:19px; }
@@ -553,6 +598,8 @@ export default function GameControlCenter() {
           {actionData?.error ? <div className="control-message control-message-error">{actionData.error}</div> : null}
           {actionData?.success ? <div className="control-message control-message-success">{actionData.success}</div> : null}
 
+          <GameReadinessPanel gameStatus={game.status} archived={Boolean(game.archivedAt)} externalReport={actionData?.readiness ?? fetcher.data?.readiness} />
+
           {results ? (
             <GameResultsSummary
               results={results}
@@ -644,8 +691,8 @@ export default function GameControlCenter() {
               <div className="control-section-head"><h2>Quick actions</h2><p>Manage the public game and wheel session.</p></div>
               <div className="control-actions">
                 <div className="control-payment-status"><p>Payment instructions</p><strong>{paymentInstructionsConfigured ? "Configured" : "Not configured"}</strong><button className="control-button control-button-secondary control-button-full" type="button" onClick={() => navigate("/app/settings")}>Edit Payment Instructions</button></div>
-                <button className="control-button control-button-primary control-button-full" type="button" onClick={() => navigate(`/app/games/${game.id}/play`)}>{wheelButtonLabel}</button>
-                {results ? <button className="control-button control-button-full" type="button" onClick={() => navigate(`/app/games/${game.id}/broadcast`)}>OPEN BROADCAST MODE</button> : null}
+                <fetcher.Form method="post"><button className="control-button control-button-primary control-button-full" type="submit" name="intent" value="open-wheels" disabled={isSubmitting}>{wheelButtonLabel}</button></fetcher.Form>
+                {results ? <fetcher.Form method="post"><button className="control-button control-button-full" type="submit" name="intent" value="open-broadcast" disabled={isSubmitting}>OPEN BROADCAST MODE</button></fetcher.Form> : null}
                 <button className="control-button control-button-secondary control-button-full" type="button" onClick={copyPublicLink}>Copy public claim link</button>
                 <fetcher.Form className="control-form" method="post">
                   <input type="hidden" name="intent" value="save-game-template" />
