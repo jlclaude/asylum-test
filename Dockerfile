@@ -13,6 +13,8 @@ RUN npm ci --omit=dev && npm cache clean --force
 
 COPY . .
 
-RUN npm run build
+# Prisma generation does not connect to this placeholder database. Runtime
+# startup requires the real PostgreSQL DATABASE_URL before migrations deploy.
+RUN DATABASE_URL="postgresql://build:build@localhost:5432/asylum_build" npm run db:production:generate && npm run build
 
 CMD ["npm", "run", "docker-start"]

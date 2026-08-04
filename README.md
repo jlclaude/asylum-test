@@ -93,12 +93,55 @@ For more information on the Shopify Dev MCP please read [the documentation](http
 
 ### Application Storage
 
-This template uses [Prisma](https://www.prisma.io/) to store session data, by default using an [SQLite](https://www.sqlite.org/index.html) database.
-The database is defined as a Prisma schema in `prisma/schema.prisma`.
+Asylum Games uses separate Prisma histories for local development and production:
 
-This use of SQLite works in production if your app runs as a single instance.
-The database that works best for you depends on the data your app needs and how it is queried.
-Here’s a short list of databases providers that provide a free tier to get started:
+- `prisma/schema.prisma` and `prisma/migrations/` remain the SQLite development schema and history.
+- `prisma/postgresql/schema.prisma` and `prisma/postgresql/migrations/` are the clean PostgreSQL production schema and history.
+
+The model and enum definitions in both schemas must remain identical. Database generation and deployment commands verify this automatically.
+
+#### Local SQLite workflow
+
+The local database remains `prisma/dev.sqlite`; no `DATABASE_URL` is required.
+
+```shell
+npm run db:local:generate
+npm run db:local:migrate:dev
+```
+
+For normal local startup using committed migrations:
+
+```shell
+npm run setup:local
+npm run dev
+```
+
+Create local migrations only against `prisma/schema.prisma`. After changing models, apply the identical model change to `prisma/postgresql/schema.prisma`, verify parity, and add the corresponding PostgreSQL migration to its separate history.
+
+#### Production PostgreSQL workflow
+
+Production must provide a PostgreSQL connection through `DATABASE_URL`:
+
+```shell
+DATABASE_URL="postgresql://user:password@host:5432/database"
+```
+
+Deploy committed migrations without resetting the database:
+
+```shell
+npm run db:production:generate
+npm run db:production:migrate:deploy
+```
+
+Or run both through:
+
+```shell
+npm run setup:production
+```
+
+Production commands reject missing, SQLite, and non-PostgreSQL URLs. Never run `prisma migrate dev`, `prisma db push`, or a database reset against production. The PostgreSQL baseline is for a clean production database and does not import local SQLite data.
+
+The production schema specifically requires PostgreSQL. Common hosting references include:
 
 | Database   | Type             | Hosters                                                                                                                                                                                                                                    |
 | ---------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -107,7 +150,7 @@ Here’s a short list of databases providers that provide a free tier to get sta
 | Redis      | Key-value        | [Digital Ocean](https://www.digitalocean.com/products/managed-databases-redis), [Amazon MemoryDB](https://aws.amazon.com/memorydb/)                                                                                                        |
 | MongoDB    | NoSQL / Document | [Digital Ocean](https://www.digitalocean.com/products/managed-databases-mongodb), [MongoDB Atlas](https://www.mongodb.com/atlas/database)                                                                                                  |
 
-To use one of these, you can use a different [datasource provider](https://www.prisma.io/docs/reference/api-reference/prisma-schema-reference#datasource) in your `schema.prisma` file, or a different [SessionStorage adapter package](https://github.com/Shopify/shopify-api-js/blob/main/packages/shopify-api/docs/guides/session-storage.md).
+Use a PostgreSQL service from the table above; MySQL, Redis, and MongoDB are not compatible with the committed production schema.
 
 ### Build
 
