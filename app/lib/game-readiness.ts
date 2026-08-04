@@ -1,6 +1,6 @@
 import { WHEEL_COUNT_MAX, WHEEL_COUNT_MIN } from "./game-template-validation.ts";
 import { formatRaffleCode } from "./raffle-number.ts";
-import { REWARD_CHAMBER_VALUES } from "./reward-chamber.ts";
+import { REWARD_CHAMBER_VALUES, rewardChamberCanBeRepaired } from "./reward-chamber.ts";
 import { MAX_SPIN_DURATION_SECONDS, MIN_SPIN_DURATION_SECONDS } from "./spin-duration.ts";
 import { getContainmentLabel, REWARD_CHAMBER_LABEL } from "./wheel-labels.ts";
 
@@ -273,8 +273,8 @@ export function evaluateGameReadiness(snapshot: ReadinessSnapshot): GameReadines
       const actualValues = valueEntries?.map((entry) => entry.value);
       const rewardValid = Boolean(actualValues && JSON.stringify(actualValues) === JSON.stringify(REWARD_CHAMBER_VALUES));
       checks.push(rewardValid
-        ? check("PASS", "wheels.reward-values", "WHEELS", "Reward Chamber weighting is exact", "All 19 persisted values and duplicates are preserved in order.")
-        : check("BLOCKING", "wheels.reward-values", "WHEELS", "Reward Chamber values are invalid", "The exact 19-entry weighted sequence must be restored.", valueWheel.status === "READY" && !valueWheel.spunAt && valueWheel.winnerEntryIndex === null ? { repairIntent: "repair-reward-chamber", affectedId: valueWheel.id } : {}));
+        ? check("PASS", "wheels.reward-values", "WHEELS", "Reward Chamber weighting is exact", "All 20 persisted values and duplicates are preserved in order.")
+        : check("BLOCKING", "wheels.reward-values", "WHEELS", "Reward Chamber values are invalid", "The exact 20-entry weighted sequence must be restored.", rewardChamberCanBeRepaired(valueWheel) ? { repairIntent: "repair-reward-chamber", affectedId: valueWheel.id } : {}));
     }
 
     for (const wheel of wheels) {

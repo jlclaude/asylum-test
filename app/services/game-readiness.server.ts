@@ -2,7 +2,7 @@ import { readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import db from "../db.server";
 import { evaluateGameReadiness, type GameReadinessReport, type ReadinessSnapshot } from "../lib/game-readiness";
-import { rewardChamberEntries } from "../lib/reward-chamber";
+import { rewardChamberCanBeRepaired, rewardChamberEntries } from "../lib/reward-chamber";
 import { getContainmentLabel, REWARD_CHAMBER_LABEL } from "../lib/wheel-labels";
 import { completeGameWheelSpin, serializeWheelEntries } from "../models/game-run.server";
 
@@ -160,9 +160,9 @@ export async function repairGameReadiness(input: {
     if (game.archivedAt) throw new Error("Archived games cannot be repaired.");
     const wheels = game.run?.rounds.flatMap((round) => round.wheels) ?? [];
     const allReady = wheels.length > 0 && wheels.every((wheel) => wheel.status === "READY" && wheel.winnerEntryIndex === null && !wheel.spunAt && !wheel.completedAt);
-    if (!allReady) throw new Error("This repair is blocked after any wheel begins spinning.");
 
     if (input.intent === "repair-wheel-labels") {
+      if (!allReady) throw new Error("This repair is blocked after any wheel begins spinning.");
       for (const wheel of wheels) {
         await transaction.gameWheel.update({
           where: { id: wheel.id },
@@ -173,6 +173,7 @@ export async function repairGameReadiness(input: {
     }
 
     if (input.intent === "repair-name-snapshots") {
+      if (!allReady) throw new Error("This repair is blocked after any wheel begins spinning.");
       if (game.run?.secondChanceCalculatedAt) throw new Error("Second Chance results already exist; snapshots are immutable.");
       const entries = game.claims.flatMap((claim) => Array.from({ length: claim.quantity }, () => ({ claimId: claim.id, displayName: claim.displayName })));
       if (entries.length === 0) throw new Error("At least one confirmed paid entry is required.");
@@ -187,9 +188,12 @@ export async function repairGameReadiness(input: {
 
     const reward = wheels.find((wheel) => wheel.id === input.affectedId && wheel.type === "VALUE");
     if (!reward) throw new Error("Reward Chamber not found.");
+    if (!rewardChamberCanBeRepaired(reward)) {
+      throw new Error("Reward Chamber values cannot change after that wheel begins spinning.");
+    }
     const json = serializeWheelEntries(rewardChamberEntries());
     await transaction.gameWheel.update({ where: { id: reward.id }, data: { originalEntriesJson: json, shuffledEntriesJson: json, shuffledAt: null, spinDurationSeconds: null } });
-    return "Restored the exact 19-entry Reward Chamber weighting.";
+    return "Restored the exact 20-entry Reward Chamber weighting.";
   });
 
   if (process.env.NODE_ENV === "development") console.info("Game readiness repair succeeded", { gameId: input.gameId, intent: input.intent, affectedId: input.affectedId ?? null });

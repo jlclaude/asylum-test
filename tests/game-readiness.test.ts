@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { evaluateGameReadiness, type ReadinessSnapshot } from "../app/lib/game-readiness.ts";
-import { REWARD_CHAMBER_VALUES, rewardChamberEntries } from "../app/lib/reward-chamber.ts";
+import { REWARD_CHAMBER_VALUES, rewardChamberCanBeRepaired, rewardChamberEntries } from "../app/lib/reward-chamber.ts";
 
 const claim = (overrides: Partial<ReadinessSnapshot["claims"][number]> = {}) => ({
   id: "claim-a",
@@ -119,9 +119,17 @@ test("healthy initialized run preserves wheel counts, snapshots, and Reward Cham
   const report = evaluateGameReadiness(readyRunSnapshot());
   assert.equal(report.isReady, true);
   assert.equal(report.checks.find((item) => item.id === "wheels.reward-values")?.severity, "PASS");
-  assert.equal(REWARD_CHAMBER_VALUES.length, 19);
-  assert.equal(REWARD_CHAMBER_VALUES.filter((value) => value === "12.5").length, 6);
+  assert.equal(REWARD_CHAMBER_VALUES.length, 20);
+  assert.equal(REWARD_CHAMBER_VALUES.filter((value) => value === "12.5").length, 7);
   assert.equal(REWARD_CHAMBER_VALUES.filter((value) => value === "25").length, 6);
+  assert.equal(REWARD_CHAMBER_VALUES.filter((value) => value === "37.5").length, 2);
+  for (const value of ["50", "75", "100", "125", "250"] as const) {
+    assert.equal(REWARD_CHAMBER_VALUES.filter((entry) => entry === value).length, 1);
+  }
+  assert.deepEqual(
+    rewardChamberEntries().map((entry) => entry.value),
+    [...REWARD_CHAMBER_VALUES],
+  );
 });
 
 test("name-wheel count and snapshot mismatches are blocking", () => {
@@ -138,12 +146,55 @@ test("malformed JSON becomes a visible blocking check", () => {
   assert.equal(report.checks.find((item) => item.id === "wheels.json")?.severity, "BLOCKING");
 });
 
-test("wrong READY Reward Chamber values provide the safe repair", () => {
+test("legacy 19-entry READY Reward Chamber provides the safe repair", () => {
   const input = readyRunSnapshot();
-  input.run!.wheels[2].originalEntriesJson = JSON.stringify([{ value: "250" }]);
+  const legacyValues = REWARD_CHAMBER_VALUES.filter((_, index) => index !== 6);
+  assert.equal(legacyValues.length, 19);
+  input.run!.wheels[2].originalEntriesJson = JSON.stringify(
+    legacyValues.map((value) => ({ value })),
+  );
   const check = evaluateGameReadiness(input).checks.find((item) => item.id === "wheels.reward-values");
   assert.equal(check?.severity, "BLOCKING");
   assert.equal(check?.repairIntent, "repair-reward-chamber");
+});
+
+test("SPINNING and COMPLETED Reward Chambers never offer entry repair", () => {
+  for (const status of ["SPINNING", "COMPLETED"] as const) {
+    const input = readyRunSnapshot();
+    const reward = input.run!.wheels[2];
+    reward.status = status;
+    reward.originalEntriesJson = JSON.stringify(
+      REWARD_CHAMBER_VALUES.slice(1).map((value) => ({ value })),
+    );
+    if (status === "SPINNING") {
+      reward.spunAt = "2026-01-01T00:00:00.000Z";
+      reward.winnerEntryIndex = 0;
+      reward.winnerValue = "12.5";
+    } else {
+      reward.spunAt = "2026-01-01T00:00:00.000Z";
+      reward.completedAt = "2026-01-01T00:01:00.000Z";
+      reward.winnerEntryIndex = 0;
+      reward.winnerValue = "12.5";
+    }
+    const check = evaluateGameReadiness(input).checks.find((item) => item.id === "wheels.reward-values");
+    assert.equal(check?.severity, "BLOCKING");
+    assert.equal(check?.repairIntent, undefined);
+    assert.equal(rewardChamberCanBeRepaired(reward), false);
+  }
+});
+
+test("Reward Chamber entries remain isolated from name-wheel snapshots", () => {
+  const input = readyRunSnapshot();
+  const nameEntries = input.run!.wheels
+    .filter((wheel) => wheel.type === "NAME")
+    .flatMap((wheel) => JSON.parse(wheel.originalEntriesJson) as Array<Record<string, string>>);
+  assert.equal(nameEntries.every((entry) => "claimId" in entry && !("value" in entry)), true);
+  assert.equal(rewardChamberEntries().every((entry) => !("claimId" in entry)), true);
+});
+
+test("an unspun READY Reward Chamber remains safely repairable", () => {
+  const reward = readyRunSnapshot().run!.wheels[2];
+  assert.equal(rewardChamberCanBeRepaired(reward), true);
 });
 
 test("durations below 25 and above 75 are blocking", () => {
