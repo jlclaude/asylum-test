@@ -1,4 +1,4 @@
-import type { LoaderFunctionArgs } from "react-router";
+import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import type { GameStatus } from "@prisma/client";
 import { Form, useLoaderData, useNavigate } from "react-router";
 import {
@@ -9,6 +9,40 @@ import { getGameTemplateSummaryForShop } from "../models/game-template.server";
 import { authenticate } from "../shopify.server";
 import { AsylumLogo } from "../components/asylum/AsylumLogo";
 import { formatRaffleCode, parseRaffleSearch } from "../lib/raffle-number";
+import { TestGameGenerator } from "../components/development/TestGameGenerator";
+import { parseTestGameOptions, testGameToolsEnabled } from "../lib/test-game-generator";
+import {
+  createDevelopmentTestGame,
+  deleteDevelopmentTestGame,
+} from "../services/test-game-generator.server";
+
+export async function action({ request }: ActionFunctionArgs) {
+  const { session } = await authenticate.admin(request);
+  if (!testGameToolsEnabled()) throw new Response("Not found", { status: 404 });
+  const formData = await request.formData();
+  const intent = String(formData.get("intent") ?? "");
+  try {
+    if (intent === "create-test-game") {
+      const created = await createDevelopmentTestGame({
+        shop: session.shop,
+        ...parseTestGameOptions(formData),
+      });
+      return { ok: true, message: "Development test game created.", created };
+    }
+    if (intent === "delete-test-game") {
+      await deleteDevelopmentTestGame({
+        shop: session.shop,
+        gameId: String(formData.get("gameId") ?? ""),
+        confirmation: String(formData.get("confirmation") ?? ""),
+      });
+      return { ok: true, message: "Development test game deleted." };
+    }
+    return { ok: false, error: "Unknown development-tool action." };
+  } catch (error) {
+    console.error("Development test-game action failed", { shop: session.shop, intent, error });
+    return { ok: false, error: error instanceof Error ? error.message : "The test-game action failed." };
+  }
+}
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const { session } = await authenticate.admin(request);
@@ -31,6 +65,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     filters: { search, status, sort },
     templateSummary,
     createdRaffleCode: createdNumber ? formatRaffleCode(createdNumber) : null,
+    testGameToolsEnabled: testGameToolsEnabled(),
     games: games.map((game) => ({
       id: game.id,
       raffleCode: formatRaffleCode(game.raffleNumber),
@@ -502,6 +537,29 @@ const styles = `
     font: inherit;
   }
 
+  .test-game-tools {
+    margin-top: 24px;
+    border-color: #5c4923;
+    background: linear-gradient(145deg, rgba(47, 39, 22, 0.94), rgba(24, 22, 19, 0.94));
+  }
+
+  .test-game-tools__copy { color: #aaa49a; }
+  .test-game-tools__form { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; align-items: end; }
+  .test-game-tools label { display: grid; gap: 7px; color: #d8d4cb; font-size: 13px; font-weight: 700; }
+  .test-game-tools input, .test-game-tools select { min-height: 42px; padding: 8px 10px; border: 1px solid #575044; border-radius: 8px; color: #fff; background: #171614; font: inherit; }
+  .test-game-tools__result { margin-top: 18px; padding: 16px; border: 1px solid #665a3d; border-radius: 10px; background: rgba(0, 0, 0, 0.24); }
+  .test-game-tools__result h4 { margin: 0 0 8px; }
+  .test-game-tools__result p { margin: 7px 0; color: #c6c0b3; }
+  .test-game-tools__checkbox { display: flex !important; align-items: center; gap: 9px !important; min-height: 42px; }
+  .test-game-tools__checkbox input { min-height: 0; width: 18px; height: 18px; }
+  .test-game-tools__issues { margin: 8px 0; padding-left: 20px; color: #e2bd78; }
+  .test-game-tools__actions { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 12px; }
+  .test-game-tools__actions a { color: #ffd274; font-weight: 750; }
+  .test-game-tools__delete { display: grid; grid-template-columns: minmax(220px, 1fr) auto; gap: 12px; align-items: end; margin-top: 18px; }
+  .test-game-tools__delete button { min-height: 42px; border: 1px solid #8f3540; border-radius: 8px; color: #fff; background: #5c2028; font: inherit; font-weight: 750; cursor: pointer; }
+  .test-game-tools__error { color: #ff8793 !important; }
+  .test-game-tools__success { color: #9ee6b5; }
+
   @media (max-width: 820px) {
     .asylum-dashboard {
       padding: 20px;
@@ -525,6 +583,8 @@ const styles = `
     .asylum-primary-button {
       width: 100%;
     }
+
+    .test-game-tools__form, .test-game-tools__delete { grid-template-columns: 1fr; }
   }
 
   @media (max-width: 480px) {
@@ -555,7 +615,7 @@ const styles = `
 
 export default function AppIndex() {
   const navigate = useNavigate();
-  const { counts, filters, games, templateSummary, createdRaffleCode } = useLoaderData<typeof loader>();
+  const { counts, filters, games, templateSummary, createdRaffleCode, testGameToolsEnabled: showTestGameTools } = useLoaderData<typeof loader>();
 
   const stats = [
     {
@@ -784,6 +844,8 @@ export default function AppIndex() {
               </div>
             </aside>
           </section>
+
+          {showTestGameTools ? <TestGameGenerator /> : null}
         </div>
       </main>
     </>

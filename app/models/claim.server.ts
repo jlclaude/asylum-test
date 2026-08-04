@@ -1,4 +1,4 @@
-import type { ClaimStatus } from "@prisma/client";
+import type { ClaimStatus, Prisma } from "@prisma/client";
 import db from "../db.server";
 import {
   claimNameEditBlockReason,
@@ -18,18 +18,32 @@ export type CreateClaimInput = {
   comment?: string;
 };
 
-export async function createClaim(input: CreateClaimInput) {
-  return db.claim.create({
+export type CreateClaimWithStateInput = CreateClaimInput & {
+  status?: ClaimStatus;
+  externalPayment?: boolean;
+  createdAt?: Date;
+};
+
+export function createClaimWithTransaction(
+  transaction: Prisma.TransactionClient,
+  input: CreateClaimWithStateInput,
+) {
+  return transaction.claim.create({
     data: {
       gameId: input.gameId,
       displayName: input.displayName,
       facebookHandle: input.facebookHandle || null,
       quantity: input.quantity,
       comment: input.comment || null,
-      status: "PENDING",
-      externalPayment: false,
+      status: input.status ?? "PENDING",
+      externalPayment: input.externalPayment ?? false,
+      createdAt: input.createdAt,
     },
   });
+}
+
+export async function createClaim(input: CreateClaimInput) {
+  return createClaimWithTransaction(db, input);
 }
 
 export async function createPublicClaim(input: CreateClaimInput) {

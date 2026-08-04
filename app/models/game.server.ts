@@ -34,23 +34,30 @@ async function allocateRaffleNumber(transaction: Prisma.TransactionClient, shop:
   return raffleNumber;
 }
 
-export async function createGame(input: CreateGameInput) {
-  return db.$transaction(async (transaction) => {
-    const raffleNumber = await allocateRaffleNumber(transaction, input.shop);
-    return transaction.game.create({
-      data: {
-        shop: input.shop,
-        raffleNumber,
-        title: input.title,
-        description: input.description || null,
-        totalSpots: input.totalSpots,
-        pricePerSpot: input.pricePerSpot,
-        wheelCount: input.wheelCount,
-        secondChanceOffset: generateSecondChanceOffset(),
-        status: input.status,
-      },
-    });
+export async function createGameWithTransaction(
+  transaction: Prisma.TransactionClient,
+  input: CreateGameInput,
+) {
+  const raffleNumber = await allocateRaffleNumber(transaction, input.shop);
+  return transaction.game.create({
+    data: {
+      shop: input.shop,
+      raffleNumber,
+      title: input.title,
+      description: input.description || null,
+      totalSpots: input.totalSpots,
+      pricePerSpot: input.pricePerSpot,
+      wheelCount: input.wheelCount,
+      secondChanceOffset: generateSecondChanceOffset(),
+      status: input.status,
+    },
   });
+}
+
+export async function createGame(input: CreateGameInput) {
+  return db.$transaction((transaction) =>
+    createGameWithTransaction(transaction, input),
+  );
 }
 
 type GameListOptions = {
