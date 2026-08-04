@@ -26,6 +26,8 @@ let playbackRequest = 0;
 let fadeTimer: number | null = null;
 let lastIdleTrackId = "";
 let lastSpinTrackId = "";
+let musicSessionSequence = 0;
+let activeMusicSession: number | null = null;
 
 const state: SpinMusicSnapshot = {
   idleTracks: [...discoveredIdleTracks],
@@ -70,13 +72,15 @@ function stopAudio() {
   if (audio) {
     audio.onloadedmetadata = null;
     audio.onerror = null;
-    audio.pause();
+    audio.loop = false;
+    try { audio.pause(); } catch { /* media cleanup is non-blocking */ }
     try { audio.currentTime = 0; } catch { /* unloaded media */ }
-    audio.src = "";
-    audio.load();
+    try { audio.removeAttribute("src"); } catch { /* detached media */ }
+    try { audio.load(); } catch { /* detached media */ }
   }
   audio = null;
   ownerId = null;
+  pendingElapsed = 0;
   state.activeTrackId = "";
   state.activePlaylist = null;
 }
@@ -88,7 +92,7 @@ async function playFromPlaylist(
   request: number,
   attempted = new Set<string>(),
 ): Promise<boolean> {
-  if (typeof window === "undefined" || request !== playbackRequest) return false;
+  if (typeof window === "undefined" || activeMusicSession === null || request !== playbackRequest) return false;
   const tracks = playlist === "IDLE" ? state.idleTracks : state.spinTracks;
   const available = tracks.filter((track) => !attempted.has(track.id));
   const previousId = playlist === "IDLE" ? lastIdleTrackId : lastSpinTrackId;
@@ -150,21 +154,22 @@ export function initializeSpinMusic() {
   } catch { /* defaults remain usable */ }
   state.status = state.muted ? "OFF" : "READY";
   emit();
-  if (!state.muted) void playIdleMusic();
 }
 
 export function playIdleMusic() {
+  if (activeMusicSession === null) return Promise.resolve(false);
   const request = ++playbackRequest;
   return playFromPlaylist("IDLE", "idle", 0, request);
 }
 
 export function startSpinMusic(wheelId: string, elapsedSeconds = 0) {
+  if (activeMusicSession === null) return Promise.resolve(false);
   const request = ++playbackRequest;
   return playFromPlaylist("SPIN", wheelId, elapsedSeconds, request);
 }
 
 export function finishSpinMusic(requestingOwner: string) {
-  if (typeof window === "undefined") return;
+  if (typeof window === "undefined" || activeMusicSession === null) return;
   if (ownerId && ownerId !== requestingOwner) return;
   const request = ++playbackRequest;
   clearFade();
@@ -191,11 +196,13 @@ export function finishSpinMusic(requestingOwner: string) {
 }
 
 export function previewSpinMusic() {
+  if (activeMusicSession === null) return Promise.resolve(false);
   const request = ++playbackRequest;
   return playFromPlaylist("SPIN", "preview", 0, request);
 }
 
 export async function resumeSpinMusic() {
+  if (activeMusicSession === null) return false;
   if (!audio) return playIdleMusic();
   try {
     await audio.play();
@@ -223,7 +230,29 @@ export function stopSpinMusic(requestingOwner?: string) {
 export function stopSpinMusicPreview() {
   if (ownerId !== "preview") return;
   stopSpinMusic("preview");
+  if (!state.muted && activeMusicSession !== null) void playIdleMusic();
+}
+
+export function stopAllWheelMusic() {
+  activeMusicSession = null;
+  playbackRequest += 1;
+  stopAudio();
+  state.status = state.muted ? "OFF" : "READY";
+  state.warning = null;
+  emit();
+}
+
+export function beginWheelMusicSession() {
+  initializeSpinMusic();
+  const session = ++musicSessionSequence;
+  activeMusicSession = session;
   if (!state.muted) void playIdleMusic();
+  return session;
+}
+
+export function endWheelMusicSession(session: number) {
+  if (activeMusicSession !== session) return;
+  stopAllWheelMusic();
 }
 
 export function setSpinMusicVolume(volume: number) {
@@ -245,7 +274,11 @@ export function setSpinMusicMuted(muted: boolean) {
   }
   state.status = "READY";
   emit();
-  void playIdleMusic();
+  if (activeMusicSession !== null) void playIdleMusic();
+}
+
+export function wheelMusicSessionIsActive() {
+  return activeMusicSession !== null;
 }
 
 export function getSpinMusicSnapshot(): SpinMusicSnapshot { return snapshot; }

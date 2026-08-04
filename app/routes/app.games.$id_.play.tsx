@@ -35,7 +35,9 @@ import type {
 import { useFullscreen } from "../hooks/useFullscreen";
 import { useGameModeShortcuts } from "../hooks/useGameModeShortcuts";
 import { useSoundPreference } from "../hooks/useSoundPreference";
+import { useWheelMusicSession } from "../hooks/useWheelMusicSession";
 import { adjacentWheelId, defaultGameModeActiveWheelId, nextUnfinishedWheelId, unfinishedWheelIds } from "../lib/game-mode-operator";
+import { stopAllWheelMusic } from "../lib/wheel-music";
 import {
   ASYLUM_THEMES,
   type AsylumThemeKey,
@@ -356,6 +358,7 @@ export default function GameModePage() {
 
   const { game, run, results, secondChance, eligiblePrizeWheels, prizeClaims } =
     useLoaderData<typeof loader>();
+  useWheelMusicSession(`game:${game.id}:play`);
 
   const orderedWheels = useMemo(
     () => run?.rounds.flatMap((round) => round.wheels) ?? [],
@@ -542,11 +545,14 @@ export default function GameModePage() {
 
         <div className="studio-toolbar">
           <div>
-            <Link to={`/app/games/${game.id}`}>
+            <Link to={`/app/games/${game.id}`} onClick={stopAllWheelMusic}>
               ← Return to Game Control
             </Link>
             {run ? (
-              <button type="button" onClick={() => navigate(`/app/games/${game.id}/broadcast`)}>
+              <button type="button" onClick={() => {
+                stopAllWheelMusic();
+                navigate(`/app/games/${game.id}/broadcast`);
+              }}>
                 OPEN BROADCAST MODE
               </button>
             ) : null}
@@ -775,7 +781,7 @@ export function ErrorBoundary() {
           {error.stack}
         </pre>
       ) : null}
-      <a href="/app">
+      <a href="/app" onClick={stopAllWheelMusic}>
         Return to dashboard
       </a>
     </main>

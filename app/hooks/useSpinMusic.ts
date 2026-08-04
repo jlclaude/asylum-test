@@ -4,6 +4,7 @@ import {
   finishSpinMusic, getSpinMusicSnapshot, initializeSpinMusic, playIdleMusic,
   previewSpinMusic, resumeSpinMusic, setSpinMusicMuted, setSpinMusicVolume, startSpinMusic,
   stopSpinMusic, stopSpinMusicPreview, subscribeToSpinMusic,
+  stopAllWheelMusic,
 } from "../lib/wheel-music";
 
 const SERVER_SNAPSHOT: SpinMusicSnapshot = {
@@ -32,6 +33,7 @@ export function useSpinMusic() {
     resume: resumeSpinMusic,
     stop: stopSpinMusic,
     stopPreview: stopSpinMusicPreview,
+    stopAll: stopAllWheelMusic,
     startSpin: startSpinMusic,
     finishSpin: finishSpinMusic,
     playIdle: playIdleMusic,

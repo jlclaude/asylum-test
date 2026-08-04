@@ -1,6 +1,7 @@
 import { Link } from "react-router";
 import type { GameResults } from "./types";
 import { formatOrdinal } from "../../lib/ordinal";
+import { stopAllWheelMusic } from "../../lib/wheel-music";
 
 type Props = {
   gameId: string;
@@ -54,7 +55,7 @@ export function GameCompletionCard({ gameId, gameTitle, results, secondChance = 
           </div>
         </section>
       ) : null}
-      <Link className="game-results-action" to={`/app/games/${gameId}`}>Return to Game Center</Link>
+      <Link className="game-results-action" to={`/app/games/${gameId}`} onClick={stopAllWheelMusic}>Return to Game Center</Link>
     </section>
   );
 }

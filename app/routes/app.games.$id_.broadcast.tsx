@@ -13,9 +13,11 @@ import type { WheelData, WheelOperatorAction, WheelOperatorHandle, WheelOperator
 import { useFullscreen } from "../hooks/useFullscreen";
 import { useGameModeShortcuts } from "../hooks/useGameModeShortcuts";
 import { useSoundPreference } from "../hooks/useSoundPreference";
+import { useWheelMusicSession } from "../hooks/useWheelMusicSession";
 import { ASYLUM_THEMES, type AsylumThemeKey } from "../lib/asylum-themes";
 import { adjacentWheelId, defaultBroadcastActiveWheelId, nextUnfinishedWheelId } from "../lib/game-mode-operator";
 import { secondChanceResultForWheel } from "../lib/second-chance";
+import { stopAllWheelMusic } from "../lib/wheel-music";
 import { action as gameModeAction, loader as gameModeLoader } from "./app.games.$id_.play";
 
 import "../styles/asylum-brand.css";
@@ -29,6 +31,7 @@ export { ErrorBoundary } from "./app.games.$id_.play";
 
 export default function BroadcastModePage() {
   const { game, run, results, secondChance } = useLoaderData<typeof loader>();
+  useWheelMusicSession(`game:${game.id}:broadcast`);
   const fullscreenTarget = useRef<HTMLElement>(null);
   const wheelRef = useRef<WheelOperatorHandle>(null);
   const acceptFetcher = useFetcher();
@@ -116,7 +119,7 @@ export default function BroadcastModePage() {
         <BroadcastGameHeader title={game.title} raffleCode={game.raffleCode} status={game.status} />
 
         <div className="broadcast-toolbar">
-          <a href={`/app/games/${game.id}/play`}>← Normal Game Mode</a>
+          <a href={`/app/games/${game.id}/play`} onClick={stopAllWheelMusic}>← Normal Game Mode</a>
           <select value={themeKey} onChange={(event) => setThemeKey(event.target.value as AsylumThemeKey)} aria-label="Asylum theme">
             {Object.values(ASYLUM_THEMES).map((option) => <option key={option.key} value={option.key}>{option.label}</option>)}
           </select>

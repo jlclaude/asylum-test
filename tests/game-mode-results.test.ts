@@ -15,10 +15,16 @@ import { getContainmentLabel, getWheelDisplayLabel } from "../app/lib/wheel-labe
 import { idleRotationAt, remainingSpinSeconds, wheelPositionAt, wheelSpinTotalDegrees } from "../app/lib/wheel-effects.client.ts";
 import { getWinningRestRotation, normalizeDegrees } from "../app/lib/wheel-geometry.ts";
 import {
+  beginWheelMusicSession,
   chooseRandomTrack,
+  endWheelMusicSession,
   getSpinMusicSnapshot,
   loopingPlaybackOffset,
+  setSpinMusicMuted,
+  setSpinMusicVolume,
+  stopAllWheelMusic,
   subscribeToSpinMusic,
+  wheelMusicSessionIsActive,
 } from "../app/lib/wheel-music.ts";
 import { broadcastCountdownLabels, shouldAnimateBroadcastCountdown } from "../app/lib/broadcast-countdown.ts";
 import { normalizeDashboardGameCounts } from "../app/lib/dashboard-game-counts.ts";
@@ -795,4 +801,26 @@ test("music randomization avoids immediate repeats when alternatives exist", () 
   assert.notEqual(chooseRandomTrack(tracks, "one", () => 0)?.id, "one");
   assert.equal(chooseRandomTrack([{ id: "only" }], "only", () => 0)?.id, "only");
   assert.equal(chooseRandomTrack([], "", () => 0), null);
+});
+
+test("wheel music sessions stop on route exit without losing preferences", () => {
+  const original = getSpinMusicSnapshot();
+  setSpinMusicVolume(0.45);
+  setSpinMusicMuted(true);
+
+  const first = beginWheelMusicSession();
+  const second = beginWheelMusicSession();
+  assert.equal(wheelMusicSessionIsActive(), true);
+
+  endWheelMusicSession(first);
+  assert.equal(wheelMusicSessionIsActive(), true, "a stale route cleanup cannot stop the current route");
+
+  endWheelMusicSession(second);
+  assert.equal(wheelMusicSessionIsActive(), false);
+  assert.equal(getSpinMusicSnapshot().volume, 0.45);
+  assert.equal(getSpinMusicSnapshot().muted, true);
+
+  setSpinMusicVolume(original.volume);
+  setSpinMusicMuted(original.muted);
+  stopAllWheelMusic();
 });

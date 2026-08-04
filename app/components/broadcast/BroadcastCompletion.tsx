@@ -1,6 +1,7 @@
 import { Link } from "react-router";
 import { GameCompletionCard } from "../results/GameCompletionCard";
 import type { GameResults } from "../results/types";
+import { stopAllWheelMusic } from "../../lib/wheel-music";
 
 export function BroadcastCompletion({ gameId, gameTitle, results, secondChance }: {
   gameId: string;
@@ -16,7 +17,7 @@ export function BroadcastCompletion({ gameId, gameTitle, results, secondChance }
   return (
     <div className="broadcast-completion">
       <GameCompletionCard gameId={gameId} gameTitle={gameTitle} results={results} secondChance={secondChance} />
-      <Link className="game-results-action" to={`/app/games/${gameId}#game-results`}>View completed results</Link>
+      <Link className="game-results-action" to={`/app/games/${gameId}#game-results`} onClick={stopAllWheelMusic}>View completed results</Link>
     </div>
   );
 }
