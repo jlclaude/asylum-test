@@ -215,9 +215,30 @@ test("Host login loader and rendered form share one matching CSRF field", async 
     createElement(RoutesStub, { initialEntries: ["/host/login?expired=1"] }),
   );
   const formMarkup = markup.match(/<form[\s\S]*?<\/form>/)?.[0] ?? "";
+  assert.equal((markup.match(/<form\b/g) ?? []).length, 1);
+  assert.match(formMarkup, /method="post"/);
   assert.match(formMarkup, /action="\/host\/login"/);
   assert.match(formMarkup, new RegExp(`name="${HOST_CSRF_FIELD_NAME}"`));
   assert.match(formMarkup, new RegExp(`value="${result.data.csrfToken}"`));
+  assert.match(formMarkup, /name="email"/);
+  assert.match(formMarkup, /name="password"/);
+  assert.match(formMarkup, /<button[^>]*>Sign in<\/button>/);
+
+  const submittedFields = new FormData();
+  for (const input of formMarkup.matchAll(/<input\b[^>]*>/g)) {
+    const name = input[0].match(/\bname="([^"]+)"/)?.[1];
+    const type = input[0].match(/\btype="([^"]+)"/)?.[1] ?? "text";
+    if (!name || input[0].includes(" disabled") || type === "checkbox")
+      continue;
+    submittedFields.append(
+      name,
+      input[0].match(/\bvalue="([^"]*)"/)?.[1] ?? "",
+    );
+  }
+  assert.equal(
+    submittedFields.get(HOST_CSRF_FIELD_NAME),
+    result.data.csrfToken,
+  );
 });
 
 test("Host login rejects missing, misnamed, and incorrect CSRF form values without logging tokens", async () => {

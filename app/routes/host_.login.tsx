@@ -1,7 +1,6 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import {
   data,
-  Form,
   redirect,
   useActionData,
   useLoaderData,
@@ -45,6 +44,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 export async function action({ request }: ActionFunctionArgs) {
   const formData = await request.formData();
+  if (process.env.HOST_LOGIN_DEBUG === "1") {
+    console.info("Host login form fields", {
+      fields: Array.from(new Set(formData.keys())),
+    });
+  }
   const origin = checkHostRequestOrigin(request);
   const csrf = await checkHostLoginCsrf(
     request,
@@ -162,7 +166,7 @@ export function HostLoginForm({
             {error}
           </p>
         ) : null}
-        <Form className="host-form" method="post" action="/host/login">
+        <form className="host-form" method="post" action="/host/login">
           <input type="hidden" name={HOST_CSRF_FIELD_NAME} value={csrfToken} />
           <label>
             Email
@@ -184,7 +188,7 @@ export function HostLoginForm({
             </span>
           </label>
           <button className="host-button">Sign in</button>
-        </Form>
+        </form>
       </section>
     </main>
   );
