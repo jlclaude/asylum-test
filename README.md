@@ -198,6 +198,25 @@ Using pnpm:
 pnpm run build
 ```
 
+### Standalone Host Portal
+
+The embedded Shopify application remains under `/app`. Authorized operators can use the independent Host Portal at `/host/login`; Host cookies never authenticate `/app` routes.
+
+Required production variables:
+
+```shell
+HOST_PORTAL_SHOP="store-name.myshopify.com"
+HOST_SESSION_SECRET="independent-random-production-secret"
+```
+
+`HOST_PORTAL_SHOP` is resolved on the server and cannot be selected through a browser form. `HOST_SESSION_SECRET` is used only when hashing network identifiers; do not reuse `SHOPIFY_API_SECRET` or `PRIZE_CLAIM_ENCRYPTION_KEY`. Generate it independently and keep it in Render environment configuration.
+
+Create the first OWNER from the authenticated Shopify Admin Settings page. Public registration is intentionally unavailable. Further accounts, role changes, session revocation, and one-time password-reset links are managed at `/host/users`.
+
+Standalone collection and product operations use the shop's stored offline Shopify session through server-side Admin GraphQL. If that session is unavailable or cannot refresh, reopen the embedded app through Shopify Admin to reauthorize it. Shopify tokens are never stored in Host Portal tables or returned to browser loaders.
+
+Host sessions use an opaque 256-bit token, store only its SHA-256 hash, enforce inactivity and absolute expiry, and use a separate CSRF token. Production cookies are `HttpOnly`/`Secure` where applicable, `SameSite`, host-only, and independently revocable. TOTP/passkey authentication is intentionally deferred to a security follow-up; no custom PIN substitute is used.
+
 ## Hosting
 
 When you're ready to set up your app in production, you can follow [our deployment documentation](https://shopify.dev/docs/apps/launch/deployment) to host it externally. From there, you have a few options:

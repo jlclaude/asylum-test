@@ -35,6 +35,95 @@ model ShopSettings {
   updatedAt           DateTime @updatedAt
 }
 
+model HostUser {
+  id                 String    @id @default(cuid())
+  shop               String
+  email              String
+  displayName        String
+  passwordHash       String
+  role               HostRole  @default(HOST)
+  isActive           Boolean   @default(true)
+  failedLoginCount   Int       @default(0)
+  lockedUntil        DateTime?
+  passwordChangedAt  DateTime?
+  passwordMustChange Boolean   @default(false)
+  lastLoginAt        DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  sessions    HostSession[]
+  resetTokens HostPasswordResetToken[]
+  auditEvents HostAuditEvent[]         @relation("HostAuditActor")
+
+  @@unique([shop, email])
+  @@index([shop])
+  @@index([shop, role, isActive])
+}
+
+model HostSession {
+  id            String    @id @default(cuid())
+  hostUserId    String
+  tokenHash     String    @unique
+  csrfTokenHash String
+  expiresAt     DateTime
+  lastSeenAt    DateTime  @default(now())
+  createdAt     DateTime  @default(now())
+  revokedAt     DateTime?
+  userAgent     String?
+  ipHash        String?
+
+  hostUser HostUser @relation(fields: [hostUserId], references: [id], onDelete: Cascade)
+
+  @@index([hostUserId])
+  @@index([expiresAt])
+}
+
+model HostPasswordResetToken {
+  id         String    @id @default(cuid())
+  hostUserId String
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  hostUser HostUser @relation(fields: [hostUserId], references: [id], onDelete: Cascade)
+
+  @@index([hostUserId])
+  @@index([expiresAt])
+}
+
+model HostLoginAttempt {
+  id              String    @id @default(cuid())
+  identifierHash  String
+  ipHash          String
+  windowStartedAt DateTime
+  failedCount     Int       @default(0)
+  blockedUntil    DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([identifierHash, ipHash, windowStartedAt])
+  @@index([blockedUntil])
+}
+
+model HostAuditEvent {
+  id           String   @id @default(cuid())
+  shop         String
+  actorId      String?
+  actorLabel   String?
+  action       String
+  targetType   String?
+  targetId     String?
+  metadataJson String?
+  createdAt    DateTime @default(now())
+
+  actor HostUser? @relation("HostAuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([shop, createdAt])
+  @@index([actorId, createdAt])
+  @@index([targetType, targetId])
+}
+
 model Game {
   id                 String     @id @default(cuid())
   shop               String
@@ -272,4 +361,11 @@ enum PrizeClaimStatus {
   FULFILLED
   EXPIRED
   REVOKED
+}
+
+enum HostRole {
+  OWNER
+  HOST
+  MODERATOR
+  VIEWER
 }

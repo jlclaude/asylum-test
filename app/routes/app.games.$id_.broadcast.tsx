@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from "react";
-import { useFetcher, useLoaderData } from "react-router";
+import { useFetcher, useLoaderData, useLocation } from "react-router";
 
 import { BroadcastCompletion } from "../components/broadcast/BroadcastCompletion";
 import { SpinMusicControls } from "../components/audio/SpinMusicControls";
@@ -30,7 +30,9 @@ export const action = gameModeAction;
 export { ErrorBoundary } from "./app.games.$id_.play";
 
 export default function BroadcastModePage() {
-  const { game, run, results, secondChance } = useLoaderData<typeof loader>();
+  const location = useLocation();
+  const routeBase = location.pathname.startsWith("/host/") ? "/host" as const : "/app" as const;
+  const { game, run, results, secondChance, csrfToken } = useLoaderData<typeof loader>();
   useWheelMusicSession(`game:${game.id}:broadcast`);
   const fullscreenTarget = useRef<HTMLElement>(null);
   const wheelRef = useRef<WheelOperatorHandle>(null);
@@ -52,7 +54,7 @@ export default function BroadcastModePage() {
   const acceptResult = useCallback((wheelId: string) => {
     if (acceptedIdsRef.current.has(wheelId)) return;
     acceptedIdsRef.current.add(wheelId);
-    acceptFetcher.submit({ intent: "accept-result", wheelId }, { method: "post" });
+    acceptFetcher.submit({ intent: "accept-result", wheelId, ...(csrfToken ? { csrfToken } : {}) }, { method: "post" });
     setAcceptedIds((current) => new Set(current).add(wheelId));
     const nextId = nextUnfinishedWheelId(wheels, wheelId);
     if (nextId) {
@@ -63,7 +65,7 @@ export default function BroadcastModePage() {
       setFinalResultAccepted(true);
       setMessage("All persisted results accepted.");
     }
-  }, [acceptFetcher, wheels]);
+  }, [acceptFetcher, csrfToken, wheels]);
 
   const runAction = useCallback((operatorAction: WheelOperatorAction): WheelOperatorResult => (
     wheelRef.current?.runAction(operatorAction) ?? { triggered: false, message: "Active wheel controls are unavailable." }
@@ -119,7 +121,7 @@ export default function BroadcastModePage() {
         <BroadcastGameHeader title={game.title} raffleCode={game.raffleCode} status={game.status} />
 
         <div className="broadcast-toolbar">
-          <a href={`/app/games/${game.id}/play`} onClick={stopAllWheelMusic}>← Normal Game Mode</a>
+          <a href={`${routeBase}/games/${game.id}/play`} onClick={stopAllWheelMusic}>← Normal Game Mode</a>
           <select value={themeKey} onChange={(event) => setThemeKey(event.target.value as AsylumThemeKey)} aria-label="Asylum theme">
             {Object.values(ASYLUM_THEMES).map((option) => <option key={option.key} value={option.key}>{option.label}</option>)}
           </select>
@@ -151,6 +153,7 @@ export default function BroadcastModePage() {
               onSelect={setActiveId}
               onOperatorStateChange={setOperatorState}
               onCompleted={() => setMessage("Result persisted. Operator acceptance required.")}
+              csrfToken={csrfToken}
             />
           </section>
         ) : (
@@ -168,7 +171,7 @@ export default function BroadcastModePage() {
         ) : null}
 
         <BroadcastWheelRail wheels={wheels} activeId={activeWheel?.id ?? null} onSelect={setActiveId} />
-        {results?.completedAt && finalResultAccepted ? <BroadcastCompletion gameId={game.id} gameTitle={game.title} results={results} secondChance={secondChance} /> : null}
+        {results?.completedAt && finalResultAccepted ? <BroadcastCompletion gameId={game.id} gameTitle={game.title} results={results} secondChance={secondChance} routeBase={routeBase} /> : null}
         <GameModeShortcuts message={message} />
 
         <footer className="studio-statusbar broadcast-statusbar">

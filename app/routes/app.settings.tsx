@@ -5,18 +5,33 @@ import { PaymentInstructionsCard } from "../components/payment/PaymentInstructio
 import { PAYMENT_INSTRUCTIONS_MAX_LENGTH, validatePaymentInstructions } from "../lib/payment-instructions";
 import { getShopSettings, updatePaymentInstructions } from "../models/shop-settings.server";
 import { authenticate } from "../shopify.server";
+import db from "../db.server";
+import { createHostUser } from "../models/host-user.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const { session } = await authenticate.admin(request);
   const settings = await getShopSettings(session.shop);
-  return { paymentInstructions: settings?.paymentInstructions ?? "" };
+  const hostOwnerCount = await db.hostUser.count({ where: { shop: session.shop, role: "OWNER", isActive: true } });
+  return { paymentInstructions: settings?.paymentInstructions ?? "", hostOwnerExists: hostOwnerCount > 0 };
 }
 
-type ActionData = { error?: string; success?: string; value: string };
+type ActionData = { error?: string; success?: string; value: string; intent?: string };
 
 export async function action({ request }: ActionFunctionArgs): Promise<ActionData> {
   const { session } = await authenticate.admin(request);
   const formData = await request.formData();
+  const intent = String(formData.get("intent") ?? "save-payment-instructions");
+  if (intent === "create-host-owner") {
+    const existingValue = (await getShopSettings(session.shop))?.paymentInstructions ?? "";
+    const password = String(formData.get("password") ?? "");
+    if (password !== String(formData.get("passwordConfirmation") ?? "")) return { intent, error: "Passwords do not match.", value: existingValue };
+    try {
+      await createHostUser({ shop: session.shop, email: String(formData.get("email") ?? ""), displayName: String(formData.get("displayName") ?? ""), password, role: "OWNER", bootstrap: true });
+      return { intent, success: "Host Portal owner created.", value: existingValue };
+    } catch (error) {
+      return { intent, error: error instanceof Error ? error.message : "The Host Portal owner could not be created.", value: existingValue };
+    }
+  }
   const validation = validatePaymentInstructions(String(formData.get("paymentInstructions") ?? ""));
   if (validation.error) return { error: validation.error, value: validation.value };
 
@@ -50,6 +65,7 @@ export default function SettingsPage() {
       {actionData?.success ? <p className="settings-message settings-success" role="status">{actionData.success}</p> : null}
       <button className="settings-button" disabled={saving}>{saving ? "Saving…" : "Save Payment Instructions"}</button>
     </Form></section><PaymentInstructionsCard instructions={value.trim() || null} preview /></div>
+    <section className="settings-backups"><h2>Host Portal Access</h2>{loaderData.hostOwnerExists ? <p>An active Host Portal OWNER is configured for this shop. Additional accounts are managed from the standalone portal.</p> : <Form className="settings-form" method="post"><input type="hidden" name="intent" value="create-host-owner"/><label>Owner display name<input name="displayName" required maxLength={100}/></label><label>Owner email<input name="email" type="email" required/></label><label>Password<input name="password" type="password" minLength={12} maxLength={128} required/></label><label>Confirm password<input name="passwordConfirmation" type="password" minLength={12} maxLength={128} required/></label>{actionData?.intent === "create-host-owner" && actionData.error ? <p className="settings-message settings-error" role="alert">{actionData.error}</p> : null}{actionData?.intent === "create-host-owner" && actionData.success ? <p className="settings-message settings-success" role="status">{actionData.success}</p> : null}<button className="settings-button">Create Owner Account</button></Form>}</section>
     <section className="settings-backups"><h2>Backup &amp; Export</h2><p>Create an emergency backup, export raffle records, or preview an empty-shop restore.</p><Link to="/app/backups">Open Backup &amp; Export</Link></section>
   </div></main></>;
 }

@@ -14,7 +14,15 @@ export default async function handleRequest(
   responseHeaders: Headers,
   reactRouterContext: EntryContext
 ) {
-  addDocumentResponseHeaders(request, responseHeaders);
+  const pathname = new URL(request.url).pathname;
+  if (pathname.startsWith("/app") || pathname.startsWith("/auth")) {
+    addDocumentResponseHeaders(request, responseHeaders);
+  } else if (pathname === "/host" || pathname.startsWith("/host/")) {
+    responseHeaders.set("Content-Security-Policy", "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; img-src 'self' data: https:; media-src 'self'; font-src 'self' data: https://cdn.shopify.com; style-src 'self' 'unsafe-inline' https://cdn.shopify.com; script-src 'self' 'unsafe-inline'; connect-src 'self'");
+    responseHeaders.set("Referrer-Policy", "same-origin");
+    responseHeaders.set("X-Content-Type-Options", "nosniff");
+    responseHeaders.set("Cache-Control", "no-store, private");
+  }
   const userAgent = request.headers.get("user-agent");
   const callbackName = isbot(userAgent ?? '')
     ? "onAllReady"
