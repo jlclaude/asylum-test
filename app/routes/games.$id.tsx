@@ -133,7 +133,7 @@ export async function action({
 
   if (facebookHandle.length > 100) {
     return {
-      error: "Your Facebook username is too long.",
+      error: "Facebook @username must be 100 characters or fewer.",
     };
   }
 
@@ -516,6 +516,12 @@ const styles = `
     font-weight: 750;
   }
 
+  .public-field small {
+    color: #96979d;
+    font-size: 11px;
+    line-height: 1.45;
+  }
+
   .public-input,
   .public-textarea {
     width: 100%;
@@ -890,7 +896,7 @@ export default function PublicGamePage() {
 
                 <div className="public-field">
                   <label htmlFor="facebookHandle">
-                    Facebook username
+                    Facebook @username (optional)
                   </label>
 
                   <input
@@ -899,9 +905,13 @@ export default function PublicGamePage() {
                     name="facebookHandle"
                     type="text"
                     maxLength={100}
-                    placeholder="@username"
+                    placeholder="@username (optional)"
                     disabled={!claimsOpen || isSubmitting}
                   />
+                  <small>
+                    Optional. Used only to help identify your Facebook profile
+                    if you know it.
+                  </small>
                 </div>
 
                 <div className="public-field">

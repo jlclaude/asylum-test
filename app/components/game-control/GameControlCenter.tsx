@@ -135,6 +135,7 @@ const styles = `
   .control-form { display:grid; gap:13px; }
   .control-field { display:grid; gap:6px; }
   .control-field label { font-size:12px; font-weight:750; }
+  .control-field small { color:#8f9096; font-size:11px; line-height:1.45; }
   .control-input,.control-textarea { width:100%; border:1px solid #39393e; border-radius:9px; outline:none; color:white; background:#111113; font:inherit; }
   .control-input { height:42px; padding:0 11px; }
   .control-textarea { min-height:78px; padding:11px; resize:vertical; }
@@ -440,7 +441,7 @@ export function GameControlCenter({
                   type="search"
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Search by name or Facebook username"
+                  placeholder="Search by name or Facebook @username"
                 />
               </div>
               <div className="control-filters">
@@ -496,7 +497,9 @@ export function GameControlCenter({
                                 {claim.quantity === 1 ? "spot" : "spots"}
                               </span>
                               {claim.facebookHandle ? (
-                                <span>{claim.facebookHandle}</span>
+                                <span>
+                                  Facebook @username (optional): {claim.facebookHandle}
+                                </span>
                               ) : null}
                               <span>{formatDate(claim.createdAt)}</span>
                             </p>
@@ -833,19 +836,25 @@ export function GameControlCenter({
                     />
                   </div>
                   <div className="control-field">
-                    <label htmlFor="facebookHandle">Facebook username</label>
+                    <label htmlFor="facebookHandle">
+                      Facebook @username (optional)
+                    </label>
                     <input
                       className="control-input"
                       id="facebookHandle"
                       name="facebookHandle"
                       type="text"
-                      placeholder="@username"
+                      placeholder="@username (optional)"
                       disabled={
                         isSubmitting ||
                         game.status !== "OPEN" ||
                         remaining === 0
                       }
                     />
+                    <small>
+                      Optional. Used only to help identify your Facebook
+                      profile if you know it.
+                    </small>
                   </div>
                   <div className="control-field">
                     <label htmlFor="quantity">Number of spots</label>
