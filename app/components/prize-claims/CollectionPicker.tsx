@@ -81,6 +81,11 @@ export function CollectionPicker({
     loadCollections("");
   }
 
+  function runSearch() {
+    setCollections([]);
+    loadCollections(search);
+  }
+
   return (
     <div className="prize-collection-choice">
       <span>Shopify collection</span>
@@ -119,13 +124,7 @@ export function CollectionPicker({
                 ×
               </button>
             </header>
-            <form
-              onSubmit={(event) => {
-                event.preventDefault();
-                setCollections([]);
-                loadCollections(search);
-              }}
-            >
+            <div className="prize-collection-search" role="search">
               <label>
                 Search collections
                 <input
@@ -133,9 +132,19 @@ export function CollectionPicker({
                   type="search"
                   value={search}
                   onChange={(event) => setSearch(event.currentTarget.value)}
+                  onKeyDown={(event) => {
+                    if (event.key !== "Enter") return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    runSearch();
+                  }}
                 />
               </label>
-              <button type="submit" disabled={fetcher.state !== "idle"}>
+              <button
+                type="button"
+                disabled={fetcher.state !== "idle"}
+                onClick={runSearch}
+              >
                 Search
               </button>
               <button
@@ -148,11 +157,18 @@ export function CollectionPicker({
               >
                 Clear
               </button>
-            </form>
+            </div>
             {fetcher.data?.error ? (
-              <p className="prize-message prize-error" role="alert">
-                {fetcher.data.error}
-              </p>
+              <div className="prize-message prize-error" role="alert">
+                <p>{fetcher.data.error}</p>
+                <button
+                  type="button"
+                  disabled={fetcher.state !== "idle"}
+                  onClick={runSearch}
+                >
+                  Retry
+                </button>
+              </div>
             ) : null}
             {fetcher.data?.scopeNotice ? (
               <p className="prize-message" role="status">

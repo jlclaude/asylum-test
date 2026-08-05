@@ -56,3 +56,34 @@ test("Host picker failures remain visible and never expose raw script HTML", () 
   );
   assert.doesNotMatch(hostResource, /<script|app-bridge\.js/);
 });
+
+test("collection search cannot submit the surrounding prize-claim form", () => {
+  assert.doesNotMatch(sharedPicker, /<form|<\/form>/);
+  assert.match(sharedPicker, /className="prize-collection-search" role="search"/);
+  assert.match(
+    sharedPicker,
+    /type="button"[\s\S]*?onClick=\{runSearch\}[\s\S]*?>[\s\S]*?Search/,
+  );
+  assert.match(
+    sharedPicker,
+    /event\.key !== "Enter"[\s\S]*?event\.preventDefault\(\)[\s\S]*?event\.stopPropagation\(\)[\s\S]*?runSearch\(\)/,
+  );
+});
+
+test("search, clear, retry, select, and close controls are non-submitting", () => {
+  const buttonTypes = [...sharedPicker.matchAll(/<button\s+([\s\S]*?)>/g)].map(
+    (match) => match[1],
+  );
+  assert.ok(buttonTypes.length >= 6);
+  for (const attributes of buttonTypes) {
+    assert.match(attributes, /type="button"/);
+    assert.doesNotMatch(attributes, /form=/);
+  }
+});
+
+test("search and clear use only the configured collection resource GET", () => {
+  assert.match(sharedPicker, /fetcher\.load\(`\$\{resourceUrl\}\?\$\{query\.toString\(\)\}`\)/);
+  assert.doesNotMatch(sharedPicker, /fetcher\.submit|method:\s*"post"/i);
+  assert.doesNotMatch(sharedPicker, /\/host\/games\/|\/app\/games\//);
+  assert.match(sharedPicker, /setSearch\(""\)[\s\S]*?loadCollections\(""\)/);
+});
