@@ -1,15 +1,17 @@
-import { Prisma } from "@prisma/client";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
-import { Form, Link, useActionData, useLoaderData, useNavigation } from "react-router";
-import { TemplateFormFields } from "../components/templates/TemplateFormFields";
-import { gameTemplateValues, validateGameTemplate } from "../lib/game-template-validation";
 import {
-  createGameTemplate,
-  deleteGameTemplate,
-  duplicateGameTemplate,
-  getGameTemplatesForShop,
-  updateGameTemplate,
-} from "../models/game-template.server";
+  Form,
+  Link,
+  useActionData,
+  useLoaderData,
+  useNavigation,
+} from "react-router";
+import { TemplateFormFields } from "../components/templates/TemplateFormFields";
+import { getGameTemplatesForShop } from "../models/game-template.server";
+import {
+  handleGameTemplateAction,
+  type GameTemplateActionData,
+} from "../services/game-template-actions.server";
 import { authenticate } from "../shopify.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -28,53 +30,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
   };
 }
 
-type ActionData = {
-  intent: string;
-  templateId?: string;
-  success?: string;
-  errors?: ReturnType<typeof validateGameTemplate>["errors"];
-  values?: ReturnType<typeof gameTemplateValues>;
-};
-
-export async function action({ request }: ActionFunctionArgs): Promise<ActionData> {
+export async function action({ request }: ActionFunctionArgs) {
   const { session } = await authenticate.admin(request);
   const formData = await request.formData();
-  const intent = String(formData.get("intent") ?? "");
-  const templateId = String(formData.get("templateId") ?? "");
-
-  try {
-    if (intent === "delete") {
-      const result = await deleteGameTemplate(templateId, session.shop);
-      return result.count ? { intent, success: "Template deleted." } : { intent, errors: { form: "Template not found." } };
-    }
-    if (intent === "duplicate") {
-      const duplicated = await duplicateGameTemplate(templateId, session.shop);
-      return duplicated ? { intent, success: `Created ${duplicated.name}.` } : { intent, errors: { form: "Template not found." } };
-    }
-
-    const values = gameTemplateValues(formData);
-    const validation = validateGameTemplate(values);
-    if (!validation.input) return { intent, templateId, errors: validation.errors, values };
-
-    if (intent === "create") {
-      await createGameTemplate(session.shop, validation.input);
-      return { intent, success: "Template created." };
-    }
-    if (intent === "update") {
-      const updated = await updateGameTemplate(templateId, session.shop, validation.input);
-      return updated ? { intent, templateId, success: "Template updated." } : { intent, templateId, errors: { form: "Template not found." }, values };
-    }
-    return { intent, errors: { form: "Unknown template action." }, values };
-  } catch (error) {
-    const duplicate = error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
-    if (!duplicate) console.error("Template action failed:", error);
-    return {
-      intent,
-      templateId,
-      errors: { form: duplicate ? "A template with this name already exists for this shop." : "The template could not be saved." },
-      values: intent === "create" || intent === "update" ? gameTemplateValues(formData) : undefined,
-    };
-  }
+  return handleGameTemplateAction(session.shop, formData);
 }
 
 const styles = `
@@ -83,26 +42,204 @@ const styles = `
 
 export default function TemplatesPage() {
   const { templates, sort } = useLoaderData<typeof loader>();
-  const actionData = useActionData<ActionData>();
+  const actionData = useActionData<GameTemplateActionData>();
   const navigation = useNavigation();
   const busy = navigation.state === "submitting";
-  return <><style dangerouslySetInnerHTML={{ __html: styles }} /><main className="templates-page"><div className="templates-shell">
-    <div className="templates-top"><Link to="/app">← Dashboard</Link><Link to="/app/games/new">Create game from template</Link></div>
-    <header className="templates-heading"><div><p>Reusable configurations</p><h1>Game Templates</h1><p>Templates store setup only—never claims, payments, wheels, or results.</p></div><Form method="get"><label htmlFor="template-sort">Sort </label><select id="template-sort" name="sort" defaultValue={sort} onChange={(event) => event.currentTarget.form?.requestSubmit()}><option value="name">Name</option><option value="recent">Recently updated</option></select></Form></header>
-    {actionData?.success ? <div className="template-message" role="status">{actionData.success}</div> : null}
-    <div className="templates-grid"><section className="template-card"><h2>Create template</h2>
-      {actionData?.intent === "create" && actionData.errors?.form ? <p className="template-error" role="alert">{actionData.errors.form}</p> : null}
-      <Form method="post"><input type="hidden" name="intent" value="create" /><TemplateFormFields idPrefix="new-template" values={actionData?.intent === "create" ? actionData.values : { wheelCount: "2", initialStatus: "OPEN" }} errors={actionData?.intent === "create" ? actionData.errors : undefined} /><div className="template-actions"><button className="template-button template-button-primary" disabled={busy}>Save template</button></div></Form>
-    </section><section className="template-list" aria-label="Saved templates">
-      {templates.length === 0 ? <div className="template-card template-empty">No templates saved yet.</div> : templates.map((template) => {
-        const editResponse = actionData?.intent === "update" && actionData.templateId === template.id ? actionData : undefined;
-        return <article className="template-card" key={template.id}><h3>{template.name} {template.isDefault ? <span className="template-default">· DEFAULT</span> : null}</h3><div className="template-meta"><span>{template.totalSpots} spots</span><span>${template.pricePerSpot}</span><span>{template.wheelCount} name wheels</span><span>{template.initialStatus}</span></div>
-          {template.defaultGameDescription ? <div><strong>Default game description preview</strong><p className="template-description-preview">{template.defaultGameDescription}</p></div> : null}
-          {editResponse?.errors?.form ? <p className="template-error" role="alert">{editResponse.errors.form}</p> : null}
-          <details><summary>Edit configuration</summary><Form method="post"><input type="hidden" name="intent" value="update" /><input type="hidden" name="templateId" value={template.id} /><TemplateFormFields idPrefix={`template-${template.id}`} errors={editResponse?.errors} values={editResponse?.values ?? { name: template.name, description: template.description ?? "", defaultGameTitle: template.defaultGameTitle ?? "", defaultGameDescription: template.defaultGameDescription ?? "", pricePerSpot: template.pricePerSpot, totalSpots: String(template.totalSpots), wheelCount: String(template.wheelCount), initialStatus: template.initialStatus, isDefault: template.isDefault }} /><div className="template-actions"><button className="template-button template-button-primary" disabled={busy}>Update</button></div></Form></details>
-          <div className="template-actions"><Form method="post"><input type="hidden" name="intent" value="duplicate" /><input type="hidden" name="templateId" value={template.id} /><button className="template-button" disabled={busy}>Duplicate</button></Form><Form method="post" onSubmit={(event) => { if (!window.confirm(`Delete ${template.name}? Existing games will not be affected.`)) event.preventDefault(); }}><input type="hidden" name="intent" value="delete" /><input type="hidden" name="templateId" value={template.id} /><button className="template-button template-danger" disabled={busy}>Delete</button></Form></div>
-        </article>;
-      })}
-    </section></div>
-  </div></main></>;
+  return (
+    <>
+      <style dangerouslySetInnerHTML={{ __html: styles }} />
+      <main className="templates-page">
+        <div className="templates-shell">
+          <div className="templates-top">
+            <Link to="/app">← Dashboard</Link>
+            <Link to="/app/games/new">Create game from template</Link>
+          </div>
+          <header className="templates-heading">
+            <div>
+              <p>Reusable configurations</p>
+              <h1>Game Templates</h1>
+              <p>
+                Templates store setup only—never claims, payments, wheels, or
+                results.
+              </p>
+            </div>
+            <Form method="get">
+              <label htmlFor="template-sort">Sort </label>
+              <select
+                id="template-sort"
+                name="sort"
+                defaultValue={sort}
+                onChange={(event) => event.currentTarget.form?.requestSubmit()}
+              >
+                <option value="name">Name</option>
+                <option value="recent">Recently updated</option>
+              </select>
+            </Form>
+          </header>
+          {actionData?.success ? (
+            <div className="template-message" role="status">
+              {actionData.success}
+            </div>
+          ) : null}
+          <div className="templates-grid">
+            <section className="template-card">
+              <h2>Create template</h2>
+              {actionData?.intent === "create" && actionData.errors?.form ? (
+                <p className="template-error" role="alert">
+                  {actionData.errors.form}
+                </p>
+              ) : null}
+              <Form method="post">
+                <input type="hidden" name="intent" value="create" />
+                <TemplateFormFields
+                  idPrefix="new-template"
+                  values={
+                    actionData?.intent === "create"
+                      ? actionData.values
+                      : { wheelCount: "2", initialStatus: "OPEN" }
+                  }
+                  errors={
+                    actionData?.intent === "create"
+                      ? actionData.errors
+                      : undefined
+                  }
+                />
+                <div className="template-actions">
+                  <button
+                    className="template-button template-button-primary"
+                    disabled={busy}
+                  >
+                    Save template
+                  </button>
+                </div>
+              </Form>
+            </section>
+            <section className="template-list" aria-label="Saved templates">
+              {templates.length === 0 ? (
+                <div className="template-card template-empty">
+                  No templates saved yet.
+                </div>
+              ) : (
+                templates.map((template) => {
+                  const editResponse =
+                    actionData?.intent === "update" &&
+                    actionData.templateId === template.id
+                      ? actionData
+                      : undefined;
+                  return (
+                    <article className="template-card" key={template.id}>
+                      <h3>
+                        {template.name}{" "}
+                        {template.isDefault ? (
+                          <span className="template-default">· DEFAULT</span>
+                        ) : null}
+                      </h3>
+                      <div className="template-meta">
+                        <span>{template.totalSpots} spots</span>
+                        <span>${template.pricePerSpot}</span>
+                        <span>{template.wheelCount} name wheels</span>
+                        <span>{template.initialStatus}</span>
+                      </div>
+                      {template.defaultGameDescription ? (
+                        <div>
+                          <strong>Default game description preview</strong>
+                          <p className="template-description-preview">
+                            {template.defaultGameDescription}
+                          </p>
+                        </div>
+                      ) : null}
+                      {editResponse?.errors?.form ? (
+                        <p className="template-error" role="alert">
+                          {editResponse.errors.form}
+                        </p>
+                      ) : null}
+                      <details>
+                        <summary>Edit configuration</summary>
+                        <Form method="post">
+                          <input type="hidden" name="intent" value="update" />
+                          <input
+                            type="hidden"
+                            name="templateId"
+                            value={template.id}
+                          />
+                          <TemplateFormFields
+                            idPrefix={`template-${template.id}`}
+                            errors={editResponse?.errors}
+                            values={
+                              editResponse?.values ?? {
+                                name: template.name,
+                                description: template.description ?? "",
+                                defaultGameTitle:
+                                  template.defaultGameTitle ?? "",
+                                defaultGameDescription:
+                                  template.defaultGameDescription ?? "",
+                                pricePerSpot: template.pricePerSpot,
+                                totalSpots: String(template.totalSpots),
+                                wheelCount: String(template.wheelCount),
+                                initialStatus: template.initialStatus,
+                                isDefault: template.isDefault,
+                              }
+                            }
+                          />
+                          <div className="template-actions">
+                            <button
+                              className="template-button template-button-primary"
+                              disabled={busy}
+                            >
+                              Update
+                            </button>
+                          </div>
+                        </Form>
+                      </details>
+                      <div className="template-actions">
+                        <Form method="post">
+                          <input
+                            type="hidden"
+                            name="intent"
+                            value="duplicate"
+                          />
+                          <input
+                            type="hidden"
+                            name="templateId"
+                            value={template.id}
+                          />
+                          <button className="template-button" disabled={busy}>
+                            Duplicate
+                          </button>
+                        </Form>
+                        <Form
+                          method="post"
+                          onSubmit={(event) => {
+                            if (
+                              !window.confirm(
+                                `Delete ${template.name}? Existing games will not be affected.`,
+                              )
+                            )
+                              event.preventDefault();
+                          }}
+                        >
+                          <input type="hidden" name="intent" value="delete" />
+                          <input
+                            type="hidden"
+                            name="templateId"
+                            value={template.id}
+                          />
+                          <button
+                            className="template-button template-danger"
+                            disabled={busy}
+                          >
+                            Delete
+                          </button>
+                        </Form>
+                      </div>
+                    </article>
+                  );
+                })
+              )}
+            </section>
+          </div>
+        </div>
+      </main>
+    </>
+  );
 }

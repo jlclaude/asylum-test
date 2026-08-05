@@ -91,6 +91,10 @@ test("Host role matrix enforces owner-only and wheel permissions", () => {
     assert.equal(hostRoleAllows("VIEWER", permission), false);
   }
   assert.equal(hostRoleAllows("HOST", "wheels:operate"), true);
+  assert.equal(hostRoleAllows("OWNER", "games:manage"), true);
+  assert.equal(hostRoleAllows("HOST", "games:manage"), true);
+  assert.equal(hostRoleAllows("MODERATOR", "games:manage"), false);
+  assert.equal(hostRoleAllows("VIEWER", "games:manage"), false);
   assert.equal(hostRoleAllows("MODERATOR", "wheels:operate"), false);
   assert.equal(hostRoleAllows("VIEWER", "claims:manage"), false);
 });
