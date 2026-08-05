@@ -25,7 +25,7 @@ export type ProductPrizeBallSelection = {
   weightPounds: number | null;
 };
 export type PrizeBallSelection = LegacyPrizeBallSelection | ProductPrizeBallSelection;
-export const DOMESTIC_WEIGHTS = [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16] as const;
+export const DOMESTIC_BALL_WEIGHTS = [13, 14, 15, 16] as const;
 
 const MAX_OPTIONS = 20;
 const MAX_BALLS = 10;

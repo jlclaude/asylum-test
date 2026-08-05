@@ -60,10 +60,14 @@ export function formatPrizeClaimShippingSummary(input: {
 }) {
   const packageLabel = input.selectedPrizeOptionLabel ?? input.preferredPrize ?? "—";
   let ballType = "Bowling";
+  let includeWeights = false;
   if (input.selectedPrizeOptionJson) {
     try {
       const option = JSON.parse(input.selectedPrizeOptionJson) as { ballType?: string };
-      if (option.ballType) ballType = option.ballType.charAt(0) + option.ballType.slice(1).toLowerCase();
+      if (option.ballType) {
+        ballType = option.ballType.charAt(0) + option.ballType.slice(1).toLowerCase();
+        includeWeights = option.ballType === "DOMESTIC";
+      }
     } catch { /* Retain the generic label for malformed legacy data. */ }
   }
   const destination = [
@@ -80,7 +84,7 @@ export function formatPrizeClaimShippingSummary(input: {
     `Winner: ${input.winnerDisplayName}`,
     `Prize Package: ${packageLabel}`,
     ...((input.selectedBalls?.length ?? 0) ? ["", ...input.selectedBalls!.flatMap((ball) => isProductPrizeBall(ball)
-      ? [`${ballType} Ball ${ball.position}: ${ball.productTitle}`, ...(ball.weightPounds ? [`Weight: ${ball.weightPounds} lb`] : []), ""]
+      ? [`${ballType} Ball ${ball.position}: ${ball.productTitle}`, ...(includeWeights && ball.weightPounds !== null ? [`Weight: ${ball.weightPounds} lb`] : []), ""]
       : [`${ballType} Ball ${ball.position}: ${ball.name}${ball.productUrl ? `\n${ball.productUrl}` : ""}`])].filter((line, index, lines) => line !== "" || index < lines.length - 1) : []),
     "",
     "Ship To:",

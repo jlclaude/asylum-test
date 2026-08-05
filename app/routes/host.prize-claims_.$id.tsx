@@ -11,6 +11,7 @@ import {
   getPrizeClaimForShop,
   updatePrizeClaimStatus,
 } from "../models/prize-claim.server";
+import { isProductPrizeBall } from "../lib/prize-packages";
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const host = await requireHostUser(request);
   if (!params.id)
@@ -26,6 +27,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       wheelLabel: claim.wheelLabel,
       status: claim.status,
       preferredPrize: claim.preferredPrize,
+      selectedPrizeOptionLabel: claim.selectedPrizeOptionLabel,
+      selectedPrizeOption: claim.selectedPrizeOption,
+      selectedBalls: claim.selectedBalls,
       recipientName: claim.recipientName,
       addressLine1: claim.addressLine1,
       addressLine2: claim.addressLine2,
@@ -104,8 +108,30 @@ export default function HostPrizeDetail() {
           </div>
           <div>
             <dt>Prize requested</dt>
-            <dd>{claim.preferredPrize ?? "Awaiting submission"}</dd>
+            <dd>{claim.selectedPrizeOptionLabel ?? claim.preferredPrize ?? "Awaiting submission"}</dd>
           </div>
+          {claim.selectedBalls.map((ball) => (
+            <div key={ball.position}>
+              <dt>
+                {claim.selectedPrizeOption
+                  ? `${claim.selectedPrizeOption.ballType.charAt(0)}${claim.selectedPrizeOption.ballType.slice(1).toLowerCase()}`
+                  : "Bowling"} ball {ball.position}
+              </dt>
+              <dd>
+                {isProductPrizeBall(ball) ? (
+                  <>
+                    {ball.productTitle}
+                    {claim.selectedPrizeOption?.ballType === "DOMESTIC" &&
+                    ball.weightPounds !== null
+                      ? ` · Weight: ${ball.weightPounds} lb`
+                      : null}
+                  </>
+                ) : (
+                  ball.name
+                )}
+              </dd>
+            </div>
+          ))}
           <div>
             <dt>Full name</dt>
             <dd>{claim.recipientName ?? "—"}</dd>

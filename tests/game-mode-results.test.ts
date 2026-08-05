@@ -8,7 +8,7 @@ import { claimNameEditBlockReason, replaceClaimDisplayNameInEntries, validateCla
 import { formatPrizeClaimShippingSummary, isPrizeClaimExpired, prizeClaimExpirationDate, validatePrizeClaimSubmission } from "../app/lib/prize-claim.ts";
 import { buildPrizeClaimUrl, generatePrizeClaimToken, hashPrizeClaimToken } from "../app/lib/prize-claim-token.server.ts";
 import { decryptPrizeClaimToken, encryptPrizeClaimToken } from "../app/lib/prize-claim-encryption.server.ts";
-import { parsePrizePackageOptions, validateAdminPrizePackageOptions, validateStructuredPrizeSelection } from "../app/lib/prize-packages.ts";
+import { DOMESTIC_BALL_WEIGHTS, parsePrizePackageOptions, parseSelectedBalls, validateAdminPrizePackageOptions, validateStructuredPrizeSelection } from "../app/lib/prize-packages.ts";
 import { listPrizeCollections, loadPublicPrizeProducts, resolveSubmittedPrizeProducts, verifyPrizeOptionCollections } from "../app/lib/shopify-prize-products.server.ts";
 import { formatRaffleCode, parseRaffleSearch } from "../app/lib/raffle-number.ts";
 import { getContainmentLabel, getWheelDisplayLabel } from "../app/lib/wheel-labels.ts";
@@ -485,17 +485,50 @@ test("public collection products follow Shopify pagination within a bounded limi
   assert.deepEqual(products.map((product) => product.title), ["First", "Second"]);
 });
 
-test("domestic product snapshots require weight and overseas snapshots discard it", async () => {
+test("Domestic ball weights contain exactly 13, 14, 15, and 16", () => {
+  assert.deepEqual([...DOMESTIC_BALL_WEIGHTS], [13, 14, 15, 16]);
+});
+
+test("domestic product snapshots accept only the shared integer weights", async () => {
   const collectionId = "gid://shopify/Collection/2";
   const admin = mockCollectionAdmin(collectionId, [{ id: "gid://shopify/Product/1", title: "Phaze II", handle: "phaze-ii" }]);
   const domestic = { id: "option-1", label: "Domestic", ballType: "DOMESTIC" as const, ballCount: 1, position: 1, collectionId, collectionTitle: "Domestic Bowling Balls" };
-  await assert.rejects(() => resolveSubmittedPrizeProducts(admin as never, domestic, ["gid://shopify/Product/1"], []), /weights are incomplete/);
-  const balls = await resolveSubmittedPrizeProducts(admin as never, domestic, ["gid://shopify/Product/1"], ["15"]);
-  assert.equal(balls[0]?.productTitle, "Phaze II");
-  assert.equal(balls[0]?.weightPounds, 15);
+  await assert.rejects(() => resolveSubmittedPrizeProducts(admin as never, domestic, ["gid://shopify/Product/1"], []), /between 13 lb and 16 lb/);
+  for (const allowedWeight of DOMESTIC_BALL_WEIGHTS) {
+    const balls = await resolveSubmittedPrizeProducts(admin as never, domestic, ["gid://shopify/Product/1"], [String(allowedWeight)]);
+    assert.equal(balls[0]?.productTitle, "Phaze II");
+    assert.equal(balls[0]?.weightPounds, allowedWeight);
+  }
+  for (const rejectedWeight of ["", "6", "10", "12", "17", "15.5", "arbitrary"]) {
+    await assert.rejects(
+      () => resolveSubmittedPrizeProducts(admin as never, domestic, ["gid://shopify/Product/1"], [rejectedWeight]),
+      /between 13 lb and 16 lb/,
+    );
+  }
+});
+
+test("overseas product snapshots discard manipulated weight data", async () => {
+  const collectionId = "gid://shopify/Collection/2";
+  const admin = mockCollectionAdmin(collectionId, [{ id: "gid://shopify/Product/1", title: "Phaze II", handle: "phaze-ii" }]);
+  const domestic = { id: "option-1", label: "Domestic", ballType: "DOMESTIC" as const, ballCount: 1, position: 1, collectionId, collectionTitle: "Domestic Bowling Balls" };
   const overseas = { ...domestic, label: "Overseas", ballType: "OVERSEAS" as const };
-  const overseasBalls = await resolveSubmittedPrizeProducts(admin as never, overseas, ["gid://shopify/Product/1"], ["16"]);
+  const overseasBalls = await resolveSubmittedPrizeProducts(admin as never, overseas, ["gid://shopify/Product/1"], ["12"]);
   assert.equal(overseasBalls[0]?.weightPounds, null);
+});
+
+test("historical Domestic weights remain readable without revalidation", () => {
+  const saved = parseSelectedBalls(JSON.stringify([{
+    position: 1,
+    productId: "gid://shopify/Product/1",
+    productTitle: "Historical Ball",
+    productHandle: "historical-ball",
+    productImageUrl: null,
+    productImageAlt: null,
+    collectionId: "gid://shopify/Collection/2",
+    collectionTitle: "Domestic",
+    weightPounds: 10,
+  }]));
+  assert.equal(saved[0] && "weightPounds" in saved[0] ? saved[0].weightPounds : null, 10);
 });
 
 test("products outside or removed from the configured collection are rejected", async () => {
@@ -572,6 +605,16 @@ test("product fulfillment summary shows domestic weights and no product URL", ()
   });
   assert.match(summary, /Domestic Ball 1: Phaze II\nWeight: 15 lb/);
   assert.equal(summary.includes("Product URL"), false);
+});
+
+test("fulfillment summary omits weight for Overseas snapshots", () => {
+  const summary = formatPrizeClaimShippingSummary({
+    winnerDisplayName: "Jane Smith", preferredPrize: "Overseas Ball",
+    selectedPrizeOptionLabel: "Overseas Ball", selectedPrizeOptionJson: JSON.stringify({ ballType: "OVERSEAS" }),
+    selectedBalls: [{ position: 1, productId: "gid://shopify/Product/1", productTitle: "Overseas Ball", productHandle: "overseas", productImageUrl: null, productImageAlt: null, collectionId: "gid://shopify/Collection/2", collectionTitle: "Overseas", weightPounds: 10 }],
+    recipientName: "Jane Smith", addressLine1: "123 Main", addressLine2: null, city: "Orlando", stateProvince: "FL", postalCode: "32801", country: "USA", winnerNotes: null,
+  });
+  assert.doesNotMatch(summary, /Weight:/);
 });
 
 test("prize claim expiration supports none, 7, 14, and 30 days", () => {

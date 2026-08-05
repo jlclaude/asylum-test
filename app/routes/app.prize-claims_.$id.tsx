@@ -228,7 +228,7 @@ export default function PrizeClaimDetail() {
               {claim.selectedBalls.map((ball) => (
                 <div key={ball.position}>
                   <dt>{claim.selectedPrizeOption ? `${claim.selectedPrizeOption.ballType.charAt(0)}${claim.selectedPrizeOption.ballType.slice(1).toLowerCase()}` : "Bowling"} ball {ball.position}</dt>
-                  <dd>{isProductPrizeBall(ball) ? <span className="prize-admin-product">{ball.productImageUrl ? <img src={ball.productImageUrl} alt={ball.productImageAlt ?? ""} /> : null}<strong>{ball.productTitle}</strong>{ball.weightPounds ? <span>Weight: {ball.weightPounds} lb</span> : null}</span> : <>{ball.name}{ball.productUrl ? <> · <a href={ball.productUrl} target="_blank" rel="noreferrer">Product link</a></> : null}</>}</dd>
+                  <dd>{isProductPrizeBall(ball) ? <span className="prize-admin-product">{ball.productImageUrl ? <img src={ball.productImageUrl} alt={ball.productImageAlt ?? ""} /> : null}<strong>{ball.productTitle}</strong>{claim.selectedPrizeOption?.ballType === "DOMESTIC" && ball.weightPounds !== null ? <span>Weight: {ball.weightPounds} lb</span> : null}</span> : <>{ball.name}{ball.productUrl ? <> · <a href={ball.productUrl} target="_blank" rel="noreferrer">Product link</a></> : null}</>}</dd>
                 </div>
               ))}
               <div>

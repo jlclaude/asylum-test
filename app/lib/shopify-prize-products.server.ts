@@ -1,6 +1,6 @@
 import type { AdminApiContext } from "@shopify/shopify-app-react-router/server";
 import type { PrizePackageOption, ProductPrizeBallSelection } from "./prize-packages.ts";
-import { DOMESTIC_WEIGHTS } from "./prize-packages.ts";
+import { DOMESTIC_BALL_WEIGHTS } from "./prize-packages.ts";
 
 export type PublicPrizeProduct = {
   id: string;
@@ -131,7 +131,7 @@ export async function resolveSubmittedPrizeProducts(
 ): Promise<ProductPrizeBallSelection[]> {
   if (!option.collectionId || !option.collectionTitle) throw new Error("This prize option does not have a Shopify collection.");
   if (productIds.length !== option.ballCount) throw new Error(`Choose exactly ${option.ballCount} bowling ${option.ballCount === 1 ? "ball" : "balls"}.`);
-  if (option.ballType === "DOMESTIC" && weights.length !== option.ballCount) throw new Error("The submitted bowling-ball weights are incomplete.");
+  if (option.ballType === "DOMESTIC" && weights.length !== option.ballCount) throw new Error("Select a weight between 13 lb and 16 lb.");
   const wanted = new Set(productIds);
   const found = new Map<string, ProductNode>();
   let after: string | null = null;
@@ -146,8 +146,17 @@ export async function resolveSubmittedPrizeProducts(
   return productIds.map((productId, index) => {
     const product = found.get(productId)!;
     const submittedWeight = option.ballType === "DOMESTIC" ? weights[index]?.trim() ?? "" : "";
-    const weight = option.ballType === "DOMESTIC" ? Number(submittedWeight) : null;
-    if (option.ballType === "DOMESTIC" && !DOMESTIC_WEIGHTS.includes(weight as typeof DOMESTIC_WEIGHTS[number])) throw new Error(`Select a valid weight for Domestic Ball ${index + 1}.`);
+    const parsedWeight = Number(submittedWeight);
+    const weight = option.ballType === "DOMESTIC" ? parsedWeight : null;
+    if (
+      option.ballType === "DOMESTIC" &&
+      (!/^\d+$/.test(submittedWeight) ||
+        !Number.isInteger(parsedWeight) ||
+        !DOMESTIC_BALL_WEIGHTS.includes(
+          parsedWeight as (typeof DOMESTIC_BALL_WEIGHTS)[number],
+        ))
+    )
+      throw new Error("Select a weight between 13 lb and 16 lb.");
     return {
       position: index + 1, productId: product.id, productTitle: product.title, productHandle: product.handle,
       productImageUrl: product.featuredImage?.url ?? null, productImageAlt: product.featuredImage?.altText ?? null,

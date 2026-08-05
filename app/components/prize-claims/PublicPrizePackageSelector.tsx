@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { DOMESTIC_WEIGHTS, isCollectionPrizeOption, type PrizePackageOption } from "../../lib/prize-packages";
+import { DOMESTIC_BALL_WEIGHTS, isCollectionPrizeOption, type PrizePackageOption } from "../../lib/prize-packages";
 import type { PublicPrizeProduct } from "../../lib/shopify-prize-products.server";
 
 function ProductChoice({ products, position, ballType }: { products: PublicPrizeProduct[]; position: number; ballType: PrizePackageOption["ballType"] }) {
@@ -23,7 +23,7 @@ function ProductChoice({ products, position, ballType }: { products: PublicPrize
           {shown.length ? <ul>{shown.map((product) => <li key={product.id}>{product.imageUrl ? <img src={product.imageUrl} alt={product.imageAlt ?? ""} /> : null}<strong>{product.title}</strong><button type="button" onClick={() => setSelected(product)}>Select</button></li>)}</ul> : <p>No available products match this search.</p>}
         </div>
       )}
-      {ballType === "DOMESTIC" ? <label>Weight<select name="ballWeight" required defaultValue=""><option value="" disabled>Select weight</option>{DOMESTIC_WEIGHTS.map((weight) => <option value={weight} key={weight}>{weight} lb</option>)}</select></label> : null}
+      {ballType === "DOMESTIC" ? <label>Weight<select name="ballWeight" required defaultValue=""><option value="" disabled>Select weight</option>{DOMESTIC_BALL_WEIGHTS.map((weight) => <option value={weight} key={weight}>{weight} lb</option>)}</select></label> : null}
     </section>
   );
 }
