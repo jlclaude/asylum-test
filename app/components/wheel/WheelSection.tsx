@@ -723,6 +723,9 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(
               >
                 <input type="hidden" name="intent" value="shuffle-wheel" />
                 <input type="hidden" name="wheelId" value={wheel.id} />
+                {csrfToken ? (
+                  <input type="hidden" name="csrfToken" value={csrfToken} />
+                ) : null}
 
                 <button
                   className="studio-machine-button"
@@ -746,6 +749,9 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(
               >
                 <input type="hidden" name="intent" value="select-duration" />
                 <input type="hidden" name="wheelId" value={wheel.id} />
+                {csrfToken ? (
+                  <input type="hidden" name="csrfToken" value={csrfToken} />
+                ) : null}
 
                 <button
                   className="studio-machine-button"
@@ -769,6 +775,9 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(
               >
                 <input type="hidden" name="intent" value="spin-wheel" />
                 <input type="hidden" name="wheelId" value={wheel.id} />
+                {csrfToken ? (
+                  <input type="hidden" name="csrfToken" value={csrfToken} />
+                ) : null}
 
                 <button
                   className="studio-machine-button studio-machine-button-spin"

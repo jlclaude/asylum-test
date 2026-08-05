@@ -235,18 +235,39 @@ export async function requireHostMutation(
   request: Request,
   permission: HostPermission,
   formData: FormData,
+  diagnostic?: {
+    intent?: string;
+    routeFamily?: "HOST_PORTAL";
+    targetType?: string;
+    targetId?: string;
+  },
 ) {
   requireSameOrigin(request);
   const context = await requireHostPermission(request, permission);
   const session = await hostSessionSecurity(request);
-  verifyHostCsrfToken(
-    String(
-      formData.get(HOST_CSRF_FIELD_NAME) ??
-        request.headers.get("X-Host-CSRF") ??
-        "",
-    ),
-    session.csrfTokenHash,
+  const csrfToken = String(
+    formData.get(HOST_CSRF_FIELD_NAME) ??
+      request.headers.get("X-Host-CSRF") ??
+      "",
   );
+  try {
+    verifyHostCsrfToken(csrfToken, session.csrfTokenHash);
+  } catch (error) {
+    if (error instanceof Response && error.status === 403 && diagnostic) {
+      console.warn("Host wheel action rejected", {
+        reason: csrfToken ? "CSRF_INVALID" : "CSRF_FORM_MISSING",
+        intent: diagnostic.intent ?? "unknown",
+        routeFamily: diagnostic.routeFamily ?? "HOST_PORTAL",
+        authenticated: true,
+        role: context.role,
+        shop: context.shop,
+        targetType: diagnostic.targetType ?? null,
+        targetId: diagnostic.targetId ?? null,
+        csrfPresent: Boolean(csrfToken),
+      });
+    }
+    throw error;
+  }
   return context;
 }
 

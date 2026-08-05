@@ -482,7 +482,9 @@ export function ErrorBoundary() {
     message =
       error.status === 404
         ? "This game could not be found."
-        : `${error.status}: ${error.statusText}`;
+        : typeof error.data === "string" && error.data.trim()
+          ? error.data
+          : `${error.status}: ${error.statusText || "Request failed"}`;
   } else if (error instanceof Error) {
     message = error.message;
   }

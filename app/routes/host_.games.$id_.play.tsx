@@ -22,8 +22,19 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 export async function action({ request, params }: ActionFunctionArgs) {
   if (!params.id) return { error: "Game ID is missing." };
   const formData = await request.clone().formData();
-  const host = await requireHostMutation(request, "wheels:operate", formData);
   const intent = String(formData.get("intent") ?? "");
+  const wheelId = String(formData.get("wheelId") ?? "").trim();
+  const host = await requireHostMutation(
+    request,
+    "wheels:operate",
+    formData,
+    {
+      intent,
+      routeFamily: "HOST_PORTAL",
+      targetType: wheelId ? "GameWheel" : "Game",
+      targetId: wheelId || params.id,
+    },
+  );
   const admin =
     intent === "create-prize-claim"
       ? await getHostAdminContext(host.shop)
