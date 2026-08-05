@@ -4,6 +4,7 @@ import {
   checkHostLoginCsrf,
   createHostLoginCsrf,
   hashHostSecret,
+  hostLoginConfigurationIssue,
   normalizeHostEmail,
   randomHostToken,
 } from "../app/lib/host-auth.server.ts";
@@ -31,6 +32,34 @@ test("Host emails are normalized", () =>
     normalizeHostEmail("  OWNER@Example.COM "),
     "owner@example.com",
   ));
+test("Host login configuration identifies missing production variables without values", () => {
+  const previousShop = process.env.HOST_PORTAL_SHOP;
+  const previousSecret = process.env.HOST_SESSION_SECRET;
+  try {
+    delete process.env.HOST_PORTAL_SHOP;
+    delete process.env.HOST_SESSION_SECRET;
+    assert.equal(hostLoginConfigurationIssue(true), "HOST_PORTAL_SHOP_MISSING");
+    process.env.HOST_PORTAL_SHOP = "invalid-shop";
+    assert.equal(hostLoginConfigurationIssue(true), "HOST_PORTAL_SHOP_INVALID");
+    process.env.HOST_PORTAL_SHOP = "asylum.myshopify.com";
+    assert.equal(
+      hostLoginConfigurationIssue(true),
+      "HOST_SESSION_SECRET_MISSING",
+    );
+    process.env.HOST_SESSION_SECRET = "too-short";
+    assert.equal(
+      hostLoginConfigurationIssue(true),
+      "HOST_SESSION_SECRET_TOO_SHORT",
+    );
+    process.env.HOST_SESSION_SECRET = "x".repeat(32);
+    assert.equal(hostLoginConfigurationIssue(true), null);
+  } finally {
+    if (previousShop === undefined) delete process.env.HOST_PORTAL_SHOP;
+    else process.env.HOST_PORTAL_SHOP = previousShop;
+    if (previousSecret === undefined) delete process.env.HOST_SESSION_SECRET;
+    else process.env.HOST_SESSION_SECRET = previousSecret;
+  }
+});
 test("Host passwords use Argon2id", async () => {
   const password = "a long host passphrase";
   const hash = await hashHostPassword(password);

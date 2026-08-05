@@ -43,6 +43,12 @@ const INACTIVITY_MS = 8 * 60 * 60 * 1000;
 const NORMAL_MS = 12 * 60 * 60 * 1000;
 const REMEMBER_MS = 7 * 24 * 60 * 60 * 1000;
 
+export type HostLoginConfigurationReason =
+  | "HOST_PORTAL_SHOP_MISSING"
+  | "HOST_PORTAL_SHOP_INVALID"
+  | "HOST_SESSION_SECRET_MISSING"
+  | "HOST_SESSION_SECRET_TOO_SHORT";
+
 export type HostContext = {
   source: "HOST_PORTAL";
   shop: string;
@@ -95,6 +101,20 @@ export function requestIpHash(request: Request) {
     });
   }
   return hashHostSecret(`${secret ?? "local-development-only"}:${ip}`);
+}
+
+export function hostLoginConfigurationIssue(
+  production = process.env.NODE_ENV === "production",
+): HostLoginConfigurationReason | null {
+  const shop = process.env.HOST_PORTAL_SHOP?.trim().toLowerCase();
+  if (!shop) return "HOST_PORTAL_SHOP_MISSING";
+  if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(shop))
+    return "HOST_PORTAL_SHOP_INVALID";
+  if (!production) return null;
+  const sessionSecret = process.env.HOST_SESSION_SECRET?.trim();
+  if (!sessionSecret) return "HOST_SESSION_SECRET_MISSING";
+  if (sessionSecret.length < 32) return "HOST_SESSION_SECRET_TOO_SHORT";
+  return null;
 }
 
 export function configuredHostShop() {

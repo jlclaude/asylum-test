@@ -87,11 +87,13 @@ export async function authenticateHostPassword(
   shop: string,
   emailValue: string,
   password: string,
+  onVerificationStart?: (accountFound: boolean) => void,
 ) {
   const email = normalizeHostEmail(emailValue);
   const user = await db.hostUser.findUnique({
     where: { shop_email: { shop, email } },
   });
+  onVerificationStart?.(Boolean(user));
   const valid = user
     ? await verifyHostPassword(user.passwordHash, password)
     : await verifyHostPassword(

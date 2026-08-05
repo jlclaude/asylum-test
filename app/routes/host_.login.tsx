@@ -1,6 +1,8 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
+import { randomUUID } from "node:crypto";
 import {
   data,
+  isRouteErrorResponse,
   redirect,
   useActionData,
   useLoaderData,
@@ -14,6 +16,7 @@ import {
   createHostLoginCsrf,
   createHostSession,
   hashHostSecret,
+  hostLoginConfigurationIssue,
   optionalHostContext,
   requestIpHash,
 } from "../lib/host-auth.server";
@@ -75,43 +78,82 @@ export async function action({ request }: ActionFunctionArgs) {
       status: 403,
     });
   }
-  const email = String(formData.get("email") ?? "");
-  const password = String(formData.get("password") ?? "");
-  const shop = configuredHostShop();
-  const identifierHash = hashHostSecret(
-    `${shop}:${email.trim().toLowerCase()}`,
-  );
-  const ipHash = requestIpHash(request);
-  if (await loginAttemptBlocked(identifierHash, ipHash))
-    return { error: "The email or password is incorrect." };
-  const user = await authenticateHostPassword(shop, email, password);
-  if (!user) {
-    await Promise.all([
-      recordLoginAttemptFailure(identifierHash, ipHash),
-      recordFailedHostLogin(shop, email),
-      recordHostAuditEvent({
-        shop,
-        action: "login.failure",
-        metadata: { ipHash: ipHash.slice(0, 12) },
-      }),
-    ]);
-    return { error: "The email or password is incorrect." };
+  const state = {
+    accountFound: false,
+    passwordVerificationStarted: false,
+    sessionCreationStarted: false,
+    sessionCreated: false,
+  };
+  let failureReason: string | null = hostLoginConfigurationIssue();
+  try {
+    if (failureReason) throw new Error(failureReason);
+    const email = String(formData.get("email") ?? "");
+    const password = String(formData.get("password") ?? "");
+    const shop = configuredHostShop();
+    const identifierHash = hashHostSecret(
+      `${shop}:${email.trim().toLowerCase()}`,
+    );
+    const ipHash = requestIpHash(request);
+    if (await loginAttemptBlocked(identifierHash, ipHash))
+      return { error: "The email or password is incorrect." };
+    const user = await authenticateHostPassword(
+      shop,
+      email,
+      password,
+      (accountFound) => {
+        state.accountFound = accountFound;
+        state.passwordVerificationStarted = true;
+      },
+    );
+    if (!user) {
+      await Promise.all([
+        recordLoginAttemptFailure(identifierHash, ipHash),
+        recordFailedHostLogin(shop, email),
+        recordHostAuditEvent({
+          shop,
+          action: "login.failure",
+          metadata: { ipHash: ipHash.slice(0, 12) },
+        }),
+      ]);
+      return { error: "The email or password is incorrect." };
+    }
+    state.sessionCreationStarted = true;
+    const created = await createHostSession({
+      hostUserId: user.id,
+      request,
+      remember: formData.get("remember") === "yes",
+    });
+    state.sessionCreated = true;
+    await recordHostAuditEvent({
+      shop,
+      actorId: user.id,
+      actorLabel: user.displayName,
+      action: "login.success",
+    });
+    const headers = new Headers();
+    for (const cookie of created.cookies) headers.append("Set-Cookie", cookie);
+    headers.append("Set-Cookie", await clearHostLoginCsrf());
+    return redirect("/host", { headers });
+  } catch (error) {
+    failureReason ??= state.sessionCreated
+      ? "LOGIN_FINALIZATION_FAILED"
+      : state.sessionCreationStarted
+        ? "SESSION_CREATION_FAILED"
+        : state.passwordVerificationStarted
+          ? "PASSWORD_VERIFICATION_FAILED"
+          : "ACCOUNT_LOOKUP_FAILED";
+    const referenceId = randomUUID().slice(0, 8).toUpperCase();
+    console.error("Host login unavailable", {
+      reason: failureReason,
+      referenceId,
+      ...state,
+      errorType: error instanceof Error ? error.name : "UnknownError",
+    });
+    throw new Response(
+      `Host login is temporarily unavailable. Reference: ${referenceId}`,
+      { status: 503 },
+    );
   }
-  const created = await createHostSession({
-    hostUserId: user.id,
-    request,
-    remember: formData.get("remember") === "yes",
-  });
-  await recordHostAuditEvent({
-    shop,
-    actorId: user.id,
-    actorLabel: user.displayName,
-    action: "login.success",
-  });
-  const headers = new Headers();
-  for (const cookie of created.cookies) headers.append("Set-Cookie", cookie);
-  headers.append("Set-Cookie", await clearHostLoginCsrf());
-  return redirect("/host", { headers });
 }
 export default function HostLogin() {
   const { expired, csrfToken } = useLoaderData<typeof loader>();
@@ -199,7 +241,11 @@ export function ErrorBoundary() {
     <HostErrorPage
       title="Host Login Error"
       message={
-        error instanceof Error ? error.message : "Host login is unavailable."
+        isRouteErrorResponse(error) && error.status === 503
+          ? String(error.data)
+          : error instanceof Error
+            ? error.message
+            : "Host login is unavailable."
       }
     />
   );

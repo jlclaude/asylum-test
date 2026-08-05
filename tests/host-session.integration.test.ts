@@ -272,3 +272,51 @@ test("Host login rejects missing, misnamed, and incorrect CSRF form values witho
     restoreEnvironment("HOST_PORTAL_URL", previousOrigin);
   }
 });
+
+test("Host login returns a controlled 503 and safe reason when production configuration is missing", async () => {
+  const previousNodeEnvironment = process.env.NODE_ENV;
+  const previousShop = process.env.HOST_PORTAL_SHOP;
+  const previousOrigin = process.env.HOST_PORTAL_URL;
+  const previousSecret = process.env.HOST_SESSION_SECRET;
+  process.env.NODE_ENV = "production";
+  process.env.HOST_PORTAL_SHOP = shopA;
+  process.env.HOST_PORTAL_URL = "https://asylum-test.onrender.com";
+  delete process.env.HOST_SESSION_SECRET;
+  const csrf = await createHostLoginCsrf();
+  const errors: unknown[][] = [];
+  const originalError = console.error;
+  console.error = (...values: unknown[]) => errors.push(values);
+  try {
+    const request = new Request("http://localhost:3000/host/login", {
+      method: "POST",
+      headers: {
+        origin: "https://asylum-test.onrender.com",
+        cookie: csrf.cookie.split(";")[0],
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        [HOST_CSRF_FIELD_NAME]: csrf.csrfToken,
+        email: "owner@example.com",
+        password: "a secret that must not be logged",
+      }),
+    });
+    await assert.rejects(
+      loginAction({ request, params: {}, context: undefined } as never),
+      (error: unknown) => error instanceof Response && error.status === 503,
+    );
+    assert.equal(errors.length, 1);
+    const logged = JSON.stringify(errors);
+    assert.match(logged, /HOST_SESSION_SECRET_MISSING/);
+    assert.match(logged, /"accountFound":false/);
+    assert.match(logged, /"passwordVerificationStarted":false/);
+    assert.match(logged, /"sessionCreationStarted":false/);
+    assert.equal(logged.includes(csrf.csrfToken), false);
+    assert.equal(logged.includes("a secret that must not be logged"), false);
+  } finally {
+    console.error = originalError;
+    restoreEnvironment("NODE_ENV", previousNodeEnvironment);
+    restoreEnvironment("HOST_PORTAL_SHOP", previousShop);
+    restoreEnvironment("HOST_PORTAL_URL", previousOrigin);
+    restoreEnvironment("HOST_SESSION_SECRET", previousSecret);
+  }
+});
