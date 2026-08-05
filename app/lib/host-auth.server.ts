@@ -13,6 +13,7 @@ import {
   requireSameOrigin,
   verifyHostCsrfToken,
 } from "./host-csrf.server";
+import { HOST_CSRF_FIELD_NAME } from "./host-csrf";
 
 const PRODUCTION = process.env.NODE_ENV === "production";
 const COOKIE_NAME = PRODUCTION
@@ -220,7 +221,9 @@ export async function requireHostMutation(
   const session = await hostSessionSecurity(request);
   verifyHostCsrfToken(
     String(
-      formData.get("csrfToken") ?? request.headers.get("X-Host-CSRF") ?? "",
+      formData.get(HOST_CSRF_FIELD_NAME) ??
+        request.headers.get("X-Host-CSRF") ??
+        "",
     ),
     session.csrfTokenHash,
   );

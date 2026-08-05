@@ -22,6 +22,7 @@ import {
   checkHostRequestOrigin,
   securityDiagnostic,
 } from "../lib/host-csrf.server";
+import { HOST_CSRF_FIELD_NAME } from "../lib/host-csrf";
 import {
   authenticateHostPassword,
   loginAttemptBlocked,
@@ -47,7 +48,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const origin = checkHostRequestOrigin(request);
   const csrf = await checkHostLoginCsrf(
     request,
-    String(formData.get("csrfToken") ?? ""),
+    String(formData.get(HOST_CSRF_FIELD_NAME) ?? ""),
   );
   if (!origin.ok || !csrf.matched) {
     const reason = !origin.ok
@@ -110,7 +111,41 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 export default function HostLogin() {
   const { expired, csrfToken } = useLoaderData<typeof loader>();
-  const data = useActionData<typeof action>();
+  const actionData = useActionData<typeof action>();
+  return (
+    <HostLoginForm
+      expired={expired}
+      csrfToken={csrfToken}
+      error={actionData?.error}
+    />
+  );
+}
+
+export function HostLoginForm({
+  expired,
+  csrfToken,
+  error,
+}: {
+  expired: boolean;
+  csrfToken: string | null | undefined;
+  error?: string;
+}) {
+  if (!csrfToken) {
+    console.error("Host login unavailable", {
+      reason: "CSRF_TOKEN_NOT_CREATED",
+    });
+    return (
+      <main className="host-page host-login">
+        <section className="host-card">
+          <p className="host-kicker">Asylum Games</p>
+          <h1>Host Portal</h1>
+          <p className="host-message host-error" role="alert">
+            Host login is temporarily unavailable.
+          </p>
+        </section>
+      </main>
+    );
+  }
   return (
     <main className="host-page host-login">
       <section className="host-card">
@@ -122,13 +157,13 @@ export default function HostLogin() {
             Your session expired. Sign in again.
           </p>
         ) : null}
-        {data?.error ? (
+        {error ? (
           <p className="host-message host-error" role="alert">
-            {data.error}
+            {error}
           </p>
         ) : null}
         <Form className="host-form" method="post" action="/host/login">
-          <input type="hidden" name="csrfToken" value={csrfToken} />
+          <input type="hidden" name={HOST_CSRF_FIELD_NAME} value={csrfToken} />
           <label>
             Email
             <input type="email" name="email" autoComplete="username" required />

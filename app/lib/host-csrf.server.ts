@@ -1,5 +1,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 
+export { HOST_CSRF_FIELD_NAME } from "./host-csrf";
+
 function same(valueA: string, valueB: string) {
   const a = Buffer.from(valueA);
   const b = Buffer.from(valueB);
@@ -43,9 +45,7 @@ export function configuredHostOrigin() {
   }
 }
 
-export function checkHostRequestOrigin(
-  request: Request,
-):
+export function checkHostRequestOrigin(request: Request):
   | { ok: true; expectedOrigin: string; origin: string }
   | {
       ok: false;
