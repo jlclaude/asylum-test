@@ -403,6 +403,7 @@ export function GameControlCenter({
               claims={prizeClaims}
               csrfToken={csrfToken}
               routeBase={routes.base}
+              routeMode={routeMode}
             />
           ) : null}
 

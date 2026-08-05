@@ -8,7 +8,6 @@ import {
   Link,
   useFetcher,
   useLoaderData,
-  useLocation,
   useNavigate,
   useRouteError,
 } from "react-router";
@@ -20,6 +19,7 @@ import { GameCompletionCard } from "../components/results/GameCompletionCard";
 import { GameResultsSummary } from "../components/results/GameResultsSummary";
 import { GamePrizeClaims } from "../components/prize-claims/GamePrizeClaims";
 import { secondChanceResultForWheel } from "../lib/second-chance";
+import type { GameControlRouteMode } from "../lib/game-control-routes";
 import { WheelSection } from "../components/wheel/WheelSection";
 import { GameModeShortcuts } from "../components/wheel/GameModeShortcuts";
 import { GameModeToolbar } from "../components/wheel/GameModeToolbar";
@@ -56,7 +56,11 @@ export async function loader({
   const { session } = await authenticate.admin(request);
 
   if (!params.id) throw new Response("Game ID is required.", { status: 400 });
-  return { ...(await loadGameModeData(params.id, session.shop)), csrfToken: null as string | null };
+  return {
+    ...(await loadGameModeData(params.id, session.shop)),
+    csrfToken: null as string | null,
+    routeMode: "SHOPIFY_ADMIN" as GameControlRouteMode,
+  };
 }
 
 export async function action({
@@ -72,8 +76,6 @@ export async function action({
 
 export default function GameModePage() {
   const navigate = useNavigate();
-  const location = useLocation();
-  const routeBase = location.pathname.startsWith("/host/") ? "/host" as const : "/app" as const;
   const fullscreenTarget = useRef<HTMLElement>(null);
   const wheelRefs = useRef(new Map<string, WheelOperatorHandle>());
 
@@ -81,8 +83,10 @@ export default function GameModePage() {
     useFetcher<WheelActionData>();
   const acceptFetcher = useFetcher<WheelActionData>();
 
-  const { game, run, results, secondChance, eligiblePrizeWheels, prizeClaims, csrfToken } =
+  const { game, run, results, secondChance, eligiblePrizeWheels, prizeClaims, csrfToken, routeMode } =
     useLoaderData<typeof loader>();
+  const routeBase =
+    routeMode === "HOST_PORTAL" ? ("/host" as const) : ("/app" as const);
   useWheelMusicSession(`game:${game.id}:play`);
 
   const orderedWheels = useMemo(
@@ -435,7 +439,13 @@ export default function GameModePage() {
           ))}
 
           {results ? <GameResultsSummary results={results} heading="Live wheel record" /> : null}
-          <GamePrizeClaims eligibleWheels={eligiblePrizeWheels} claims={prizeClaims} csrfToken={csrfToken} routeBase={routeBase} />
+          <GamePrizeClaims
+            eligibleWheels={eligiblePrizeWheels}
+            claims={prizeClaims}
+            csrfToken={csrfToken}
+            routeBase={routeBase}
+            routeMode={routeMode}
+          />
 
           {game.status === "COMPLETED" && results?.completedAt && activeWheelId && acceptedIds.has(activeWheelId) ? (
             <GameCompletionCard

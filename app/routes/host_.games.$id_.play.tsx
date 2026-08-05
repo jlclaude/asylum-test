@@ -10,6 +10,7 @@ import {
 } from "../services/game-mode.server";
 import GameModePage, { ErrorBoundary } from "./app.games.$id_.play";
 import { recordHostAuditEvent } from "../models/host-audit.server";
+import type { GameControlRouteMode } from "../lib/game-control-routes";
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const host = await requireHostPermission(request, "wheels:operate");
@@ -17,6 +18,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   return {
     ...(await loadGameModeData(params.id, host.shop)),
     csrfToken: host.csrfToken,
+    routeMode: "HOST_PORTAL" as GameControlRouteMode,
   };
 }
 export async function action({ request, params }: ActionFunctionArgs) {

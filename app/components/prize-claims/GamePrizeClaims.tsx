@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useFetcher } from "react-router";
+import type { GameControlRouteMode } from "../../lib/game-control-routes";
 import { PrizePackageBuilder } from "./PrizePackageBuilder";
 
 type EligibleWheel = {
@@ -45,11 +46,13 @@ export function GamePrizeClaims({
   claims,
   csrfToken = null,
   routeBase = "/app",
+  routeMode,
 }: {
   eligibleWheels: EligibleWheel[];
   claims: ClaimSummary[];
   csrfToken?: string | null;
   routeBase?: "/app" | "/host";
+  routeMode: GameControlRouteMode;
 }) {
   const fetcher = useFetcher<ActionData>();
   const [copied, setCopied] = useState(false);
@@ -155,7 +158,7 @@ export function GamePrizeClaims({
                   {csrfToken ? (
                     <input type="hidden" name="csrfToken" value={csrfToken} />
                   ) : null}
-                  <PrizePackageBuilder />
+                  <PrizePackageBuilder routeMode={routeMode} />
                   <label>
                     Expiration
                     <select name="expirationDays" defaultValue="14">
