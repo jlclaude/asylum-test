@@ -207,9 +207,10 @@ Required production variables:
 ```shell
 HOST_PORTAL_SHOP="store-name.myshopify.com"
 HOST_SESSION_SECRET="independent-random-production-secret"
+HOST_PORTAL_URL="https://asylum-test.onrender.com"
 ```
 
-`HOST_PORTAL_SHOP` is resolved on the server and cannot be selected through a browser form. `HOST_SESSION_SECRET` is used only when hashing network identifiers; do not reuse `SHOPIFY_API_SECRET` or `PRIZE_CLAIM_ENCRYPTION_KEY`. Generate it independently and keep it in Render environment configuration.
+`HOST_PORTAL_SHOP` is resolved on the server and cannot be selected through a browser form. `HOST_SESSION_SECRET` is used only when hashing network identifiers; do not reuse `SHOPIFY_API_SECRET` or `PRIZE_CLAIM_ENCRYPTION_KEY`. Generate it independently and keep it in Render environment configuration. `HOST_PORTAL_URL` is the trusted external HTTPS origin used for Host mutation validation; `APP_URL` and then `SHOPIFY_APP_URL` are supported fallbacks.
 
 Create the first OWNER from the authenticated Shopify Admin Settings page. Public registration is intentionally unavailable. Further accounts, role changes, session revocation, and one-time password-reset links are managed at `/host/users`.
 

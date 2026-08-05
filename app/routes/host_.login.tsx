@@ -1,5 +1,6 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import {
+  data,
   Form,
   redirect,
   useActionData,
@@ -9,12 +10,18 @@ import {
 import { HostErrorPage } from "../components/host/HostErrorPage";
 import {
   configuredHostShop,
+  checkHostLoginCsrf,
+  clearHostLoginCsrf,
+  createHostLoginCsrf,
   createHostSession,
   hashHostSecret,
   optionalHostContext,
   requestIpHash,
 } from "../lib/host-auth.server";
-import { requireSameOrigin } from "../lib/host-csrf.server";
+import {
+  checkHostRequestOrigin,
+  securityDiagnostic,
+} from "../lib/host-csrf.server";
 import {
   authenticateHostPassword,
   loginAttemptBlocked,
@@ -26,11 +33,43 @@ import "../styles/host-portal.css";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   if (await optionalHostContext(request)) throw redirect("/host");
-  return { expired: new URL(request.url).searchParams.has("expired") };
+  const csrf = await createHostLoginCsrf();
+  return data(
+    {
+      expired: new URL(request.url).searchParams.has("expired"),
+      csrfToken: csrf.csrfToken,
+    },
+    { headers: { "Set-Cookie": csrf.cookie } },
+  );
 }
 export async function action({ request }: ActionFunctionArgs) {
-  requireSameOrigin(request);
   const formData = await request.formData();
+  const origin = checkHostRequestOrigin(request);
+  const csrf = await checkHostLoginCsrf(
+    request,
+    String(formData.get("csrfToken") ?? ""),
+  );
+  if (!origin.ok || !csrf.matched) {
+    const reason = !origin.ok
+      ? origin.reason
+      : !csrf.formPresent
+        ? "CSRF_FORM_MISSING"
+        : !csrf.cookiePresent
+          ? "CSRF_COOKIE_MISSING"
+          : "CSRF_MISMATCH";
+    console.warn(
+      "Host login rejected",
+      securityDiagnostic(request, reason, {
+        csrfFormPresent: csrf.formPresent,
+        csrfCookiePresent: csrf.cookiePresent,
+        csrfMatched: csrf.matched,
+        originMatched: origin.ok,
+      }),
+    );
+    throw new Response("Host login is temporarily unavailable.", {
+      status: 403,
+    });
+  }
   const email = String(formData.get("email") ?? "");
   const password = String(formData.get("password") ?? "");
   const shop = configuredHostShop();
@@ -66,10 +105,11 @@ export async function action({ request }: ActionFunctionArgs) {
   });
   const headers = new Headers();
   for (const cookie of created.cookies) headers.append("Set-Cookie", cookie);
+  headers.append("Set-Cookie", await clearHostLoginCsrf());
   return redirect("/host", { headers });
 }
 export default function HostLogin() {
-  const { expired } = useLoaderData<typeof loader>();
+  const { expired, csrfToken } = useLoaderData<typeof loader>();
   const data = useActionData<typeof action>();
   return (
     <main className="host-page host-login">
@@ -87,7 +127,8 @@ export default function HostLogin() {
             {data.error}
           </p>
         ) : null}
-        <Form className="host-form" method="post">
+        <Form className="host-form" method="post" action="/host/login">
+          <input type="hidden" name="csrfToken" value={csrfToken} />
           <label>
             Email
             <input type="email" name="email" autoComplete="username" required />

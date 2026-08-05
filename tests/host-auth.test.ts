@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  checkHostLoginCsrf,
+  createHostLoginCsrf,
   hashHostSecret,
   normalizeHostEmail,
   randomHostToken,
@@ -11,7 +13,12 @@ import {
   verifyHostPassword,
 } from "../app/lib/host-password.server.ts";
 import { hostRoleAllows } from "../app/lib/host-permissions.ts";
-import { verifyHostCsrfToken } from "../app/lib/host-csrf.server.ts";
+import {
+  checkHostRequestOrigin,
+  configuredHostOrigin,
+  securityDiagnostic,
+  verifyHostCsrfToken,
+} from "../app/lib/host-csrf.server.ts";
 
 test("Host tokens contain 256 bits and only their stable hash is persisted", () => {
   const token = randomHostToken();
@@ -57,4 +64,91 @@ test("Host role matrix enforces owner-only and wheel permissions", () => {
   assert.equal(hostRoleAllows("HOST", "wheels:operate"), true);
   assert.equal(hostRoleAllows("MODERATOR", "wheels:operate"), false);
   assert.equal(hostRoleAllows("VIEWER", "claims:manage"), false);
+});
+
+test("configured public origin accepts Render HTTPS regardless of internal request URL", () => {
+  const previous = process.env.HOST_PORTAL_URL;
+  process.env.HOST_PORTAL_URL = "https://asylum-test.onrender.com/";
+  try {
+    assert.equal(configuredHostOrigin(), "https://asylum-test.onrender.com");
+    const request = new Request(
+      "http://localhost:3000/host/login.data?expired=1",
+      {
+        method: "POST",
+        headers: {
+          origin: "https://asylum-test.onrender.com",
+          "x-forwarded-proto": "https",
+          "x-forwarded-host": "asylum-test.onrender.com",
+        },
+      },
+    );
+    assert.equal(checkHostRequestOrigin(request).ok, true);
+    assert.equal(
+      securityDiagnostic(request, "TEST").pathname,
+      "/host/login.data",
+    );
+  } finally {
+    if (previous === undefined) delete process.env.HOST_PORTAL_URL;
+    else process.env.HOST_PORTAL_URL = previous;
+  }
+});
+
+test("missing and unapproved origins remain rejected", () => {
+  const previous = process.env.HOST_PORTAL_URL;
+  process.env.HOST_PORTAL_URL = "https://asylum-test.onrender.com";
+  try {
+    assert.equal(
+      checkHostRequestOrigin(
+        new Request("http://localhost:3000/host/login", { method: "POST" }),
+      ).ok,
+      false,
+    );
+    assert.equal(
+      checkHostRequestOrigin(
+        new Request("http://localhost:3000/host/login", {
+          method: "POST",
+          headers: { origin: "https://evil.example" },
+        }),
+      ).ok,
+      false,
+    );
+  } finally {
+    if (previous === undefined) delete process.env.HOST_PORTAL_URL;
+    else process.env.HOST_PORTAL_URL = previous;
+  }
+});
+
+test("login CSRF cookie is host-wide and must match the hidden form value", async () => {
+  const csrf = await createHostLoginCsrf();
+  assert.match(csrf.cookie, /Path=\//);
+  assert.match(csrf.cookie, /HttpOnly/);
+  assert.match(csrf.cookie, /SameSite=Lax/);
+  const cookie = csrf.cookie.split(";")[0];
+  assert.deepEqual(
+    await checkHostLoginCsrf(
+      new Request("http://localhost/host/login.data?expired=1", {
+        headers: { cookie },
+      }),
+      csrf.csrfToken,
+    ),
+    { formPresent: true, cookiePresent: true, matched: true },
+  );
+  assert.equal(
+    (
+      await checkHostLoginCsrf(
+        new Request("http://localhost/host/login.data", {
+          headers: { cookie },
+        }),
+        "wrong",
+      )
+    ).matched,
+    false,
+  );
+  assert.deepEqual(
+    await checkHostLoginCsrf(
+      new Request("http://localhost/host/login.data"),
+      csrf.csrfToken,
+    ),
+    { formPresent: true, cookiePresent: false, matched: false },
+  );
 });

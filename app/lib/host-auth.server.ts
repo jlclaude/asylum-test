@@ -8,7 +8,11 @@ import {
   type HostPermission,
 } from "./host-permissions";
 import { recordHostAuditEvent } from "../models/host-audit.server";
-import { requireSameOrigin, verifyHostCsrfToken } from "./host-csrf.server";
+import {
+  hostCsrfTokensMatch,
+  requireSameOrigin,
+  verifyHostCsrfToken,
+} from "./host-csrf.server";
 
 const PRODUCTION = process.env.NODE_ENV === "production";
 const COOKIE_NAME = PRODUCTION
@@ -23,6 +27,16 @@ const hostCookie = createCookie(COOKIE_NAME, {
 const csrfCookie = createCookie(
   PRODUCTION ? "__Host-asylum_host_csrf" : "asylum_host_csrf",
   { httpOnly: false, secure: PRODUCTION, sameSite: "strict", path: "/" },
+);
+const loginCsrfCookie = createCookie(
+  PRODUCTION ? "__Host-asylum_host_login_csrf" : "asylum_host_login_csrf",
+  {
+    httpOnly: true,
+    secure: PRODUCTION,
+    sameSite: "lax",
+    path: "/",
+    maxAge: 15 * 60,
+  },
 );
 const INACTIVITY_MS = 8 * 60 * 60 * 1000;
 const NORMAL_MS = 12 * 60 * 60 * 1000;
@@ -44,6 +58,26 @@ export function hashHostSecret(value: string) {
 }
 export function randomHostToken() {
   return randomBytes(32).toString("base64url");
+}
+export async function createHostLoginCsrf() {
+  const csrfToken = randomHostToken();
+  return { csrfToken, cookie: await loginCsrfCookie.serialize(csrfToken) };
+}
+
+export async function checkHostLoginCsrf(request: Request, submitted: string) {
+  const cookieToken =
+    ((await loginCsrfCookie.parse(request.headers.get("Cookie"))) as
+      string | null) ?? "";
+  const matched = hostCsrfTokensMatch(submitted, cookieToken);
+  return {
+    formPresent: Boolean(submitted),
+    cookiePresent: Boolean(cookieToken),
+    matched,
+  };
+}
+
+export function clearHostLoginCsrf() {
+  return loginCsrfCookie.serialize("", { maxAge: 0 });
 }
 export function normalizeHostEmail(value: string) {
   return value.trim().toLowerCase();
