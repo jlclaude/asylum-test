@@ -1,6 +1,12 @@
 import type { WheelEntry } from "../models/game-run.server";
 
 export const CLAIM_DISPLAY_NAME_MAX_LENGTH = 100;
+export const DUPLICATE_DISPLAY_NAME_MESSAGE =
+  "That display name is already being used in this raffle. Please add a last initial or another identifier.";
+
+export function normalizeDisplayNameForUniqueness(name: string) {
+  return name.normalize("NFKC").trim().replace(/\s+/gu, " ").toLowerCase();
+}
 
 export function validateClaimDisplayName(value: string) {
   const displayName = value.trim();

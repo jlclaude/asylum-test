@@ -3,6 +3,7 @@ import { formatRaffleCode } from "./raffle-number.ts";
 import { REWARD_CHAMBER_VALUES, rewardChamberCanBeRepaired } from "./reward-chamber.ts";
 import { MAX_SPIN_DURATION_SECONDS, MIN_SPIN_DURATION_SECONDS } from "./spin-duration.ts";
 import { getContainmentLabel, REWARD_CHAMBER_LABEL } from "./wheel-labels.ts";
+import { normalizeDisplayNameForUniqueness } from "./claim-display-name.ts";
 
 export type ReadinessSeverity = "PASS" | "WARNING" | "BLOCKING";
 export type ReadinessStatus = "PASSED" | "NEEDS_ATTENTION" | "FAILED";
@@ -122,7 +123,6 @@ function parseEntries(value: string): { entries?: Entry[]; error?: string } {
   }
 }
 
-const normalizedName = (value: string) => value.trim().replace(/\s+/g, " ").toLocaleLowerCase();
 const sameEntries = (left: Entry[], right: Entry[]) => JSON.stringify(left) === JSON.stringify(right);
 const entryKey = (entry: Entry) => "claimId" in entry
   ? `name:${String(entry.claimId)}:${String(entry.displayName)}`
@@ -168,7 +168,17 @@ export function evaluateGameReadiness(snapshot: ReadinessSnapshot): GameReadines
   checks.push(new Set(claims.map((claim) => claim.id)).size === claims.length
     ? check("PASS", "claims.identity", "CLAIMS", "Claim identities are unique", "Every loaded claim belongs to this game through its database relation.")
     : check("BLOCKING", "claims.identity", "CLAIMS", "Claim identities conflict", "Duplicate claim IDs cannot be used to build wheel entries."));
-  const activeClaims = claims.filter((claim) => claim.status === "PENDING" || claim.status === "CONFIRMED");
+  const activeClaims = orderedClaims.filter((claim) => claim.status === "PENDING" || claim.status === "CONFIRMED");
+  const resultsStarted = Boolean(
+    run?.wheels.some(
+      (wheel) =>
+        wheel.status === "SPINNING" ||
+        wheel.status === "COMPLETED" ||
+        wheel.winnerEntryIndex !== null ||
+        wheel.spunAt !== null ||
+        wheel.completedAt !== null,
+    ),
+  );
   const reservedQuantity = activeClaims.reduce((sum, claim) => sum + claim.quantity, 0);
   checks.push(reservedQuantity <= game.totalSpots
     ? check("PASS", "claims.capacity", "CLAIMS", "Claim quantities fit capacity", `${reservedQuantity} of ${game.totalSpots} spots are reserved.`)
@@ -182,10 +192,33 @@ export function evaluateGameReadiness(snapshot: ReadinessSnapshot): GameReadines
   checks.push(eligibleQuantity > 0
     ? check("PASS", "claims.eligible", "CLAIMS", "Paid wheel entries are available", `${eligibleQuantity} confirmed paid spots are eligible.`)
     : check("BLOCKING", "claims.eligible", "CLAIMS", "No confirmed paid entries", "At least one confirmed paid spot is required before wheels can open."));
-  const blankNames = eligibleClaims.filter((claim) => !claim.displayName.trim());
+  const blankNames = activeClaims.filter(
+    (claim) => !normalizeDisplayNameForUniqueness(claim.displayName),
+  );
   checks.push(blankNames.length
-    ? check("BLOCKING", "claims.names", "CLAIMS", "Eligible display names are missing", `${blankNames.length} eligible claims have blank display names.`)
-    : check("PASS", "claims.names", "CLAIMS", "Eligible display names are present", "Duplicate names are allowed and retained."));
+    ? check(resultsStarted ? "WARNING" : "BLOCKING", "claims.names", "CLAIMS", "Active display names are missing", `${blankNames.length} active claims have blank display names. ${resultsStarted ? "Wheel history is preserved." : "Edit them before initializing wheels."}`)
+    : check("PASS", "claims.names", "CLAIMS", "Active display names are present", "Every pending and confirmed claim has a display name."));
+  const claimsByName = new Map<string, Array<{ name: string; sequence: number }>>();
+  for (const claim of activeClaims) {
+    const normalized = normalizeDisplayNameForUniqueness(claim.displayName);
+    if (!normalized) continue;
+    const sequence = orderedClaims.findIndex((candidate) => candidate.id === claim.id) + 1;
+    const group = claimsByName.get(normalized) ?? [];
+    group.push({ name: claim.displayName, sequence });
+    claimsByName.set(normalized, group);
+  }
+  const duplicateNames = [...claimsByName.values()].filter(
+    (group) => group.length > 1,
+  );
+  checks.push(duplicateNames.length
+    ? check(
+        resultsStarted ? "WARNING" : "BLOCKING",
+        "claims.unique-names",
+        "CLAIMS",
+        "Duplicate active display names found",
+        `${duplicateNames.map((group) => `${group[0]?.name ?? "Unnamed"} (claims ${group.map((item) => `#${item.sequence}`).join(", ")})`).join("; ")}. ${resultsStarted ? "Wheel history will not be rewritten." : "Edit one of these names before wheel initialization."}`,
+      )
+    : check("PASS", "claims.unique-names", "CLAIMS", "Active display names are unique", "Every pending and confirmed claim has a distinct normalized display name."));
   const excluded = claims.filter((claim) => claim.status === "PENDING" || (claim.status === "CONFIRMED" && !claim.externalPayment));
   checks.push(excluded.length
     ? check("WARNING", "claims.excluded", "CLAIMS", "Claims are excluded from wheels", `${excluded.length} pending or unpaid claims will not appear on name wheels.`)
@@ -334,7 +367,7 @@ export function evaluateGameReadiness(snapshot: ReadinessSnapshot): GameReadines
         if (pair.name === null || pair.index === null) return pair.name === null && pair.index === null;
         if (pair.index < 0 || pair.index >= sourceEntries.length) return false;
         return sourceEntries[pair.index]?.displayName === pair.name &&
-          (!firstName?.winnerDisplayName || normalizedName(pair.name) !== normalizedName(firstName.winnerDisplayName));
+          (!firstName?.winnerDisplayName || normalizeDisplayNameForUniqueness(pair.name) !== normalizeDisplayNameForUniqueness(firstName.winnerDisplayName));
       });
       checks.push(valid
         ? check("PASS", "second-chance.saved", "SECOND_CHANCE", "Second Chance results are valid", "Saved results remain tied to Containment A and valid source indexes.")

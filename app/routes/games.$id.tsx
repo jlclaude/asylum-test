@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import type {
   ActionFunctionArgs,
   LoaderFunctionArgs,
@@ -27,6 +28,7 @@ import { renderGameInstructionVariables } from "../lib/game-instruction-variable
 import { toPublicSecondChanceResult } from "../lib/second-chance";
 import { AsylumLogo } from "../components/asylum/AsylumLogo";
 import { formatRaffleCode } from "../lib/raffle-number";
+import { DUPLICATE_DISPLAY_NAME_MESSAGE } from "../lib/claim-display-name";
 
 import "../styles/game-results.css";
 
@@ -91,6 +93,12 @@ export async function loader({
 type ActionData = {
   error?: string;
   success?: string;
+  values?: {
+    displayName: string;
+    facebookHandle: string;
+    quantity: string;
+    comment: string;
+  };
 };
 
 export async function action({
@@ -118,29 +126,28 @@ export async function action({
   ).trim();
 
   const quantity = Number(formData.get("quantity"));
+  const values = {
+    displayName,
+    facebookHandle,
+    quantity: String(formData.get("quantity") ?? ""),
+    comment,
+  };
+  const invalid = (error: string): ActionData => ({ error, values });
 
   if (!displayName) {
-    return {
-      error: "Enter your Facebook display name.",
-    };
+    return invalid("Enter your Facebook display name.");
   }
 
   if (displayName.length > 100) {
-    return {
-      error: "Your display name is too long.",
-    };
+    return invalid("Your display name is too long.");
   }
 
   if (facebookHandle.length > 100) {
-    return {
-      error: "Facebook @username must be 100 characters or fewer.",
-    };
+    return invalid("Facebook @username must be 100 characters or fewer.");
   }
 
   if (comment.length > 500) {
-    return {
-      error: "Comments must be 500 characters or fewer.",
-    };
+    return invalid("Comments must be 500 characters or fewer.");
   }
 
   if (
@@ -148,9 +155,7 @@ export async function action({
     quantity < 1 ||
     quantity > 10000
   ) {
-    return {
-      error: "Enter a valid whole-number quantity.",
-    };
+    return invalid("Enter a valid whole-number quantity.");
   }
 
   try {
@@ -163,9 +168,7 @@ export async function action({
     });
 
     if (!result.success) {
-      return {
-        error: result.error,
-      };
+      return invalid(result.error);
     }
 
     return {
@@ -176,12 +179,11 @@ export async function action({
   } catch (error) {
     console.error("Public claim failed:", error);
 
-    return {
-      error:
-        error instanceof Error
-          ? error.message
-          : "Your claim could not be submitted.",
-    };
+    return invalid(
+      error instanceof Error
+        ? error.message
+        : "Your claim could not be submitted.",
+    );
   }
 }
 
@@ -722,8 +724,15 @@ export default function PublicGamePage() {
 
   const actionData = useActionData<ActionData>();
   const navigation = useNavigation();
+  const displayNameRef = useRef<HTMLInputElement>(null);
 
   const isSubmitting = navigation.state === "submitting";
+  const duplicateNameRejected =
+    actionData?.error === DUPLICATE_DISPLAY_NAME_MESSAGE;
+
+  useEffect(() => {
+    if (duplicateNameRejected) displayNameRef.current?.focus();
+  }, [duplicateNameRejected]);
 
   const remaining = Math.max(
     game.totalSpots - totals.reservedQuantity,
@@ -884,14 +893,22 @@ export default function PublicGamePage() {
                   </label>
 
                   <input
+                    ref={displayNameRef}
                     className="public-input"
                     id="displayName"
                     name="displayName"
                     type="text"
                     maxLength={100}
+                    defaultValue={actionData?.values?.displayName}
+                    aria-invalid={duplicateNameRejected || undefined}
+                    aria-describedby="display-name-uniqueness"
                     required
                     disabled={!claimsOpen || isSubmitting}
                   />
+                  <small id="display-name-uniqueness">
+                    Display names must be unique within this raffle so
+                    everyone can be identified on the wheel.
+                  </small>
                 </div>
 
                 <div className="public-field">
@@ -905,6 +922,7 @@ export default function PublicGamePage() {
                     name="facebookHandle"
                     type="text"
                     maxLength={100}
+                    defaultValue={actionData?.values?.facebookHandle}
                     placeholder="@username (optional)"
                     disabled={!claimsOpen || isSubmitting}
                   />
@@ -927,6 +945,7 @@ export default function PublicGamePage() {
                     min="1"
                     max={remaining}
                     step="1"
+                    defaultValue={actionData?.values?.quantity}
                     required
                     disabled={!claimsOpen || isSubmitting}
                   />
@@ -942,6 +961,7 @@ export default function PublicGamePage() {
                     id="comment"
                     name="comment"
                     maxLength={500}
+                    defaultValue={actionData?.values?.comment}
                     placeholder="Optional message for the host"
                     disabled={!claimsOpen || isSubmitting}
                   />

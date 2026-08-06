@@ -2,6 +2,8 @@ import { Prisma, type ClaimStatus } from "@prisma/client";
 import db from "../db.server";
 import {
   claimNameEditBlockReason,
+  DUPLICATE_DISPLAY_NAME_MESSAGE,
+  normalizeDisplayNameForUniqueness,
   replaceClaimDisplayNameInEntries,
   validateClaimDisplayName,
 } from "../lib/claim-display-name";
@@ -25,26 +27,109 @@ export type CreateClaimWithStateInput = CreateClaimInput & {
   createdAt?: Date;
 };
 
-export function createClaimWithTransaction(
+const ACTIVE_CLAIM_STATUSES: ClaimStatus[] = ["PENDING", "CONFIRMED"];
+
+function isDuplicateReservationError(error: unknown) {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === "P2002"
+  );
+}
+
+async function assertDisplayNameAvailable(
+  transaction: Prisma.TransactionClient,
+  gameId: string,
+  normalizedDisplayName: string,
+  excludeClaimId?: string,
+) {
+  const activeClaims = await transaction.claim.findMany({
+    where: {
+      gameId,
+      status: { in: ACTIVE_CLAIM_STATUSES },
+      ...(excludeClaimId ? { id: { not: excludeClaimId } } : {}),
+    },
+    select: { displayName: true, normalizedDisplayName: true },
+  });
+  if (
+    activeClaims.some(
+      (claim) =>
+        (claim.normalizedDisplayName ??
+          normalizeDisplayNameForUniqueness(claim.displayName)) ===
+        normalizedDisplayName,
+    )
+  ) {
+    throw new Error(DUPLICATE_DISPLAY_NAME_MESSAGE);
+  }
+}
+
+async function reserveDisplayName(
+  transaction: Prisma.TransactionClient,
+  input: { claimId: string; gameId: string; normalizedDisplayName: string },
+) {
+  try {
+    await transaction.claimNameReservation.upsert({
+      where: { claimId: input.claimId },
+      create: input,
+      update: {
+        gameId: input.gameId,
+        normalizedDisplayName: input.normalizedDisplayName,
+      },
+    });
+  } catch (error) {
+    if (isDuplicateReservationError(error)) {
+      throw new Error(DUPLICATE_DISPLAY_NAME_MESSAGE);
+    }
+    throw error;
+  }
+}
+
+export async function createClaimWithTransaction(
   transaction: Prisma.TransactionClient,
   input: CreateClaimWithStateInput,
 ) {
-  return transaction.claim.create({
+  const validation = validateClaimDisplayName(input.displayName);
+  if ("error" in validation) throw new Error(validation.error);
+  const normalizedDisplayName = normalizeDisplayNameForUniqueness(
+    validation.displayName,
+  );
+  const status = input.status ?? "PENDING";
+  if (ACTIVE_CLAIM_STATUSES.includes(status)) {
+    await assertDisplayNameAvailable(
+      transaction,
+      input.gameId,
+      normalizedDisplayName,
+    );
+  }
+  const claim = await transaction.claim.create({
     data: {
       gameId: input.gameId,
-      displayName: input.displayName,
+      displayName: validation.displayName,
+      normalizedDisplayName,
       facebookHandle: input.facebookHandle || null,
       quantity: input.quantity,
       comment: input.comment || null,
-      status: input.status ?? "PENDING",
+      status,
       externalPayment: input.externalPayment ?? false,
       createdAt: input.createdAt,
     },
   });
+  if (ACTIVE_CLAIM_STATUSES.includes(status)) {
+    await reserveDisplayName(transaction, {
+      claimId: claim.id,
+      gameId: claim.gameId,
+      normalizedDisplayName,
+    });
+  }
+  return claim;
 }
 
 export async function createClaim(input: CreateClaimInput) {
-  return createClaimWithTransaction(db, input);
+  return retrySerializableTransaction(() =>
+    db.$transaction(
+      (transaction) => createClaimWithTransaction(transaction, input),
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    ),
+  );
 }
 
 export async function createPublicClaim(input: CreateClaimInput) {
@@ -101,17 +186,7 @@ export async function createPublicClaim(input: CreateClaimInput) {
       };
     }
 
-    const claim = await transaction.claim.create({
-      data: {
-        gameId: input.gameId,
-        displayName: input.displayName,
-        facebookHandle: input.facebookHandle || null,
-        quantity: input.quantity,
-        comment: input.comment || null,
-        status: "PENDING",
-        externalPayment: false,
-      },
-    });
+    const claim = await createClaimWithTransaction(transaction, input);
 
     return {
       success: true as const,
@@ -177,13 +252,38 @@ export async function updateClaim(
     expiresAt?: Date | null;
   },
 ) {
-  return db.claim.updateMany({
-    where: {
-      id: claimId,
-      gameId,
-    },
-    data,
-  });
+  return retrySerializableTransaction(() => db.$transaction(async (transaction) => {
+    const claim = await transaction.claim.findFirst({
+      where: { id: claimId, gameId },
+    });
+    if (!claim) return { count: 0 };
+    const nextStatus = data.status ?? claim.status;
+    const normalizedDisplayName =
+      claim.normalizedDisplayName ??
+      normalizeDisplayNameForUniqueness(claim.displayName);
+    if (ACTIVE_CLAIM_STATUSES.includes(nextStatus)) {
+      await assertDisplayNameAvailable(
+        transaction,
+        gameId,
+        normalizedDisplayName,
+        claim.id,
+      );
+      await reserveDisplayName(transaction, {
+        claimId: claim.id,
+        gameId,
+        normalizedDisplayName,
+      });
+    } else {
+      await transaction.claimNameReservation.deleteMany({
+        where: { claimId: claim.id },
+      });
+    }
+    await transaction.claim.update({
+      where: { id: claim.id },
+      data: { ...data, normalizedDisplayName },
+    });
+    return { count: 1 };
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }));
 }
 
 export async function confirmClaimPayment(
@@ -299,7 +399,7 @@ export async function updateClaimDisplayName(input: UpdateClaimDisplayNameInput)
   }
   const displayName = validation.displayName;
 
-  return db.$transaction(async (transaction) => {
+  return retrySerializableTransaction(() => db.$transaction(async (transaction) => {
     const game = await transaction.game.findFirst({
       where: { id: input.gameId, shop: input.shop },
       select: {
@@ -325,6 +425,14 @@ export async function updateClaimDisplayName(input: UpdateClaimDisplayNameInput)
       where: { id: input.claimId, gameId: game.id },
     });
     if (!claim) throw new Error("Claim not found.");
+
+    const normalizedDisplayName = normalizeDisplayNameForUniqueness(displayName);
+    await assertDisplayNameAvailable(
+      transaction,
+      game.id,
+      normalizedDisplayName,
+      claim.id,
+    );
 
     const wheels = game.run?.rounds.flatMap((round) => round.wheels) ?? [];
     const blockReason = claimNameEditBlockReason(
@@ -370,8 +478,15 @@ export async function updateClaimDisplayName(input: UpdateClaimDisplayNameInput)
 
     await transaction.claim.update({
       where: { id: claim.id },
-      data: { displayName },
+      data: { displayName, normalizedDisplayName },
     });
+    if (ACTIVE_CLAIM_STATUSES.includes(claim.status)) {
+      await reserveDisplayName(transaction, {
+        claimId: claim.id,
+        gameId: game.id,
+        normalizedDisplayName,
+      });
+    }
 
     if (process.env.NODE_ENV === "development") {
       console.info("Claim display name corrected", {
@@ -389,5 +504,5 @@ export async function updateClaimDisplayName(input: UpdateClaimDisplayNameInput)
       displayName,
       updatedEntryCount,
     };
-  });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }));
 }

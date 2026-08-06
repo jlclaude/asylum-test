@@ -575,6 +575,9 @@ export function GameControlCenter({
                               maxLength={100}
                               required
                             />
+                            <small>
+                              Display names must be unique within this raffle.
+                            </small>
                           </div>
                           <div className="control-name-editor-actions">
                             <button
@@ -834,6 +837,10 @@ export function GameControlCenter({
                         remaining === 0
                       }
                     />
+                    <small>
+                      Display names must be unique within this raffle so each
+                      participant is identifiable on the wheel.
+                    </small>
                   </div>
                   <div className="control-field">
                     <label htmlFor="facebookHandle">
