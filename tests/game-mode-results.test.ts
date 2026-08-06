@@ -4,7 +4,7 @@ import test from "node:test";
 import { toPublicGameResults } from "../app/lib/game-results.ts";
 import { adjacentWheelId, broadcastWheelStatus, defaultActiveWheelId, defaultBroadcastActiveWheelId, defaultGameModeActiveWheelId, fullscreenIsActive, nextUnfinishedWheelId, savedSoundIsMuted, shortcutTargetIsEditable, unfinishedWheelIds, wheelActionBlockReason, wheelScrollBehavior } from "../app/lib/game-mode-operator.ts";
 import { formatPublicName } from "../app/lib/public-name.ts";
-import { claimNameEditBlockReason, DUPLICATE_DISPLAY_NAME_MESSAGE, normalizeDisplayNameForUniqueness, replaceClaimDisplayNameInEntries, validateClaimDisplayName } from "../app/lib/claim-display-name.ts";
+import { claimNameEditBlockReason, replaceClaimDisplayNameInEntries, validateClaimDisplayName } from "../app/lib/claim-display-name.ts";
 import { formatPrizeClaimShippingSummary, isPrizeClaimExpired, prizeClaimExpirationDate, validatePrizeClaimSubmission } from "../app/lib/prize-claim.ts";
 import { buildPrizeClaimUrl, generatePrizeClaimToken, hashPrizeClaimToken } from "../app/lib/prize-claim-token.server.ts";
 import { decryptPrizeClaimToken, encryptPrizeClaimToken } from "../app/lib/prize-claim-encryption.server.ts";
@@ -277,16 +277,6 @@ test("claim name correction validates plain display text", () => {
   assert.deepEqual(validateClaimDisplayName("<script>alert('x')</script>"), {
     displayName: "<script>alert('x')</script>",
   });
-});
-
-test("claim display-name uniqueness uses NFKC, case folding, and collapsed whitespace", () => {
-  const normalized = normalizeDisplayNameForUniqueness("  John   Smith  ");
-  assert.equal(normalized, "john smith");
-  assert.equal(normalizeDisplayNameForUniqueness("JOHN SMITH"), normalized);
-  assert.equal(normalizeDisplayNameForUniqueness("Ｊｏｈｎ　Ｓｍｉｔｈ"), normalized);
-  assert.notEqual(normalizeDisplayNameForUniqueness("John-Smith"), normalized);
-  assert.notEqual(normalizeDisplayNameForUniqueness("John Smith Jr."), normalized);
-  assert.match(DUPLICATE_DISPLAY_NAME_MESSAGE, /already being used in this raffle/i);
 });
 
 test("claim name correction preserves duplicate count, indexes, and other claims", () => {

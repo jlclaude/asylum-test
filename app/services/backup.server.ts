@@ -16,7 +16,6 @@ import {
 } from "../lib/backup-format";
 import { claimsCsv, prizeClaimsCsv, winnersCsv } from "../lib/csv-export";
 import { formatRaffleCode } from "../lib/raffle-number";
-import { normalizeDisplayNameForUniqueness } from "../lib/claim-display-name";
 
 const SCHEMA_VERSION = "asylum-games-prisma-year-raffles-2026-08-04";
 const iso = (value: Date | null) => value?.toISOString() ?? null;
@@ -342,31 +341,11 @@ export async function restoreEmergencyBackup(input: { text: string; shop: string
     } });
     for (const item of data.claims) await transaction.claim.create({ data: {
       id: stringValue(item, "id"), gameId: stringValue(item, "gameId"), displayName: stringValue(item, "displayName"),
-      normalizedDisplayName: normalizeDisplayNameForUniqueness(stringValue(item, "displayName")),
       facebookHandle: nullableString(item, "facebookHandle"), quantity: numberValue(item, "quantity"),
       comment: nullableString(item, "comment"), status: stringValue(item, "status") as ClaimStatus,
       externalPayment: boolValue(item, "externalPayment"), expiresAt: nullableDate(item, "expiresAt"),
       createdAt: dateValue(item, "createdAt"), updatedAt: dateValue(item, "updatedAt"),
     } });
-    const restoredActiveClaims = await transaction.claim.findMany({
-      where: {
-        game: { shop: input.shop },
-        status: { in: ["PENDING", "CONFIRMED"] },
-      },
-      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-    });
-    const reservedNames = new Set<string>();
-    for (const claim of restoredActiveClaims) {
-      const normalizedDisplayName = normalizeDisplayNameForUniqueness(
-        claim.displayName,
-      );
-      const key = `${claim.gameId}\u0000${normalizedDisplayName}`;
-      if (!normalizedDisplayName || reservedNames.has(key)) continue;
-      reservedNames.add(key);
-      await transaction.claimNameReservation.create({
-        data: { claimId: claim.id, gameId: claim.gameId, normalizedDisplayName },
-      });
-    }
     for (const item of data.runs) await transaction.gameRun.create({ data: {
       id: stringValue(item, "id"), gameId: stringValue(item, "gameId"), startedAt: dateValue(item, "startedAt"),
       completedAt: nullableDate(item, "completedAt"), secondChanceCalculatedAt: nullableDate(item, "secondChanceCalculatedAt"),

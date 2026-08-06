@@ -140,10 +140,9 @@ model Game {
   createdAt          DateTime   @default(now())
   updatedAt          DateTime   @updatedAt
 
-  claims                Claim[]
-  claimNameReservations ClaimNameReservation[]
-  run                   GameRun?
-  prizeClaims           PrizeClaim[]
+  claims      Claim[]
+  run         GameRun?
+  prizeClaims PrizeClaim[]
 
   @@unique([shop, raffleYear, raffleNumber])
   @@index([shop])
@@ -186,42 +185,24 @@ model GameTemplate {
 }
 
 model Claim {
-  id                    String      @id @default(cuid())
-  gameId                String
-  displayName           String
-  normalizedDisplayName String?
-  facebookHandle        String?
-  quantity              Int
-  comment               String?
-  status                ClaimStatus @default(PENDING)
-  externalPayment       Boolean     @default(false)
-  expiresAt             DateTime?
-  createdAt             DateTime    @default(now())
-  updatedAt             DateTime    @updatedAt
+  id              String      @id @default(cuid())
+  gameId          String
+  displayName     String
+  facebookHandle  String?
+  quantity        Int
+  comment         String?
+  status          ClaimStatus @default(PENDING)
+  externalPayment Boolean     @default(false)
+  expiresAt       DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
 
-  game            Game                  @relation(fields: [gameId], references: [id], onDelete: Cascade)
-  winningWheels   GameWheel[]           @relation("WinningClaim")
-  prizeClaims     PrizeClaim[]          @relation("PrizeClaimWinner")
-  nameReservation ClaimNameReservation?
+  game          Game         @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  winningWheels GameWheel[]  @relation("WinningClaim")
+  prizeClaims   PrizeClaim[] @relation("PrizeClaimWinner")
 
   @@index([gameId])
   @@index([gameId, status])
-  @@index([gameId, normalizedDisplayName])
-}
-
-model ClaimNameReservation {
-  id                    String   @id @default(cuid())
-  gameId                String
-  claimId               String   @unique
-  normalizedDisplayName String
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
-
-  game  Game  @relation(fields: [gameId], references: [id], onDelete: Cascade)
-  claim Claim @relation(fields: [claimId], references: [id], onDelete: Cascade)
-
-  @@unique([gameId, normalizedDisplayName])
-  @@index([gameId])
 }
 
 model GameRun {

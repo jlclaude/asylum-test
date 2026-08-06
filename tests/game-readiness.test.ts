@@ -110,27 +110,12 @@ test("malformed raffle years block readiness while historical years remain valid
   assert.equal(historical.checks.find((item) => item.id === "raffle.valid")?.severity, "PASS");
 });
 
-test("duplicate active display names block wheel initialization with claim sequences", () => {
+test("duplicate eligible display names remain valid and repeated", () => {
   const report = evaluateGameReadiness(snapshot({
-    claims: [claim({ id: "claim-a", displayName: "John Smith", quantity: 1 }), claim({ id: "claim-b", displayName: "  JOHN   SMITH ", quantity: 1, createdAt: "2026-01-01T00:00:01.000Z" })],
+    claims: [claim({ id: "claim-a", quantity: 1 }), claim({ id: "claim-b", quantity: 1, createdAt: "2026-01-01T00:00:01.000Z" })],
   }));
-  const duplicate = report.checks.find((item) => item.id === "claims.unique-names");
-  assert.equal(report.isReady, false);
-  assert.equal(duplicate?.severity, "BLOCKING");
-  assert.match(duplicate?.message ?? "", /#1, #2/);
-});
-
-test("duplicate names warn without rewriting history after a wheel starts", () => {
-  const input = readyRunSnapshot();
-  input.claims.push(claim({ id: "claim-b", createdAt: "2026-01-01T00:00:01.000Z" }));
-  input.run!.wheels[0].status = "SPINNING";
-  input.run!.wheels[0].spunAt = "2026-01-01T00:01:00.000Z";
-  input.run!.wheels[0].winnerEntryIndex = 0;
-  const duplicate = evaluateGameReadiness(input).checks.find(
-    (item) => item.id === "claims.unique-names",
-  );
-  assert.equal(duplicate?.severity, "WARNING");
-  assert.match(duplicate?.message ?? "", /history will not be rewritten/i);
+  assert.equal(report.isReady, true);
+  assert.equal(report.checks.find((item) => item.id === "claims.names")?.severity, "PASS");
 });
 
 test("blank eligible display names are blocking", () => {

@@ -23,7 +23,6 @@
     "prisma:generate": "npm run db:production:generate",
     "db:migrate:deploy": "npm run db:production:migrate:deploy",
     "db:status": "node scripts/verify-production-database-url.mjs && prisma migrate status",
-    "db:backfill-claim-names": "node scripts/backfill-claim-name-reservations.mjs",
     "lint": "eslint --ignore-path .gitignore --cache --cache-location ./node_modules/.cache/eslint .",
     "shopify": "shopify",
     "prisma": "prisma",

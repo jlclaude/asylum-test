@@ -1,4 +1,3 @@
-import { useEffect, useRef } from "react";
 import type {
   ActionFunctionArgs,
   LoaderFunctionArgs,
@@ -28,7 +27,6 @@ import { renderGameInstructionVariables } from "../lib/game-instruction-variable
 import { toPublicSecondChanceResult } from "../lib/second-chance";
 import { AsylumLogo } from "../components/asylum/AsylumLogo";
 import { formatRaffleCode } from "../lib/raffle-number";
-import { DUPLICATE_DISPLAY_NAME_MESSAGE } from "../lib/claim-display-name";
 
 import "../styles/game-results.css";
 
@@ -724,15 +722,8 @@ export default function PublicGamePage() {
 
   const actionData = useActionData<ActionData>();
   const navigation = useNavigation();
-  const displayNameRef = useRef<HTMLInputElement>(null);
 
   const isSubmitting = navigation.state === "submitting";
-  const duplicateNameRejected =
-    actionData?.error === DUPLICATE_DISPLAY_NAME_MESSAGE;
-
-  useEffect(() => {
-    if (duplicateNameRejected) displayNameRef.current?.focus();
-  }, [duplicateNameRejected]);
 
   const remaining = Math.max(
     game.totalSpots - totals.reservedQuantity,
@@ -893,22 +884,15 @@ export default function PublicGamePage() {
                   </label>
 
                   <input
-                    ref={displayNameRef}
                     className="public-input"
                     id="displayName"
                     name="displayName"
                     type="text"
                     maxLength={100}
                     defaultValue={actionData?.values?.displayName}
-                    aria-invalid={duplicateNameRejected || undefined}
-                    aria-describedby="display-name-uniqueness"
                     required
                     disabled={!claimsOpen || isSubmitting}
                   />
-                  <small id="display-name-uniqueness">
-                    Display names must be unique within this raffle so
-                    everyone can be identified on the wheel.
-                  </small>
                 </div>
 
                 <div className="public-field">
