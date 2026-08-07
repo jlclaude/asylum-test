@@ -215,13 +215,21 @@ export async function shuffleGameWheel(
       deserializeWheelEntries(wheel.shuffledEntriesJson),
     );
 
-    return transaction.gameWheel.update({
-      where: { id: wheel.id },
+    const update = await transaction.gameWheel.updateMany({
+      where: {
+        id: wheel.id,
+        status: "READY",
+        updatedAt: wheel.updatedAt,
+      },
       data: {
         shuffledEntriesJson: serializeWheelEntries(shuffled),
         shuffledAt: new Date(),
       },
     });
+    if (update.count === 0) {
+      throw new Error("This wheel changed in another interface. Refresh before shuffling again.");
+    }
+    return transaction.gameWheel.findUniqueOrThrow({ where: { id: wheel.id } });
   });
 }
 
@@ -253,10 +261,17 @@ export async function selectGameWheelDuration(
       MAX_SPIN_DURATION_SECONDS + 1,
     );
 
-    await transaction.gameWheel.update({
-      where: { id: wheel.id },
+    const update = await transaction.gameWheel.updateMany({
+      where: {
+        id: wheel.id,
+        status: "READY",
+        updatedAt: wheel.updatedAt,
+      },
       data: { spinDurationSeconds },
     });
+    if (update.count === 0) {
+      throw new Error("This wheel changed in another interface. Refresh before selecting a spin time.");
+    }
 
     return {
       wheelId: wheel.id,
@@ -320,8 +335,12 @@ export async function startGameWheelSpin(
       winnerValue = winningEntry.value;
     }
 
-    await transaction.gameWheel.update({
-      where: { id: wheel.id },
+    const spin = await transaction.gameWheel.updateMany({
+      where: {
+        id: wheel.id,
+        status: "READY",
+        updatedAt: wheel.updatedAt,
+      },
       data: {
         status: "SPINNING",
         winnerEntryIndex,
@@ -331,6 +350,9 @@ export async function startGameWheelSpin(
         spunAt,
       },
     });
+    if (spin.count === 0) {
+      throw new Error("This wheel changed in another interface. Refresh before spinning.");
+    }
 
     if (wheel.gameRound.status === "READY") {
       await transaction.gameRound.update({
@@ -401,11 +423,14 @@ export async function completeGameWheelSpin(
         secondChance: secondChanceCompletionPayload(secondChanceRun),
       };
     }
+    if (wheel.status !== "SPINNING") {
+      throw new Error("Only a spinning wheel can be completed.");
+    }
 
     const completion = await transaction.gameWheel.updateMany({
       where: {
         id: wheel.id,
-        status: { not: "COMPLETED" },
+        status: "SPINNING",
       },
       data: {
         status: "COMPLETED",
@@ -515,9 +540,14 @@ export async function acceptGameWheelResult(
       throw new Error("Only a persisted completed result can be accepted.");
     }
     if (wheel.resultAcceptedAt) return wheel;
-    return transaction.gameWheel.update({
-      where: { id: wheel.id },
-      data: { resultAcceptedAt: new Date() },
+    const acceptedAt = new Date();
+    const acceptance = await transaction.gameWheel.updateMany({
+      where: { id: wheel.id, status: "COMPLETED", resultAcceptedAt: null },
+      data: { resultAcceptedAt: acceptedAt },
     });
+    if (acceptance.count === 0) {
+      return transaction.gameWheel.findUniqueOrThrow({ where: { id: wheel.id } });
+    }
+    return transaction.gameWheel.findUniqueOrThrow({ where: { id: wheel.id } });
   });
 }

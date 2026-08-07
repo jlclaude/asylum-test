@@ -50,12 +50,25 @@ test("clean PostgreSQL supports raffle concurrency, idempotency, uniqueness, and
       winnerEntryIndex: 0, winnerClaimId: claim.id, winnerDisplayName: claim.displayName,
     } });
 
+    const concurrentSpins = await Promise.all([
+      db.gameWheel.updateMany({
+        where: { id: wheel.id, status: "READY", updatedAt: wheel.updatedAt },
+        data: { status: "SPINNING", winnerEntryIndex: 0, spunAt: new Date() },
+      }),
+      db.gameWheel.updateMany({
+        where: { id: wheel.id, status: "READY", updatedAt: wheel.updatedAt },
+        data: { status: "SPINNING", winnerEntryIndex: 1, spunAt: new Date() },
+      }),
+    ]);
+    assert.equal(concurrentSpins.reduce((sum, result) => sum + result.count, 0), 1);
+    assert.equal((await db.gameWheel.findUniqueOrThrow({ where: { id: wheel.id } })).status, "SPINNING");
+
     const firstCompletion = await db.gameWheel.updateMany({
-      where: { id: wheel.id, status: { not: "COMPLETED" } },
+      where: { id: wheel.id, status: "SPINNING" },
       data: { status: "COMPLETED", completedAt: new Date() },
     });
     const duplicateCompletion = await db.gameWheel.updateMany({
-      where: { id: wheel.id, status: { not: "COMPLETED" } },
+      where: { id: wheel.id, status: "SPINNING" },
       data: { status: "COMPLETED", completedAt: new Date() },
     });
     assert.equal(firstCompletion.count, 1);
