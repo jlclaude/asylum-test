@@ -10,6 +10,7 @@
     "build": "npm run clean && tsc -p tsconfig.json && node scripts/copy-static.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "vite-node tests/obs-controller.test.ts",
     "dev": "npm run build && electron .",
     "package:mac": "npm run build && electron-builder --mac --arm64 --x64 --dir"
   },
@@ -35,10 +36,16 @@
       "target": [
         {
           "target": "dir",
-          "arch": ["arm64", "x64"]
+          "arch": [
+            "arm64",
+            "x64"
+          ]
         }
       ],
       "identity": null
     }
+  },
+  "dependencies": {
+    "obs-websocket-js": "^5.0.8"
   }
 }

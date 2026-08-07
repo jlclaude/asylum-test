@@ -3,6 +3,9 @@ import { join } from "node:path";
 import { createFacebookView, clearFacebookSession } from "./facebook-view";
 import { goBack, goForward, navigate } from "./navigation";
 import { ASYLUM_ORIGIN, denyPermissions, isAsylumUrl, openExternalHttps, restrictNavigation } from "./security";
+import { ObsController } from "./obs/ObsController";
+import { ObsSettingsStore } from "./obs/obs-settings";
+import type { ObsConnectConfig } from "./obs/obs-types";
 
 const hostUrl = process.env.ASYLUM_DESKTOP_HOST_URL ?? `${ASYLUM_ORIGIN}/host`;
 const hostOrigin = new URL(hostUrl).origin;
@@ -12,6 +15,8 @@ let hostView: WebContentsView | null = null;
 let facebookView: WebContentsView | null = null;
 let currentGameLink = "";
 let currentFacebookPost = "";
+let obsController: ObsController;
+let obsSettings: ObsSettingsStore;
 const viewStates = { host: "loading", facebook: "loading" } as Record<"host" | "facebook", "loading" | "ready" | "failed" | "crashed">;
 
 function status(target: "host" | "facebook", state: "loading" | "ready" | "failed" | "crashed") {
@@ -99,12 +104,41 @@ function registerIpc() {
     currentFacebookPost = candidate.facebookPost;
     return true;
   });
+  const obsAction = (channel: string, action: (...args: unknown[]) => Promise<unknown> | unknown) => {
+    ipcMain.handle(channel, async (event, ...args) => {
+      if (!fromShell(event)) return { ok: false, error: "Unauthorized request." };
+      try { return { ok: true, value: await action(...args) }; }
+      catch (error) { return { ok: false, error: error instanceof Error ? error.message : "OBS request failed." }; }
+    });
+  };
+  obsAction("obs:settings", () => obsSettings.load());
+  obsAction("obs:state", () => obsController.getState());
+  obsAction("obs:connect", async (payload) => {
+    if (!payload || typeof payload !== "object") throw new Error("Invalid OBS connection settings.");
+    const candidate = payload as ObsConnectConfig & { rememberSettings?: boolean };
+    const saved = await obsSettings.load();
+    const config = { host: candidate.host, port: candidate.port, password: candidate.password || (saved.config.host === candidate.host && saved.config.port === candidate.port ? saved.config.password : "") };
+    await obsSettings.save(config, candidate.rememberSettings === true);
+    await obsController.connect(config);
+    return obsController.getState();
+  });
+  obsAction("obs:disconnect", () => obsController.disconnect());
+  obsAction("obs:refresh", () => obsController.refresh());
+  obsAction("obs:switch-scene", (sceneName) => obsController.switchScene(sceneName));
+  obsAction("obs:start-stream", () => obsController.startStream());
+  obsAction("obs:stop-stream", () => obsController.stopStream());
+  obsAction("obs:start-recording", () => obsController.startRecording());
+  obsAction("obs:stop-recording", () => obsController.stopRecording());
 }
 
 app.whenReady().then(() => {
   console.info("[desktop] starting", app.getVersion());
   session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
+  obsSettings = new ObsSettingsStore();
+  obsController = new ObsController();
+  obsController.subscribe((state) => windowRef?.webContents.send("obs:state-changed", state));
   registerIpc(); createWindow();
   app.on("activate", () => { if (BaseWindow.getAllWindows().length === 0) createWindow(); });
 });
+app.on("before-quit", () => { void obsController?.disconnect(); });
 app.on("window-all-closed", () => { if (process.platform !== "darwin") app.quit(); });

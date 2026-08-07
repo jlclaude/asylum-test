@@ -25,6 +25,21 @@ contextBridge.exposeInMainWorld("asylumDesktop", {
     copyGameLink: () => invoke("integration:copy-game-link"),
     copyFacebookPost: () => invoke("integration:copy-facebook-post"),
   },
+  obs: {
+    settings: () => invoke("obs:settings"),
+    state: () => invoke("obs:state"),
+    connect: (settings: unknown) => invoke("obs:connect", settings),
+    disconnect: () => invoke("obs:disconnect"),
+    refresh: () => invoke("obs:refresh"),
+    switchScene: (sceneName: string) => invoke("obs:switch-scene", sceneName),
+    startStream: () => invoke("obs:start-stream"), stopStream: () => invoke("obs:stop-stream"),
+    startRecording: () => invoke("obs:start-recording"), stopRecording: () => invoke("obs:stop-recording"),
+    onStateChanged: (callback: (state: unknown) => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, state: unknown) => callback(state);
+      ipcRenderer.on("obs:state-changed", listener);
+      return () => ipcRenderer.removeListener("obs:state-changed", listener);
+    },
+  },
   onStatus: (callback: (status: unknown) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, status: unknown) => callback(status);
     ipcRenderer.on("desktop:status", listener);

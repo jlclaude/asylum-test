@@ -1,5 +1,9 @@
 # Asylum Games Desktop
 
+The desktop companion embeds the Host Portal and a persistent Facebook view, and provides a local OBS Studio control panel. Open **Studio**, enable OBS WebSocket under **Tools → WebSocket Server Settings**, then connect to `127.0.0.1:4455`. Remote hosts are rejected. A remembered password is encrypted with the operating system credential facility; when encryption is unavailable it remains session-only.
+
+The Studio panel can refresh and switch scenes, start or stop streaming and recording, and follows OBS scene/output events. Unexpected disconnects use bounded automatic retries. Stopping a stream or recording requires confirmation.
+
 Secure Electron shell for the hosted Host Portal and a separately partitioned Facebook browser.
 
 ## Architectural boundary
