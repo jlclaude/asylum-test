@@ -28,7 +28,11 @@
     "prisma": "prisma",
     "graphql-codegen": "graphql-codegen",
     "vite": "vite",
-    "typecheck": "react-router typegen && tsc --noEmit"
+    "typecheck": "react-router typegen && tsc --noEmit",
+    "desktop:dev": "npm run dev --workspace @asylum-games/desktop",
+    "desktop:typecheck": "npm run typecheck --workspace @asylum-games/desktop",
+    "desktop:build": "npm run build --workspace @asylum-games/desktop",
+    "desktop:package:mac": "npm run package:mac --workspace @asylum-games/desktop"
   },
   "type": "module",
   "engines": {
@@ -72,6 +76,7 @@
     "vite": "^6.3.6"
   },
   "workspaces": [
+    "desktop",
     "extensions/*"
   ],
   "trustedDependencies": [

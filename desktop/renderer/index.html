@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'" />
+    <title>Asylum Games Desktop</title>
+    <link rel="stylesheet" href="desktop-shell.css" />
+  </head>
+  <body>
+    <main id="shell">
+      <header class="app-header"><span>ASYLUM GAMES</span><small id="version"></small></header>
+      <section id="host-region" class="view-region">
+        <div id="host-error" class="error-card" hidden>
+          <strong>ASYLUM GAMES COULD NOT CONNECT</strong><button id="host-retry">Retry</button>
+        </div>
+      </section>
+      <div id="divider" role="separator" aria-orientation="horizontal" tabindex="0"></div>
+      <section id="facebook-panel">
+        <div class="section-title">FACEBOOK GROUP</div>
+        <nav class="toolbar" aria-label="Facebook navigation">
+          <button id="back" title="Back">←</button><button id="forward" title="Forward">→</button>
+          <button id="reload">Reload</button><button id="group">Facebook Group</button>
+          <button id="copy-link">Copy Game Link</button><button id="copy-post">Copy Facebook Post</button>
+          <button id="external">Open External</button><button id="clear-login" class="owner-action">Clear Facebook Login</button>
+          <button id="collapse">Collapse</button>
+        </nav>
+        <div id="facebook-region" class="view-region">
+          <div id="facebook-error" class="error-card" hidden>
+            <strong>FACEBOOK COULD NOT CONNECT</strong><button id="facebook-retry">Retry</button><button id="facebook-error-external">Open Facebook Externally</button>
+          </div>
+        </div>
+      </section>
+    </main>
+    <script src="desktop-shell.js"></script>
+  </body>
+</html>

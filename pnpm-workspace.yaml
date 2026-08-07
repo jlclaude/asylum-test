@@ -1,4 +1,5 @@
 packages:
+  - 'desktop'
   - 'extensions/*'
 allowBuilds:
   '@parcel/watcher': true

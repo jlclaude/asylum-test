@@ -1,0 +1,44 @@
+{
+  "name": "@asylum-games/desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Secure desktop companion for the Asylum Games Host Portal",
+  "main": "dist/main/main.js",
+  "type": "commonjs",
+  "scripts": {
+    "clean": "node scripts/clean.mjs",
+    "build": "npm run clean && tsc -p tsconfig.json && node scripts/copy-static.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "dev": "npm run build && electron .",
+    "package:mac": "npm run build && electron-builder --mac --arm64 --x64 --dir"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.8",
+    "electron": "39.8.10",
+    "electron-builder": "^26.0.12",
+    "typescript": "^5.9.3"
+  },
+  "build": {
+    "appId": "com.asylumgames.desktop",
+    "productName": "Asylum Games Desktop",
+    "asar": true,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.entertainment",
+      "target": [
+        {
+          "target": "dir",
+          "arch": ["arm64", "x64"]
+        }
+      ],
+      "identity": null
+    }
+  }
+}
