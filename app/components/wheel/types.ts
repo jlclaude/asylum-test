@@ -37,6 +37,8 @@ export type WheelActionData = {
     afterDisplayName: string | null;
   } | null;
   privateUrl?: string;
+  stale?: boolean;
+  authoritativeWheel?: Partial<WheelData> & Pick<WheelData, "id" | "status">;
 };
 
 export type WheelOperatorAction =

@@ -8,6 +8,8 @@ Electron is an optional interface, never a prerequisite for operating a raffle. 
 
 Only desktop preferences and integrations belong locally: window/layout preferences, the isolated Facebook session, and future OBS/hotkey configuration. When the server is unavailable the views show a retryable connection error; the desktop app does not permit offline spins or manufacture results.
 
+The desktop toolbar switches between the hosted portal and Facebook panel, reloads the portal, and opens it in the system browser. “Studio — Coming Later” is intentionally disabled. `main/obs-controller.ts` defines only a future native integration boundary; it is not connected to raffle controls.
+
 Core commands continue through the hosted application's authenticated server actions. PostgreSQL remains authoritative, and critical wheel mutations use conditional writes so a stale controller cannot overwrite a concurrent shuffle, duration selection, spin, completion, or result acceptance from another interface.
 
 ## Development

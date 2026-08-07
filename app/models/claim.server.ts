@@ -176,11 +176,17 @@ export async function updateClaim(
     externalPayment?: boolean;
     expiresAt?: Date | null;
   },
+  expectedStatus?: ClaimStatus,
+  requireMutableGame = false,
 ) {
   return db.claim.updateMany({
     where: {
       id: claimId,
       gameId,
+      ...(expectedStatus ? { status: expectedStatus } : {}),
+      ...(requireMutableGame
+        ? { game: { status: { in: ["OPEN", "CLOSED"] }, archivedAt: null } }
+        : {}),
     },
     data,
   });
@@ -193,7 +199,7 @@ export async function confirmClaimPayment(
   return updateClaim(claimId, gameId, {
     status: "CONFIRMED",
     externalPayment: true,
-  });
+  }, "PENDING", true);
 }
 
 export async function cancelClaim(
@@ -203,7 +209,7 @@ export async function cancelClaim(
   return updateClaim(claimId, gameId, {
     status: "CANCELED",
     externalPayment: false,
-  });
+  }, "PENDING", true);
 }
 
 export async function getClaimTotals(gameId: string) {

@@ -9,6 +9,7 @@ import {
   useFetcher,
   useLoaderData,
   useNavigate,
+  useRevalidator,
   useRouteError,
 } from "react-router";
 
@@ -43,6 +44,7 @@ import {
 } from "../lib/asylum-themes";
 import { authenticate } from "../shopify.server";
 import { handleGameModeAction, loadGameModeData } from "../services/game-mode.server";
+import { shopifyOperator } from "../lib/operator-context.server";
 
 import "../styles/asylum-brand.css";
 import "../styles/game-results.css";
@@ -71,7 +73,7 @@ export async function action({
     await authenticate.admin(request);
 
   if (!params.id) return { error: "Game ID is missing." };
-  return handleGameModeAction({ request, gameId: params.id, shop: session.shop, admin });
+  return handleGameModeAction({ request, gameId: params.id, operator: shopifyOperator(session), admin });
 }
 
 export default function GameModePage() {
@@ -82,6 +84,9 @@ export default function GameModePage() {
   const beginFetcher =
     useFetcher<WheelActionData>();
   const acceptFetcher = useFetcher<WheelActionData>();
+  const revalidator = useRevalidator();
+  const handledAcceptance = useRef<string | null>(null);
+  const handledStaleAcceptance = useRef<WheelActionData | null>(null);
 
   const { game, run, results, secondChance, eligiblePrizeWheels, prizeClaims, csrfToken, routeMode } =
     useLoaderData<typeof loader>();
@@ -150,6 +155,23 @@ export default function GameModePage() {
 
   const acceptResult = useCallback((wheelId: string) => {
     acceptFetcher.submit({ intent: "accept-result", wheelId, ...(csrfToken ? { csrfToken } : {}) }, { method: "post" });
+  }, [acceptFetcher, csrfToken]);
+
+  useEffect(() => {
+    const response = acceptFetcher.data;
+    if (!response || acceptFetcher.state !== "idle") return;
+    if (response.stale) {
+      if (handledStaleAcceptance.current !== response) {
+        handledStaleAcceptance.current = response;
+        revalidator.revalidate();
+        setOperatorMessage(response.error ?? "This wheel changed in another session. The latest state has been loaded.");
+      }
+      return;
+    }
+    if (response.intent !== "accept-result" || !response.success || !response.wheelId) return;
+    if (handledAcceptance.current === response.wheelId) return;
+    handledAcceptance.current = response.wheelId;
+    const wheelId = response.wheelId;
     setAcceptedIds((current) => new Set(current).add(wheelId));
     const nextId = nextUnfinishedWheelId(
       orderedWheels.map((wheel) => completedLocally.has(wheel.id)
@@ -168,7 +190,7 @@ export default function GameModePage() {
       const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       wheelRefs.current.get(nextId)?.scrollIntoView(reducedMotion);
     });
-  }, [acceptFetcher, completedLocally, csrfToken, orderedWheels]);
+  }, [acceptFetcher.data, acceptFetcher.state, completedLocally, orderedWheels, revalidator]);
 
   const activeWheel = activeWheelId
     ? operatorStates[activeWheelId] ?? (() => {

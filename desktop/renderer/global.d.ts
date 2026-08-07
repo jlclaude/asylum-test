@@ -5,7 +5,11 @@ declare global {
     asylumDesktop: {
       version(): Promise<string>;
       layout: { update(layout: DesktopLayout): Promise<void> };
-      host: { retry(): Promise<void> };
+      host: {
+        retry(): Promise<void>;
+        reload(): Promise<void>;
+        openExternal(): Promise<void>;
+      };
       facebook: {
         back(): Promise<void>;
         forward(): Promise<void>;

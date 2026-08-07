@@ -9,6 +9,8 @@ contextBridge.exposeInMainWorld("asylumDesktop", {
   },
   host: {
     retry: () => invoke("host:retry"),
+    reload: () => invoke("host:reload"),
+    openExternal: () => invoke("host:open-external"),
   },
   facebook: {
     back: () => invoke("facebook:back"),

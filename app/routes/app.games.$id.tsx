@@ -12,6 +12,7 @@ import {
   shopifyGameControlPermissions,
 } from "../lib/game-control-routes";
 import { handleGameControlAction } from "../services/game-control-actions.server";
+import { shopifyOperator } from "../lib/operator-context.server";
 
 import "../styles/game-results.css";
 import "../styles/prize-claims.css";
@@ -30,7 +31,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
   return handleGameControlAction({
     request,
     gameId: params.id,
-    shop: session.shop,
+    operator: shopifyOperator(session),
     admin,
     routes: gameControlRoutes("SHOPIFY_ADMIN", params.id ?? ""),
     redirect,

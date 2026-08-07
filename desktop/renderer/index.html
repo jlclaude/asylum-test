@@ -9,10 +9,22 @@
   </head>
   <body>
     <main id="shell">
-      <header class="app-header"><span>ASYLUM GAMES</span><small id="version"></small></header>
+      <header class="app-header">
+        <span>ASYLUM GAMES DESKTOP</span>
+        <nav class="desktop-toolbar" aria-label="Desktop panels">
+          <button id="show-host">Host Portal</button>
+          <button id="show-facebook">Facebook</button>
+          <button disabled title="OBS integration is planned for a later sprint">Studio — Coming Later</button>
+          <button id="reload-host">Reload Portal</button>
+          <button id="external-host">Open Portal Externally</button>
+        </nav>
+        <small id="version"></small>
+      </header>
       <section id="host-region" class="view-region">
         <div id="host-error" class="error-card" hidden>
-          <strong>ASYLUM GAMES COULD NOT CONNECT</strong><button id="host-retry">Retry</button>
+          <strong>ASYLUM GAMES CONNECTION LOST</strong>
+          <p>Raffle controls are unavailable until the server reconnects.</p>
+          <button id="host-retry">RETRY</button>
         </div>
       </section>
       <div id="divider" role="separator" aria-orientation="horizontal" tabindex="0"></div>

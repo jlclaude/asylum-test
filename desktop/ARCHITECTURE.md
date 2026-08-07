@@ -30,3 +30,7 @@ Wheel shuffle, duration selection, and spin use the wheel row's `status` and `up
 - future desktop preferences: window placement, OBS, hotkeys, and notifications
 
 None of these stores contains authoritative games, claims, wheel order, winners, Second Chance results, prize claims, templates, or settings.
+
+## Release independence
+
+Ordinary UI and raffle-service changes deploy with the web application through Render and appear inside Electron on reload. Shopify configuration continues through Shopify deployment. A new Electron release is needed only for native shell, browser-panel, security, packaging, OBS, or hotkey changes.

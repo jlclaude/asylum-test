@@ -1,10 +1,12 @@
 import { readdirSync } from "node:fs";
 import { resolve } from "node:path";
+import { Prisma } from "@prisma/client";
 import db from "../db.server";
 import { evaluateGameReadiness, type GameReadinessReport, type ReadinessSnapshot } from "../lib/game-readiness";
 import { rewardChamberCanBeRepaired, rewardChamberEntries } from "../lib/reward-chamber";
 import { getContainmentLabel, REWARD_CHAMBER_LABEL } from "../lib/wheel-labels";
 import { completeGameWheelSpin, serializeWheelEntries } from "../models/game-run.server";
+import { retrySerializableTransaction } from "../lib/prisma-transaction.server";
 
 const SUPPORTED_AUDIO = new Set([".mp3", ".wav", ".ogg", ".m4a"]);
 
@@ -149,7 +151,7 @@ export async function repairGameReadiness(input: {
     return { message: `${wheel.label} reconciled using its persisted winner.` };
   }
 
-  const message = await db.$transaction(async (transaction) => {
+  const message = await retrySerializableTransaction(() => db.$transaction(async (transaction) => {
     const game = await transaction.game.findFirst({
       where: { id: input.gameId, shop: input.shop },
       include: {
@@ -195,7 +197,7 @@ export async function repairGameReadiness(input: {
     const json = serializeWheelEntries(rewardChamberEntries());
     await transaction.gameWheel.update({ where: { id: reward.id }, data: { originalEntriesJson: json, shuffledEntriesJson: json, shuffledAt: null, spinDurationSeconds: null } });
     return "Restored the exact 20-entry Reward Chamber weighting.";
-  });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }));
 
   if (process.env.NODE_ENV === "development") console.info("Game readiness repair succeeded", { gameId: input.gameId, intent: input.intent, affectedId: input.affectedId ?? null });
   return { message };

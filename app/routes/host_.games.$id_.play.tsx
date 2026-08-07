@@ -11,6 +11,7 @@ import {
 import GameModePage, { ErrorBoundary } from "./app.games.$id_.play";
 import { recordHostAuditEvent } from "../models/host-audit.server";
 import type { GameControlRouteMode } from "../lib/game-control-routes";
+import { hostOperator } from "../lib/operator-context.server";
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const host = await requireHostPermission(request, "wheels:operate");
@@ -44,7 +45,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const result = await handleGameModeAction({
     request,
     gameId: params.id,
-    shop: host.shop,
+    operator: hostOperator(host),
     admin,
   });
   if (

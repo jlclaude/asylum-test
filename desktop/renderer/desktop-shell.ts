@@ -20,14 +20,16 @@ function reportLayout() {
 function applyLayout() {
   document.body.classList.toggle("collapsed", collapsed);
   document.querySelector("#collapse")!.textContent = collapsed ? "Expand" : "Collapse";
-  if (!collapsed) shell.style.gridTemplateRows = `42px minmax(120px, ${1 - ratio}fr) 7px minmax(170px, ${ratio}fr)`;
+  shell.style.gridTemplateRows = collapsed
+    ? "54px minmax(120px, 1fr) 0 72px"
+    : `54px minmax(120px, ${1 - ratio}fr) 7px minmax(170px, ${ratio}fr)`;
   requestAnimationFrame(reportLayout);
 }
 
 divider.addEventListener("pointerdown", (start) => {
   divider.setPointerCapture(start.pointerId);
   const move = (event: PointerEvent) => {
-    const available = window.innerHeight - 49;
+    const available = window.innerHeight - 61;
     ratio = Math.min(0.7, Math.max(0.2, (window.innerHeight - event.clientY) / available));
     localStorage.setItem("facebook-ratio", String(ratio));
     applyLayout();
@@ -45,6 +47,8 @@ action("external", window.asylumDesktop.facebook.openExternal);
 action("copy-link", window.asylumDesktop.integration.copyGameLink);
 action("copy-post", window.asylumDesktop.integration.copyFacebookPost);
 action("host-retry", window.asylumDesktop.host.retry);
+action("reload-host", window.asylumDesktop.host.reload);
+action("external-host", window.asylumDesktop.host.openExternal);
 action("facebook-retry", window.asylumDesktop.facebook.retry);
 action("facebook-error-external", window.asylumDesktop.facebook.openExternal);
 action("clear-login", async () => {
@@ -53,6 +57,16 @@ action("clear-login", async () => {
 action("collapse", async () => {
   collapsed = !collapsed;
   localStorage.setItem("facebook-collapsed", String(collapsed));
+  applyLayout();
+});
+action("show-host", async () => {
+  collapsed = true;
+  localStorage.setItem("facebook-collapsed", "true");
+  applyLayout();
+});
+action("show-facebook", async () => {
+  collapsed = false;
+  localStorage.setItem("facebook-collapsed", "false");
   applyLayout();
 });
 

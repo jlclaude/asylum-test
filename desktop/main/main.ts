@@ -66,7 +66,8 @@ function validRect(value: unknown): value is Electron.Rectangle {
 }
 
 function registerIpc() {
-  ipcMain.handle("desktop:version", () => app.getVersion());
+  const fromShell = (event: Electron.IpcMainInvokeEvent) => event.sender === windowRef?.webContents;
+  ipcMain.handle("desktop:version", (event) => fromShell(event) ? app.getVersion() : "");
   ipcMain.handle("layout:update", (event, layout: { host?: unknown; facebook?: unknown }) => {
     if (event.sender !== windowRef?.webContents || !validRect(layout?.host)) return;
     hostView?.setBounds(layout.host);
@@ -76,16 +77,18 @@ function registerIpc() {
       facebookView?.setBounds(layout.facebook);
     } else facebookView?.setVisible(false);
   });
-  ipcMain.handle("host:retry", () => hostView?.webContents.reload());
-  ipcMain.handle("facebook:back", () => facebookView && goBack(facebookView.webContents));
-  ipcMain.handle("facebook:forward", () => facebookView && goForward(facebookView.webContents));
-  ipcMain.handle("facebook:reload", () => facebookView?.webContents.reload());
-  ipcMain.handle("facebook:retry", () => facebookView && navigate(facebookView.webContents, facebookGroupUrl));
-  ipcMain.handle("facebook:open-group", () => facebookView && navigate(facebookView.webContents, facebookGroupUrl));
-  ipcMain.handle("facebook:open-external", () => openExternalHttps(facebookView?.webContents.getURL() || facebookGroupUrl));
-  ipcMain.handle("facebook:clear-session", async () => { await clearFacebookSession(); await facebookView?.webContents.reload(); });
-  ipcMain.handle("integration:copy-game-link", () => { if (!currentGameLink) return false; clipboard.writeText(currentGameLink); return true; });
-  ipcMain.handle("integration:copy-facebook-post", () => { if (!currentFacebookPost) return false; clipboard.writeText(currentFacebookPost); return true; });
+  ipcMain.handle("host:retry", (event) => fromShell(event) && hostView ? navigate(hostView.webContents, hostUrl) : undefined);
+  ipcMain.handle("host:reload", (event) => { if (fromShell(event)) hostView?.webContents.reload(); });
+  ipcMain.handle("host:open-external", (event) => { if (fromShell(event)) openExternalHttps(hostView?.webContents.getURL() || hostUrl); });
+  ipcMain.handle("facebook:back", (event) => { if (fromShell(event) && facebookView) goBack(facebookView.webContents); });
+  ipcMain.handle("facebook:forward", (event) => { if (fromShell(event) && facebookView) goForward(facebookView.webContents); });
+  ipcMain.handle("facebook:reload", (event) => { if (fromShell(event)) facebookView?.webContents.reload(); });
+  ipcMain.handle("facebook:retry", (event) => fromShell(event) && facebookView ? navigate(facebookView.webContents, facebookGroupUrl) : undefined);
+  ipcMain.handle("facebook:open-group", (event) => fromShell(event) && facebookView ? navigate(facebookView.webContents, facebookGroupUrl) : undefined);
+  ipcMain.handle("facebook:open-external", (event) => { if (fromShell(event)) openExternalHttps(facebookView?.webContents.getURL() || facebookGroupUrl); });
+  ipcMain.handle("facebook:clear-session", async (event) => { if (!fromShell(event)) return; await clearFacebookSession(); await facebookView?.webContents.reload(); });
+  ipcMain.handle("integration:copy-game-link", (event) => { if (!fromShell(event) || !currentGameLink) return false; clipboard.writeText(currentGameLink); return true; });
+  ipcMain.handle("integration:copy-facebook-post", (event) => { if (!fromShell(event) || !currentFacebookPost) return false; clipboard.writeText(currentFacebookPost); return true; });
   ipcMain.handle("integration:update", (event, context: unknown) => {
     if (event.sender !== hostView?.webContents || !context || typeof context !== "object") return false;
     const candidate = context as Record<string, unknown>;

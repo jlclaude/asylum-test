@@ -13,6 +13,7 @@ import {
 } from "../lib/game-control-routes";
 import { handleGameControlAction } from "../services/game-control-actions.server";
 import { getHostAdminContext } from "../lib/host-shopify.server";
+import { hostOperator } from "../lib/operator-context.server";
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const host = await requireHostPermission(request, "games:view");
@@ -61,7 +62,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     request,
     formData,
     gameId: params.id,
-    shop: host.shop,
+    operator: hostOperator(host),
     admin,
     routes: gameControlRoutes("HOST_PORTAL", params.id ?? "", host.csrfToken),
     redirect,

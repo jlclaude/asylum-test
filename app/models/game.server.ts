@@ -171,12 +171,14 @@ export async function updateGameStatus(
   id: string,
   shop: string,
   status: GameStatus,
+  expectedStatus?: GameStatus,
 ) {
   return db.game.updateMany({
     where: {
       id,
       shop,
       archivedAt: null,
+      ...(expectedStatus ? { status: expectedStatus } : {}),
     },
     data: {
       status,

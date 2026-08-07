@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { data } from "react-router";
 import {
-  createClaim,
+  createPublicClaim,
   getClaimTotals,
   updateClaimDisplayName,
   updateClaim,
@@ -36,6 +36,7 @@ import {
   type ReadinessRepairIntent,
 } from "./game-readiness.server";
 import { gameControlRoutes } from "../lib/game-control-routes";
+import type { OperatorContext } from "../lib/operator-context.server";
 
 export type GameControlActionData = {
   error?: string;
@@ -50,13 +51,14 @@ export type GameControlActionData = {
 export async function handleGameControlAction(input: {
   request: Request;
   gameId: string | undefined;
-  shop: string;
+  operator: OperatorContext;
   admin?: Parameters<typeof verifyPrizeOptionCollections>[0];
   routes: ReturnType<typeof gameControlRoutes>;
   redirect: (url: string) => Response;
   formData?: FormData;
 }) {
-  const { request, gameId, shop, admin, routes, redirect } = input;
+  const { request, gameId, operator, admin, routes, redirect } = input;
+  const { shop } = operator;
   if (!gameId) return { error: "Game ID is missing." };
 
   const game = await getGameForShop(gameId, shop);
@@ -279,26 +281,14 @@ export async function handleGameControlAction(input: {
         };
       }
 
-      const totals = await getClaimTotals(game.id);
-      const remaining = game.totalSpots - totals.reservedQuantity;
-
-      if (quantity > remaining) {
-        return {
-          error:
-            remaining > 0
-              ? `Only ${remaining} spots remain.`
-              : "This game is full.",
-          intent,
-        };
-      }
-
-      await createClaim({
+      const reservation = await createPublicClaim({
         gameId: game.id,
         displayName,
         facebookHandle,
         quantity,
         comment,
       });
+      if (!reservation.success) return { error: reservation.error, intent };
 
       return {
         success: `${quantity} ${quantity === 1 ? "spot was" : "spots were"} added for ${displayName}.`,
@@ -311,9 +301,9 @@ export async function handleGameControlAction(input: {
         return { error: "Only an open game can be closed.", intent };
       }
 
-      const result = await updateGameStatus(game.id, shop, "CLOSED");
+      const result = await updateGameStatus(game.id, shop, "CLOSED", "OPEN");
       if (result.count === 0)
-        return { error: "The game could not be closed.", intent };
+        return { error: "This game changed in another session. The latest state has been loaded.", intent };
 
       return {
         success: "Game closed. New public claims are disabled.",
@@ -331,9 +321,9 @@ export async function handleGameControlAction(input: {
       if (remaining <= 0)
         return { error: "This game is full and cannot be reopened.", intent };
 
-      const result = await updateGameStatus(game.id, shop, "OPEN");
+      const result = await updateGameStatus(game.id, shop, "OPEN", "CLOSED");
       if (result.count === 0)
-        return { error: "The game could not be reopened.", intent };
+        return { error: "This game changed in another session. The latest state has been loaded.", intent };
 
       return { success: "Game reopened. Public claims are enabled.", intent };
     }
@@ -352,10 +342,10 @@ export async function handleGameControlAction(input: {
       const result = await updateClaim(claimId, game.id, {
         status: "CONFIRMED",
         externalPayment: true,
-      });
+      }, "PENDING", true);
 
       if (result.count === 0) {
-        return { error: "The claim could not be found or updated.", intent };
+        return { error: "This claim changed in another session. The latest state has been loaded.", intent };
       }
 
       return { success: "Payment confirmed and claim approved.", intent };
@@ -365,10 +355,10 @@ export async function handleGameControlAction(input: {
       const result = await updateClaim(claimId, game.id, {
         status: "CANCELED",
         externalPayment: false,
-      });
+      }, "PENDING", true);
 
       if (result.count === 0) {
-        return { error: "The claim could not be found or updated.", intent };
+        return { error: "This claim changed in another session. The latest state has been loaded.", intent };
       }
 
       return { success: "Claim canceled and spots released.", intent };

@@ -10,6 +10,7 @@ import {
   selectGameWheelDuration,
   shuffleGameWheel,
   startGameWheelSpin,
+  StaleWheelStateError,
 } from "../models/game-run.server";
 import { getGameForShop } from "../models/game.server";
 import { getGameResults } from "../models/game-results.server";
@@ -30,6 +31,7 @@ import {
   updatePrizeClaimStatus,
 } from "../models/prize-claim.server";
 import { runGameReadinessCheck } from "./game-readiness.server";
+import type { OperatorContext } from "../lib/operator-context.server";
 
 export async function loadGameModeData(gameId: string, shop: string) {
   const game = await getGameForShop(gameId, shop);
@@ -101,7 +103,7 @@ export async function loadGameModeData(gameId: string, shop: string) {
 export async function handleGameModeAction(input: {
   request: Request;
   gameId: string;
-  shop: string;
+  operator: OperatorContext;
   admin: AdminApiContext | null;
 }) {
   const formData = await input.request.formData();
@@ -109,25 +111,25 @@ export async function handleGameModeAction(input: {
   const wheelId = String(formData.get("wheelId") ?? "").trim();
   try {
     if (intent === "begin-game") {
-      const readiness = await runGameReadinessCheck(input.gameId, input.shop);
+      const readiness = await runGameReadinessCheck(input.gameId, input.operator.shop);
       if (!readiness.isReady)
         return {
           intent,
           error: `${readiness.blockingCount} blocking readiness issues must be resolved in the Game Control Center.`,
         };
-      await beginGameRun(input.gameId, input.shop);
+      await beginGameRun(input.gameId, input.operator.shop);
       return { intent, success: "Containment wheels initialized." };
     }
     if (!wheelId) return { intent, error: "Wheel ID is missing." };
     if (intent === "shuffle-wheel") {
-      await shuffleGameWheel(wheelId, input.gameId, input.shop);
+      await shuffleGameWheel(wheelId, input.gameId, input.operator.shop);
       return { intent, wheelId, success: "Wheel order recalibrated." };
     }
     if (intent === "select-duration") {
       const result = await selectGameWheelDuration(
         wheelId,
         input.gameId,
-        input.shop,
+        input.operator.shop,
       );
       return {
         intent,
@@ -140,7 +142,7 @@ export async function handleGameModeAction(input: {
       const result = await startGameWheelSpin(
         wheelId,
         input.gameId,
-        input.shop,
+        input.operator.shop,
       );
       return {
         intent,
@@ -157,7 +159,7 @@ export async function handleGameModeAction(input: {
       const result = await completeGameWheelSpin(
         wheelId,
         input.gameId,
-        input.shop,
+        input.operator.shop,
       );
       return {
         intent,
@@ -169,7 +171,7 @@ export async function handleGameModeAction(input: {
       };
     }
     if (intent === "accept-result") {
-      await acceptGameWheelResult(wheelId, input.gameId, input.shop);
+      await acceptGameWheelResult(wheelId, input.gameId, input.operator.shop);
       return { intent, wheelId, success: "Persisted result accepted." };
     }
     if (intent === "create-prize-claim") {
@@ -192,7 +194,7 @@ export async function handleGameModeAction(input: {
         validation.options,
       );
       const result = await createWinnerPrizeClaim({
-        shop: input.shop,
+        shop: input.operator.shop,
         gameId: input.gameId,
         gameWheelId: wheelId,
         expirationDays: expirationDays as PrizeClaimExpirationDays,
@@ -221,7 +223,7 @@ export async function handleGameModeAction(input: {
       const id = String(formData.get("prizeClaimId") ?? "").trim();
       await updatePrizeClaimStatus({
         id,
-        shop: input.shop,
+        shop: input.operator.shop,
         action: intent === "revoke-prize-claim" ? "revoke" : "fulfill",
       });
       return {
@@ -236,11 +238,18 @@ export async function handleGameModeAction(input: {
     return { intent, error: "Unknown Game Mode action." };
   } catch (error) {
     console.error("Game Mode action failed", {
-      shop: input.shop,
+      shop: input.operator.shop,
       gameId: input.gameId,
       intent,
       error,
     });
+    if (error instanceof StaleWheelStateError) return {
+      intent,
+      wheelId: error.wheel.id,
+      stale: true,
+      error: error.message,
+      authoritativeWheel: error.wheel,
+    };
     return {
       intent,
       wheelId: wheelId || undefined,

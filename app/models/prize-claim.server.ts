@@ -1,4 +1,4 @@
-import type { PrizeClaimStatus } from "@prisma/client";
+import { Prisma, type PrizeClaimStatus } from "@prisma/client";
 import type { AdminApiContext } from "@shopify/shopify-app-react-router/server";
 import db from "../db.server";
 import {
@@ -31,7 +31,8 @@ export async function createWinnerPrizeClaim(input: {
   expirationDays: PrizeClaimExpirationDays;
   prizeOptions: PrizePackageOption[];
 }) {
-  return db.$transaction(async (transaction) => {
+  try {
+    return await db.$transaction(async (transaction) => {
     const existing = await transaction.prizeClaim.findUnique({
       where: { activeGameWheelId: input.gameWheelId },
     });
@@ -76,7 +77,16 @@ export async function createWinnerPrizeClaim(input: {
       },
     });
     return { created: true as const, prizeClaim, token };
-  });
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      const existing = await db.prizeClaim.findUnique({
+        where: { activeGameWheelId: input.gameWheelId },
+      });
+      if (existing) return { created: false as const, prizeClaim: existing, token: null };
+    }
+    throw error;
+  }
 }
 
 export async function getPrizeClaimsForGame(gameId: string, shop: string) {

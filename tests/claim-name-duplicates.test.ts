@@ -21,7 +21,7 @@ test("display names are not uniquely constrained in either database schema", () 
 
 test("public, Host, and Shopify claim paths do not check display-name availability", () => {
   assert.match(publicRoute, /createPublicClaim\(/);
-  assert.match(gameActions, /await createClaim\(/);
+  assert.match(gameActions, /await createPublicClaim\(/);
   assert.doesNotMatch(claimModel, /assertDisplayNameAvailable/);
   assert.doesNotMatch(claimModel, /claimNameReservation/);
   assert.doesNotMatch(publicRoute, /already being used|already taken/i);

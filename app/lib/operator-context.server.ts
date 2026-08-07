@@ -10,10 +10,15 @@ export type OperatorContext = {
   role: HostRole | "SHOPIFY_ADMIN";
 };
 
-export async function requireShopifyOperator(
-  request: Request,
-): Promise<OperatorContext> {
-  const { session } = await authenticate.admin(request);
+type ShopifySessionIdentity = { shop: string; id: string };
+type HostIdentity = {
+  shop: string;
+  actorId: string;
+  actorDisplayName: string;
+  role: HostRole;
+};
+
+export function shopifyOperator(session: ShopifySessionIdentity): OperatorContext {
   return {
     shop: session.shop,
     source: "SHOPIFY_ADMIN",
@@ -23,10 +28,7 @@ export async function requireShopifyOperator(
   };
 }
 
-export async function requireHostOperator(
-  request: Request,
-): Promise<OperatorContext> {
-  const host = await requireHostUser(request);
+export function hostOperator(host: HostIdentity): OperatorContext {
   return {
     shop: host.shop,
     source: "HOST_PORTAL",
@@ -34,4 +36,18 @@ export async function requireHostOperator(
     actorDisplayName: host.actorDisplayName,
     role: host.role,
   };
+}
+
+export async function requireShopifyOperator(
+  request: Request,
+): Promise<OperatorContext> {
+  const { session } = await authenticate.admin(request);
+  return shopifyOperator(session);
+}
+
+export async function requireHostOperator(
+  request: Request,
+): Promise<OperatorContext> {
+  const host = await requireHostUser(request);
+  return hostOperator(host);
 }

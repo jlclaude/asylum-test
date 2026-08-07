@@ -7,7 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { useFetcher } from "react-router";
+import { useFetcher, useRevalidator } from "react-router";
 
 import {
   animateWheelIdle,
@@ -88,6 +88,7 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(
   ) {
     const sectionRef = useRef<HTMLElement>(null);
     const fetcher = useFetcher<WheelActionData>();
+    const revalidator = useRevalidator();
     const {
       startSpin: startMusic,
       finishSpin: finishMusic,
@@ -95,6 +96,8 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(
     } = useSpinMusic();
     const lastSpinToken = useRef<string | null>(null);
     const completionSent = useRef(false);
+    const completionNotified = useRef(false);
+    const handledStaleResponse = useRef<WheelActionData | null>(null);
     const animationController = useRef<WheelAnimationController | null>(null);
     const idleController = useRef<WheelAnimationController | null>(null);
     const revealActive = useRef(false);
@@ -444,7 +447,6 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(
           );
         }
 
-        onCompleted(wheel.id);
       };
 
       setResult(null);
@@ -564,7 +566,6 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(
             );
           }
 
-          onCompleted(wheel.id);
         },
       });
     }, [
@@ -582,6 +583,26 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(
     ]);
 
     const visibleStatus = spinning ? "SPINNING" : wheel.status;
+
+    useEffect(() => {
+      const data = fetcher.data;
+      if (data?.stale) {
+        if (handledStaleResponse.current !== data) {
+          handledStaleResponse.current = data;
+          revalidator.revalidate();
+        }
+        return;
+      }
+      if (
+        data?.intent === "complete-wheel" &&
+        data.wheelId === wheel.id &&
+        data.success &&
+        !completionNotified.current
+      ) {
+        completionNotified.current = true;
+        onCompleted(wheel.id);
+      }
+    }, [fetcher.data, onCompleted, revalidator, wheel.id]);
 
     const actionMessage = recoveryError
       ? { error: recoveryError }

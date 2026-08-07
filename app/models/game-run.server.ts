@@ -1,9 +1,11 @@
 import { randomInt } from "node:crypto";
+import { Prisma } from "@prisma/client";
 import db from "../db.server";
 import { MAX_SPIN_DURATION_SECONDS, MIN_SPIN_DURATION_SECONDS } from "../lib/spin-duration";
 import { ensureSecondChanceForCompletedWheel } from "./second-chance.server";
 import { getContainmentLabel, REWARD_CHAMBER_LABEL } from "../lib/wheel-labels";
 import { rewardChamberEntries } from "../lib/reward-chamber";
+import { retrySerializableTransaction } from "../lib/prisma-transaction.server";
 
 export type NameWheelEntry = {
   claimId: string;
@@ -15,6 +17,61 @@ export type ValueWheelEntry = {
 };
 
 export type WheelEntry = NameWheelEntry | ValueWheelEntry;
+
+export type AuthoritativeWheelState = {
+  id: string;
+  status: "READY" | "SPINNING" | "COMPLETED";
+  entries: WheelEntry[];
+  spinDurationSeconds: number | null;
+  winnerEntryIndex: number | null;
+  winnerDisplayName: string | null;
+  winnerValue: string | null;
+  spunAt: string | null;
+  resultAcceptedAt: string | null;
+};
+
+export class StaleWheelStateError extends Error {
+  constructor(
+    message: string,
+    readonly wheel: AuthoritativeWheelState,
+  ) {
+    super(message);
+    this.name = "StaleWheelStateError";
+  }
+}
+
+function authoritativeWheelState(wheel: {
+  id: string;
+  status: "READY" | "SPINNING" | "COMPLETED";
+  shuffledEntriesJson: string;
+  spinDurationSeconds: number | null;
+  winnerEntryIndex: number | null;
+  winnerDisplayName: string | null;
+  winnerValue: string | null;
+  spunAt: Date | null;
+  resultAcceptedAt: Date | null;
+}): AuthoritativeWheelState {
+  return {
+    id: wheel.id,
+    status: wheel.status,
+    entries: deserializeWheelEntries(wheel.shuffledEntriesJson),
+    spinDurationSeconds: wheel.spinDurationSeconds,
+    winnerEntryIndex: wheel.winnerEntryIndex,
+    winnerDisplayName: wheel.winnerDisplayName,
+    winnerValue: wheel.winnerValue,
+    spunAt: wheel.spunAt?.toISOString() ?? null,
+    resultAcceptedAt: wheel.resultAcceptedAt?.toISOString() ?? null,
+  };
+}
+
+async function staleWheel(
+  transaction: Prisma.TransactionClient,
+  wheelId: string,
+  message = "This wheel changed in another session. The latest state has been loaded.",
+): Promise<StaleWheelStateError> {
+  const current = await transaction.gameWheel.findUniqueOrThrow({ where: { id: wheelId } });
+  return new StaleWheelStateError(message, authoritativeWheelState(current));
+}
 
 export function serializeWheelEntries(entries: WheelEntry[]) {
   return JSON.stringify(entries);
@@ -79,7 +136,8 @@ export async function getGameRun(gameId: string) {
 }
 
 export async function beginGameRun(gameId: string, shop: string) {
-  return db.$transaction(async (transaction) => {
+  try {
+    return await retrySerializableTransaction(() => db.$transaction(async (transaction) => {
     const game = await transaction.game.findFirst({
       where: { id: gameId, shop },
     });
@@ -185,7 +243,14 @@ export async function beginGameRun(gameId: string, shop: string) {
         },
       },
     });
-  });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }));
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      const existing = await getGameRun(gameId);
+      if (existing) return existing;
+    }
+    throw error;
+  }
 }
 
 export async function shuffleGameWheel(
@@ -208,7 +273,7 @@ export async function shuffleGameWheel(
 
     if (!wheel) throw new Error("Wheel not found.");
     if (wheel.status !== "READY") {
-      throw new Error("This wheel can no longer be shuffled.");
+      throw await staleWheel(transaction, wheel.id);
     }
 
     const shuffled = secureShuffle(
@@ -227,7 +292,7 @@ export async function shuffleGameWheel(
       },
     });
     if (update.count === 0) {
-      throw new Error("This wheel changed in another interface. Refresh before shuffling again.");
+      throw await staleWheel(transaction, wheel.id);
     }
     return transaction.gameWheel.findUniqueOrThrow({ where: { id: wheel.id } });
   });
@@ -253,7 +318,7 @@ export async function selectGameWheelDuration(
 
     if (!wheel) throw new Error("Wheel not found.");
     if (wheel.status !== "READY") {
-      throw new Error("Spin time can only be selected for a ready wheel.");
+      throw await staleWheel(transaction, wheel.id);
     }
 
     const spinDurationSeconds = randomInt(
@@ -270,7 +335,7 @@ export async function selectGameWheelDuration(
       data: { spinDurationSeconds },
     });
     if (update.count === 0) {
-      throw new Error("This wheel changed in another interface. Refresh before selecting a spin time.");
+      throw await staleWheel(transaction, wheel.id);
     }
 
     return {
@@ -309,7 +374,7 @@ export async function startGameWheelSpin(
 
     if (!wheel) throw new Error("Wheel not found.");
     if (wheel.status !== "READY") {
-      throw new Error("This wheel is not ready to spin.");
+      throw await staleWheel(transaction, wheel.id);
     }
     if (!wheel.spinDurationSeconds) {
       throw new Error("Select a random spin time before spinning.");
@@ -351,7 +416,7 @@ export async function startGameWheelSpin(
       },
     });
     if (spin.count === 0) {
-      throw new Error("This wheel changed in another interface. Refresh before spinning.");
+      throw await staleWheel(transaction, wheel.id);
     }
 
     if (wheel.gameRound.status === "READY") {
@@ -406,7 +471,7 @@ export async function completeGameWheelSpin(
 
     if (!wheel) throw new Error("Wheel not found.");
     if (wheel.winnerEntryIndex === null) {
-      throw new Error("No saved result exists for this wheel.");
+      throw await staleWheel(transaction, wheel.id);
     }
 
     if (wheel.status === "COMPLETED") {
@@ -424,7 +489,7 @@ export async function completeGameWheelSpin(
       };
     }
     if (wheel.status !== "SPINNING") {
-      throw new Error("Only a spinning wheel can be completed.");
+      throw await staleWheel(transaction, wheel.id);
     }
 
     const completion = await transaction.gameWheel.updateMany({
@@ -537,7 +602,7 @@ export async function acceptGameWheelResult(
     });
     if (!wheel) throw new Error("Wheel not found.");
     if (wheel.status !== "COMPLETED" || wheel.winnerEntryIndex === null) {
-      throw new Error("Only a persisted completed result can be accepted.");
+      throw await staleWheel(transaction, wheel.id);
     }
     if (wheel.resultAcceptedAt) return wheel;
     const acceptedAt = new Date();

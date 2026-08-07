@@ -3,6 +3,7 @@ import test from "node:test";
 import { PrismaClient } from "@prisma/client";
 
 import { allocateNextRaffleIdentity } from "../app/models/raffle-number.server.ts";
+import { startGameWheelSpin, StaleWheelStateError } from "../app/models/game-run.server.ts";
 
 const databaseUrl = process.env.POSTGRES_TEST_DATABASE_URL;
 
@@ -47,21 +48,19 @@ test("clean PostgreSQL supports raffle concurrency, idempotency, uniqueness, and
       gameRoundId: round.id, position: 1, type: "NAME", label: "Containment A",
       originalEntriesJson: JSON.stringify([{ claimId: claim.id, displayName: claim.displayName }]),
       shuffledEntriesJson: JSON.stringify([{ claimId: claim.id, displayName: claim.displayName }]),
-      winnerEntryIndex: 0, winnerClaimId: claim.id, winnerDisplayName: claim.displayName,
+      spinDurationSeconds: 25,
     } });
 
-    const concurrentSpins = await Promise.all([
-      db.gameWheel.updateMany({
-        where: { id: wheel.id, status: "READY", updatedAt: wheel.updatedAt },
-        data: { status: "SPINNING", winnerEntryIndex: 0, spunAt: new Date() },
-      }),
-      db.gameWheel.updateMany({
-        where: { id: wheel.id, status: "READY", updatedAt: wheel.updatedAt },
-        data: { status: "SPINNING", winnerEntryIndex: 1, spunAt: new Date() },
-      }),
+    const concurrentSpins = await Promise.allSettled([
+      startGameWheelSpin(wheel.id, game.id, shop),
+      startGameWheelSpin(wheel.id, game.id, shop),
     ]);
-    assert.equal(concurrentSpins.reduce((sum, result) => sum + result.count, 0), 1);
-    assert.equal((await db.gameWheel.findUniqueOrThrow({ where: { id: wheel.id } })).status, "SPINNING");
+    assert.equal(concurrentSpins.filter((result) => result.status === "fulfilled").length, 1);
+    const rejectedSpin = concurrentSpins.find((result) => result.status === "rejected");
+    assert.equal(rejectedSpin?.status === "rejected" && rejectedSpin.reason instanceof StaleWheelStateError, true);
+    const persistedSpin = await db.gameWheel.findUniqueOrThrow({ where: { id: wheel.id } });
+    assert.equal(persistedSpin.status, "SPINNING");
+    assert.notEqual(persistedSpin.winnerEntryIndex, null);
 
     const firstCompletion = await db.gameWheel.updateMany({
       where: { id: wheel.id, status: "SPINNING" },

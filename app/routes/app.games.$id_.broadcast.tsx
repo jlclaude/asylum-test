@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useRef, useState } from "react";
-import { useFetcher, useLoaderData, useLocation } from "react-router";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useFetcher, useLoaderData, useLocation, useRevalidator } from "react-router";
 
 import { BroadcastCompletion } from "../components/broadcast/BroadcastCompletion";
 import { SpinMusicControls } from "../components/audio/SpinMusicControls";
@@ -9,7 +9,7 @@ import { BroadcastWheelRail } from "../components/broadcast/BroadcastWheelRail";
 import { GameModeShortcuts } from "../components/wheel/GameModeShortcuts";
 import { GameModeToolbar } from "../components/wheel/GameModeToolbar";
 import { WheelSection } from "../components/wheel/WheelSection";
-import type { WheelData, WheelOperatorAction, WheelOperatorHandle, WheelOperatorResult, WheelOperatorState } from "../components/wheel/types";
+import type { WheelActionData, WheelData, WheelOperatorAction, WheelOperatorHandle, WheelOperatorResult, WheelOperatorState } from "../components/wheel/types";
 import { useFullscreen } from "../hooks/useFullscreen";
 import { useGameModeShortcuts } from "../hooks/useGameModeShortcuts";
 import { useSoundPreference } from "../hooks/useSoundPreference";
@@ -36,7 +36,9 @@ export default function BroadcastModePage() {
   useWheelMusicSession(`game:${game.id}:broadcast`);
   const fullscreenTarget = useRef<HTMLElement>(null);
   const wheelRef = useRef<WheelOperatorHandle>(null);
-  const acceptFetcher = useFetcher();
+  const acceptFetcher = useFetcher<WheelActionData>();
+  const revalidator = useRevalidator();
+  const handledStaleAcceptance = useRef<WheelActionData | null>(null);
   const [themeKey, setThemeKey] = useState<AsylumThemeKey>("classic");
   const [message, setMessage] = useState<string | null>(null);
   const [operatorState, setOperatorState] = useState<WheelOperatorState | null>(null);
@@ -53,8 +55,24 @@ export default function BroadcastModePage() {
 
   const acceptResult = useCallback((wheelId: string) => {
     if (acceptedIdsRef.current.has(wheelId)) return;
-    acceptedIdsRef.current.add(wheelId);
     acceptFetcher.submit({ intent: "accept-result", wheelId, ...(csrfToken ? { csrfToken } : {}) }, { method: "post" });
+  }, [acceptFetcher, csrfToken]);
+
+  useEffect(() => {
+    const response = acceptFetcher.data;
+    if (!response || acceptFetcher.state !== "idle") return;
+    if (response.stale) {
+      if (handledStaleAcceptance.current !== response) {
+        handledStaleAcceptance.current = response;
+        revalidator.revalidate();
+        setMessage(response.error ?? "This wheel changed in another session. The latest state has been loaded.");
+      }
+      return;
+    }
+    if (response.intent !== "accept-result" || !response.success || !response.wheelId) return;
+    const wheelId = response.wheelId;
+    if (acceptedIdsRef.current.has(wheelId)) return;
+    acceptedIdsRef.current.add(wheelId);
     setAcceptedIds((current) => new Set(current).add(wheelId));
     const nextId = nextUnfinishedWheelId(wheels, wheelId);
     if (nextId) {
@@ -65,7 +83,7 @@ export default function BroadcastModePage() {
       setFinalResultAccepted(true);
       setMessage("All persisted results accepted.");
     }
-  }, [acceptFetcher, csrfToken, wheels]);
+  }, [acceptFetcher.data, acceptFetcher.state, revalidator, wheels]);
 
   const runAction = useCallback((operatorAction: WheelOperatorAction): WheelOperatorResult => (
     wheelRef.current?.runAction(operatorAction) ?? { triggered: false, message: "Active wheel controls are unavailable." }
