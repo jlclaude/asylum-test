@@ -14,6 +14,9 @@ async function run() {
   assert.match(css, /width: clamp\(520px, 62vh, 760px\)/); assert.match(css, /\.broadcast-brand-logo[^}]*height: 84px/s);
   assert.match(css, /@media \(max-width: 1399px\)/); assert.match(css, /@media \(max-width: 1099px\)/); assert.match(css, /@media \(max-width: 899px\)/);
   assert.doesNotMatch(route, /broadcast-lower|winner-area|second-area/); assert.match(route, /broadcast-status-panel/); assert.match(route, /broadcast-result/);
+  assert.match(route, /BROADCAST TEMPORARILY UNAVAILABLE/); assert.match(route, /SELECT AN ACTIVE RAFFLE/); assert.match(route, /RAFFLE COMPLETE/); assert.match(route, /READY TO SPIN/); assert.match(route, /REWARD CHAMBER RESULT/);
+  assert.match(route, /Math\.min\(1_000 \* 2 \*\* failures\.current, 15_000\)/); assert.match(route, /data\.broadcast \?\? lastKnown/); assert.match(route, /asylumBroadcastDesktop/);
+  assert.match(css, /broadcast-safe-zone/); assert.match(css, /state-spinning \.broadcast-wheel/); assert.match(css, /broadcast-connection-overlay/);
   assert.doesNotMatch(model, /randomInt|winnerEntryIndex\s*=/, "broadcast model must never calculate winners");
   assert.doesNotMatch(model, /facebookHandle|claimId|prizeClaim|payment/i, "broadcast payload must omit sensitive claim data");
   assert.match(engine, /runtimeEnabled = false/); assert.match(main, /new ObsAutomationEngine\(obsController, obsSettings\)/, "production automation must remain hard-disabled");

@@ -29,6 +29,8 @@ let obsController: ObsController;
 let obsSettings: ObsSettingsStore;
 let obsAutomation: ObsAutomationEngine;
 let winnerPresentation: WinnerPresentationController;
+type BroadcastHealth = { state: string; gameState: string | null; raffleCode: string | null; wheelLabel: string | null; updatedAt: string; status: "live" | "waiting" | "error"; message: string | null };
+let broadcastHealth: BroadcastHealth = { state: "WAITING", gameState: null, raffleCode: null, wheelLabel: null, updatedAt: new Date(0).toISOString(), status: "waiting", message: null };
 const viewStates = { host: "loading", facebook: "loading", broadcast: "loading" } as Record<"host" | "facebook" | "broadcast", "loading" | "ready" | "failed" | "crashed">;
 
 function status(target: "host" | "facebook" | "broadcast", state: "loading" | "ready" | "failed" | "crashed") {
@@ -47,9 +49,9 @@ function track(view: WebContentsView, target: "host" | "facebook" | "broadcast")
 
 function safeOrigin(rawUrl: string) { try { return new URL(rawUrl).origin; } catch { return "invalid-url"; } }
 function publishActiveGame() { windowRef?.webContents.send("desktop:active-game", activeGame); }
-function setActiveGame(context: ActiveGameContext) { activeGame = context; currentBroadcastUrl = context.broadcastUrl; void activeGameStore.save(context); if (broadcastView?.webContents.getURL() !== context.broadcastUrl) void navigate(broadcastView!.webContents, context.broadcastUrl); publishActiveGame(); }
+function setActiveGame(context: ActiveGameContext, force = false) { if (activeGame?.locked && activeGame.gameId !== context.gameId && !force) return false; activeGame = { ...context, locked: force ? false : context.locked }; currentBroadcastUrl = context.broadcastUrl; void activeGameStore.save(activeGame); if (broadcastView?.webContents.getURL() !== context.broadcastUrl) void navigate(broadcastView!.webContents, context.broadcastUrl); publishActiveGame(); return true; }
 async function clearActiveGame() { activeGame = null; currentBroadcastUrl = `${hostOrigin}/broadcast`; await activeGameStore.clear(); if (broadcastView && broadcastView.webContents.getURL() !== currentBroadcastUrl) await navigate(broadcastView.webContents, currentBroadcastUrl); publishActiveGame(); }
-function handleHostNavigation(url: string) { const context = activeGameFromHostUrl(url, hostOrigin); if (context) setActiveGame({ ...context, raffleCode: activeGame?.gameId === context.gameId ? activeGame.raffleCode : null, gameTitle: activeGame?.gameId === context.gameId ? activeGame.gameTitle : null }); }
+function handleHostNavigation(url: string) { const context = activeGameFromHostUrl(url, hostOrigin); if (context) setActiveGame({ ...context, raffleCode: activeGame?.gameId === context.gameId ? activeGame.raffleCode : null, gameTitle: activeGame?.gameId === context.gameId ? activeGame.gameTitle : null, locked: activeGame?.gameId === context.gameId ? activeGame.locked : false }); }
 
 function createWindow() {
   const devToolsEnabled = !app.isPackaged || process.env.ASYLUM_DESKTOP_DEVTOOLS === "1";
@@ -71,7 +73,7 @@ function createWindow() {
     sandbox: true, devTools: devToolsEnabled,
   } });
   facebookView = createFacebookView(devToolsEnabled);
-  broadcastView = new WebContentsView({ webPreferences: { partition: "persist:asylum-broadcast", contextIsolation: true, nodeIntegration: false, sandbox: true, devTools: devToolsEnabled } });
+  broadcastView = new WebContentsView({ webPreferences: { partition: "persist:asylum-broadcast", preload: join(__dirname, "../preload/broadcast-preload.js"), contextIsolation: true, nodeIntegration: false, sandbox: true, devTools: devToolsEnabled } });
   windowRef.contentView.addChildView(hostView);
   windowRef.contentView.addChildView(facebookView);
   windowRef.contentView.addChildView(broadcastView);
@@ -81,7 +83,7 @@ function createWindow() {
   track(hostView, "host"); track(facebookView, "facebook"); track(broadcastView, "broadcast");
   hostView.webContents.on("did-navigate", (_event, url) => handleHostNavigation(url));
   hostView.webContents.on("did-navigate-in-page", (_event, url) => handleHostNavigation(url));
-  broadcastView.webContents.session.webRequest.onCompleted({ urls: [`${hostOrigin}/broadcast*`] }, (details) => { if (details.resourceType === "mainFrame" && details.statusCode === 404 && details.url === currentBroadcastUrl) void clearActiveGame(); });
+  broadcastView.webContents.session.webRequest.onCompleted({ urls: [`${hostOrigin}/broadcast*`] }, (details) => { if (details.resourceType === "mainFrame" && details.statusCode >= 400 && details.url === currentBroadcastUrl) status("broadcast", "failed"); });
   void navigate(hostView.webContents, hostUrl);
   void navigate(facebookView.webContents, facebookGroupUrl);
   void navigate(broadcastView.webContents, currentBroadcastUrl);
@@ -97,6 +99,7 @@ function registerIpc() {
   const fromShell = (event: Electron.IpcMainInvokeEvent) => event.sender === windowRef?.webContents;
   ipcMain.handle("desktop:version", (event) => fromShell(event) ? app.getVersion() : "");
   ipcMain.handle("active-game:get", (event) => fromShell(event) ? activeGame : null);
+  ipcMain.handle("broadcast:health:get", (event) => fromShell(event) ? broadcastHealth : null);
   ipcMain.handle("layout:update", (event, layout: { host?: unknown; facebook?: unknown; broadcast?: unknown }) => {
     if (event.sender !== windowRef?.webContents) return;
     for (const [view, bounds] of [[hostView, layout?.host], [facebookView, layout?.facebook], [broadcastView, layout?.broadcast]] as const) {
@@ -107,8 +110,18 @@ function registerIpc() {
   ipcMain.handle("host:reload", (event) => { if (fromShell(event)) hostView?.webContents.reload(); });
   ipcMain.handle("host:open-portal", (event) => fromShell(event) && hostView ? navigate(hostView.webContents, hostUrl) : undefined);
   ipcMain.handle("broadcast:retry", (event) => fromShell(event) && broadcastView ? navigate(broadcastView.webContents, currentBroadcastUrl) : undefined);
-  ipcMain.handle("active-game:select", (event, gameId: unknown) => { if (!fromShell(event) || !validGameId(gameId)) return false; setActiveGame({ gameId, sourceUrl: "desktop-selection", broadcastUrl: broadcastUrlFor(gameId, hostOrigin), raffleCode: null, gameTitle: null }); return true; });
+  ipcMain.handle("broadcast:set-scale", (event, scale: unknown) => { if (!fromShell(event) || !broadcastView || ![1, 1.25, 1.5].includes(Number(scale))) return false; broadcastView.webContents.setZoomFactor(Number(scale)); return true; });
+  ipcMain.handle("broadcast:set-safe-areas", (event, visible: unknown) => { if (!fromShell(event) || !broadcastView || typeof visible !== "boolean") return false; void broadcastView.webContents.executeJavaScript(`document.documentElement.classList.toggle("show-broadcast-safe-areas", ${visible})`); return true; });
+  ipcMain.handle("active-game:select", (event, gameId: unknown, force: unknown) => { if (!fromShell(event) || !validGameId(gameId) || (force !== undefined && typeof force !== "boolean")) return false; return setActiveGame({ gameId, sourceUrl: "desktop-selection", broadcastUrl: broadcastUrlFor(gameId, hostOrigin), raffleCode: null, gameTitle: null, locked: false }, force === true); });
+  ipcMain.handle("active-game:set-lock", async (event, locked: unknown) => { if (!fromShell(event) || typeof locked !== "boolean" || !activeGame) return false; activeGame = { ...activeGame, locked }; await activeGameStore.save(activeGame); publishActiveGame(); return true; });
   ipcMain.handle("active-game:clear", async (event) => { if (!fromShell(event)) return false; await clearActiveGame(); return true; });
+  ipcMain.on("broadcast:health", (event, value: unknown) => {
+    if (event.sender !== broadcastView?.webContents || !value || typeof value !== "object") return;
+    const candidate = value as Record<string, unknown>; const allowedStates = ["WAITING", "READY", "SPINNING", "WINNER", "SECOND_CHANCE", "REWARD_CHAMBER", "COMPLETED", "ERROR"];
+    if (typeof candidate.state !== "string" || !allowedStates.includes(candidate.state) || (candidate.gameState !== null && !["OPEN", "CLOSED", "READY", "IN_PROGRESS", "COMPLETED"].includes(String(candidate.gameState))) || (candidate.raffleCode !== null && typeof candidate.raffleCode !== "string") || (candidate.wheelLabel !== null && typeof candidate.wheelLabel !== "string") || !["live", "waiting", "error"].includes(String(candidate.status))) return;
+    broadcastHealth = { state: candidate.state, gameState: typeof candidate.gameState === "string" ? candidate.gameState : null, raffleCode: typeof candidate.raffleCode === "string" ? candidate.raffleCode.slice(0, 100) : null, wheelLabel: typeof candidate.wheelLabel === "string" ? candidate.wheelLabel.slice(0, 512) : null, updatedAt: new Date().toISOString(), status: candidate.status as BroadcastHealth["status"], message: typeof candidate.message === "string" ? candidate.message.slice(0, 200) : null };
+    windowRef?.webContents.send("desktop:broadcast-health", broadcastHealth);
+  });
   ipcMain.handle("host:open-external", (event) => { if (fromShell(event)) openExternalHttps(hostView?.webContents.getURL() || hostUrl); });
   ipcMain.handle("facebook:back", (event) => { if (fromShell(event) && facebookView) goBack(facebookView.webContents); });
   ipcMain.handle("facebook:forward", (event) => { if (fromShell(event) && facebookView) goForward(facebookView.webContents); });
@@ -130,7 +143,7 @@ function registerIpc() {
     if (typeof candidate.publicClaimUrl !== "string" || !isAsylumUrl(candidate.publicClaimUrl, hostOrigin)) return false;
     if (typeof candidate.facebookPost !== "string" || candidate.facebookPost.length > 10_000) return false;
     currentGameLink = candidate.publicClaimUrl;
-    setActiveGame({ gameId: candidate.activeGameId, sourceUrl: hostView.webContents.getURL(), broadcastUrl: candidate.broadcastUrl, raffleCode: candidate.activeRaffleCode, gameTitle: candidate.activeGameTitle });
+    setActiveGame({ gameId: candidate.activeGameId, sourceUrl: hostView.webContents.getURL(), broadcastUrl: candidate.broadcastUrl, raffleCode: candidate.activeRaffleCode, gameTitle: candidate.activeGameTitle, locked: activeGame?.gameId === candidate.activeGameId ? activeGame.locked : false });
     currentFacebookPost = candidate.facebookPost;
     return true;
   });

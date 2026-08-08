@@ -23,8 +23,8 @@ contextBridge.exposeInMainWorld("asylumDesktop", {
     openExternal: () => invoke("facebook:open-external"),
     clearSession: () => invoke("facebook:clear-session"),
   },
-  broadcast: { retry: () => invoke("broadcast:retry") },
-  activeGame: { get: () => invoke("active-game:get"), select: (gameId: string) => invoke("active-game:select", gameId), clear: () => invoke("active-game:clear") },
+  broadcast: { retry: () => invoke("broadcast:retry"), getHealth: () => invoke("broadcast:health:get"), setScale: (scale: number) => invoke("broadcast:set-scale", scale), setSafeAreas: (visible: boolean) => invoke("broadcast:set-safe-areas", visible) },
+  activeGame: { get: () => invoke("active-game:get"), select: (gameId: string, force = false) => invoke("active-game:select", gameId, force), setLock: (locked: boolean) => invoke("active-game:set-lock", locked), clear: () => invoke("active-game:clear") },
   integration: {
     copyGameLink: () => invoke("integration:copy-game-link"),
     copyFacebookPost: () => invoke("integration:copy-facebook-post"),
@@ -65,4 +65,5 @@ contextBridge.exposeInMainWorld("asylumDesktop", {
     return () => ipcRenderer.removeListener("desktop:status", listener);
   },
   onActiveGame: (callback: (context: unknown) => void) => { const listener = (_event: Electron.IpcRendererEvent, context: unknown) => callback(context); ipcRenderer.on("desktop:active-game", listener); return () => ipcRenderer.removeListener("desktop:active-game", listener); },
+  onBroadcastHealth: (callback: (health: unknown) => void) => { const listener = (_event: Electron.IpcRendererEvent, health: unknown) => callback(health); ipcRenderer.on("desktop:broadcast-health", listener); return () => ipcRenderer.removeListener("desktop:broadcast-health", listener); },
 });

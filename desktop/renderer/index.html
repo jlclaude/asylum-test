@@ -16,6 +16,7 @@
           <button id="show-facebook">Facebook</button>
           <button id="show-broadcast">Broadcast</button>
           <button id="show-studio">Studio</button>
+          <button id="broadcast-exit-clean" hidden>Exit Clean Output</button>
           <button id="reload-host">Reload Portal</button>
           <button id="external-host">Open Portal Externally</button>
         </nav>
@@ -30,7 +31,10 @@
       </section>
       <div id="divider" role="separator" aria-orientation="horizontal" tabindex="0"></div>
       <section id="broadcast-panel" hidden>
-        <div class="section-title">BROADCAST <span id="broadcast-context">NO ACTIVE RAFFLE</span><button id="select-active-game">Select Active Raffle</button><button id="clear-active-game">Clear Active Game</button></div>
+        <div class="section-title broadcast-controls">BROADCAST <span id="broadcast-context">NO ACTIVE RAFFLE</span><button id="select-active-game">Switch Game</button><button id="lock-active-game">Lock Active Raffle</button><button id="clear-active-game">Clear Active Game</button><button id="broadcast-fullscreen">Fullscreen Broadcast</button><button id="broadcast-exit-fullscreen" hidden>Exit Fullscreen</button><label>Scale <select id="broadcast-scale"><option value="fit">Fit</option><option value="1">100%</option><option value="1.25">125%</option><option value="1.5">150%</option></select></label><label><input id="broadcast-clean" type="checkbox"> Clean Output</label><label><input id="broadcast-safe-areas" type="checkbox"> Show Safe Areas</label></div>
+        <div id="broadcast-status-strip" class="broadcast-status-strip">
+          <span>ACTIVE RAFFLE<strong id="strip-raffle">—</strong></span><span>GAME STATE<strong id="strip-state">WAITING</strong></span><span>CURRENT WHEEL<strong id="strip-wheel">—</strong></span><span>OBS<strong id="strip-obs">DISCONNECTED</strong></span><span>BROADCAST<strong id="strip-broadcast">WAITING</strong></span><span><strong id="broadcast-updated">Broadcast Updated: —</strong><small id="broadcast-stale" hidden>Broadcast state may be stale.</small></span>
+        </div>
         <div id="broadcast-region" class="view-region">
           <div id="broadcast-error" class="error-card" hidden><strong>BROADCAST COULD NOT LOAD</strong><button id="broadcast-retry">Retry</button></div>
         </div>
@@ -100,6 +104,7 @@
           <section class="winner-presentation"><h2>Winner Presentation</h2><div class="automation-options"><label><input id="winner-enabled" type="checkbox"> Celebration Enabled</label><label><input id="winner-confetti" type="checkbox"> Confetti Enabled</label><label><input id="winner-sound" type="checkbox"> Winner Sound Enabled</label><label>Volume <input id="winner-volume" type="range" min="0" max="100"></label><label>Overlay Delay <input id="winner-delay" type="number" min="0" max="60000"> ms</label><label>Celebration Duration <input id="winner-duration" type="number" min="250" max="60000"> ms</label></div><button id="winner-choose-audio">Choose Audio File</button><button id="winner-save">Save Presentation</button><button id="winner-test">Test Winner Overlay</button><button id="winner-test-confetti">Test Confetti</button><button id="winner-test-sound">Test Winner Sound</button><button id="winner-replay">Replay Last Winner</button><button id="winner-hide">Hide Overlay</button><span id="winner-status"></span></section>
           <p id="obs-error" class="obs-error" hidden></p>
           <details><summary>To connect OBS</summary><ol><li>Open OBS Studio.</li><li>Go to Tools → WebSocket Server Settings.</li><li>Enable WebSocket server.</li><li>Use port 4455.</li><li>Enter the same password here if authentication is enabled.</li></ol><p>Only OBS on this computer is supported.</p></details>
+          <details><summary>Desktop hotkeys</summary><p>B Broadcast · H Host Portal · F Facebook · S Studio · F11 Fullscreen Broadcast. Hotkeys are ignored while typing.</p></details>
         </div>
         <div id="studio-error" class="studio-error" hidden><h1>Production Studio Error</h1><p id="studio-error-message">OBS controls could not be loaded.</p><button id="studio-retry">Retry</button></div>
       </section>

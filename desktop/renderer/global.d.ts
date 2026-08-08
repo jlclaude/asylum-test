@@ -12,8 +12,8 @@ declare global {
     version(): Promise<string>; layout: { update(layout: DesktopLayout): Promise<void> };
     host: { retry(): Promise<void>; reload(): Promise<void>; openPortal(): Promise<void>; openBroadcast(): Promise<void>; openExternal(): Promise<void> };
     facebook: { back(): Promise<void>; forward(): Promise<void>; reload(): Promise<void>; retry(): Promise<void>; openGroup(): Promise<void>; openExternal(): Promise<void>; clearSession(): Promise<void> };
-    broadcast: { retry(): Promise<void> };
-    activeGame: { get(): Promise<ActiveGameContext | null>; select(gameId: string): Promise<boolean>; clear(): Promise<boolean> };
+    broadcast: { retry(): Promise<void>; getHealth(): Promise<BroadcastHealth | null>; setScale(scale: number): Promise<boolean>; setSafeAreas(visible: boolean): Promise<boolean> };
+    activeGame: { get(): Promise<ActiveGameContext | null>; select(gameId: string, force?: boolean): Promise<boolean>; setLock(locked: boolean): Promise<boolean>; clear(): Promise<boolean> };
     integration: { copyGameLink(): Promise<boolean>; copyFacebookPost(): Promise<boolean> };
     winner: { getSettings(): Promise<ObsResult<WinnerPresentationPublic>>; saveSettings(value: unknown): Promise<ObsResult<WinnerPresentationPublic>>; chooseAudio(): Promise<ObsResult<WinnerPresentationPublic | null>>; test(mode: "overlay" | "confetti" | "sound"): Promise<ObsResult<boolean>>; replay(): Promise<ObsResult<boolean>>; hide(): Promise<ObsResult<void>> };
     obs: {
@@ -25,8 +25,10 @@ declare global {
     };
     onStatus(callback: (status: DesktopStatus) => void): () => void;
     onActiveGame(callback: (context: ActiveGameContext) => void): () => void;
+    onBroadcastHealth(callback: (health: BroadcastHealth) => void): () => void;
   } }
   interface DesktopLayout { host: { x: number; y: number; width: number; height: number } | null; facebook: { x: number; y: number; width: number; height: number } | null; broadcast: { x: number; y: number; width: number; height: number } | null; }
   interface DesktopStatus { target: "host" | "facebook" | "broadcast"; state: "loading" | "ready" | "failed" | "crashed"; }
-  interface ActiveGameContext { gameId: string; sourceUrl: string; broadcastUrl: string; raffleCode: string | null; gameTitle: string | null; }
+  interface ActiveGameContext { gameId: string; sourceUrl: string; broadcastUrl: string; raffleCode: string | null; gameTitle: string | null; locked: boolean; }
+  interface BroadcastHealth { state: "WAITING" | "READY" | "SPINNING" | "WINNER" | "SECOND_CHANCE" | "REWARD_CHAMBER" | "COMPLETED" | "ERROR"; gameState: "OPEN" | "CLOSED" | "READY" | "IN_PROGRESS" | "COMPLETED" | null; raffleCode: string | null; wheelLabel: string | null; updatedAt: string; status: "live" | "waiting" | "error"; message: string | null; }
 }
