@@ -4,6 +4,11 @@ const invoke = (channel: string, ...args: unknown[]) => ipcRenderer.invoke(chann
 
 contextBridge.exposeInMainWorld("asylumDesktop", {
   version: () => invoke("desktop:version"),
+  zoom: {
+    get: () => invoke("zoom:get"), set: (factor: number) => invoke("zoom:set", factor), setWorkspace: (workspace: string) => invoke("zoom:set-workspace", workspace),
+    onChanged: (callback: (value: unknown) => void) => { const listener = (_event: Electron.IpcRendererEvent, value: unknown) => callback(value); ipcRenderer.on("desktop:zoom-changed", listener); return () => ipcRenderer.removeListener("desktop:zoom-changed", listener); },
+    onStudioZoom: (callback: (factor: unknown) => void) => { const listener = (_event: Electron.IpcRendererEvent, factor: unknown) => callback(factor); ipcRenderer.on("desktop:studio-zoom", listener); return () => ipcRenderer.removeListener("desktop:studio-zoom", listener); },
+  },
   layout: {
     update: (layout: unknown) => invoke("layout:update", layout),
   },

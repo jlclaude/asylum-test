@@ -8,6 +8,7 @@ async function run() {
   const renderer = await readFile(join(process.cwd(), "renderer/desktop-shell.ts"), "utf8");
   const hostPreload = await readFile(join(process.cwd(), "preload/host-preload.ts"), "utf8");
   const main = await readFile(join(process.cwd(), "main/main.ts"), "utf8");
+  const zoom = await readFile(join(process.cwd(), "main/zoom-settings.ts"), "utf8");
   const wheel = await readFile(join(process.cwd(), "../app/components/wheel/WheelSection.tsx"), "utf8");
   const winnerOverlay = await readFile(join(process.cwd(), "renderer/winner-overlay.ts"), "utf8");
   const winnerController = await readFile(join(process.cwd(), "main/winner/WinnerPresentationController.ts"), "utf8");
@@ -53,6 +54,11 @@ async function run() {
   assert.match(main, /activeGame\?\.locked/); assert.match(main, /active-game:set-lock/); assert.match(main, /event\.sender !== broadcastView\?\.webContents/);
   assert.match(main, /broadcast:set-scale/); assert.match(main, /broadcast:set-safe-areas/); assert.match(main, /broadcast-preload\.js/);
   assert.match(html, /OBS Browser Source URL/); assert.match(html, /id="copy-obs-broadcast-url"/); assert.match(html, /id="regenerate-obs-broadcast-url"/); assert.match(main, /broadcast:copy-obs-url/);
+  assert.match(html, /id="zoom-status"/); assert.match(main, /label: "Zoom In"/); assert.match(main, /CmdOrCtrl\+Plus/); assert.match(main, /CmdOrCtrl\+-/); assert.match(main, /CmdOrCtrl\+0/);
+  for (const workspace of ["host", "facebook", "broadcast", "studio"]) assert.match(zoom, new RegExp(`${workspace}: 1`));
+  for (const preset of ["0.75", "0.9", "1", "1.1", "1.25", "1.5", "1.75", "2"]) assert.ok(zoom.includes(preset), `missing zoom preset ${preset}`);
+  assert.match(main, /broadcastView\?\.webContents\.setZoomFactor/); assert.match(main, /desktop:studio-zoom/); assert.match(renderer, /style\.zoom/);
+  assert.match(main, /zoomStore\.save/); assert.doesNotMatch(zoom, /Prisma|PostgreSQL/);
   console.info("Studio layout and fallback tests passed");
 }
 void run().catch((error) => { console.error(error); process.exitCode = 1; });

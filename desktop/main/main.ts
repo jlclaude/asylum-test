@@ -1,4 +1,4 @@
-import { app, BaseWindow, BrowserWindow, clipboard, dialog, ipcMain, session, WebContentsView } from "electron";
+import { app, BaseWindow, BrowserWindow, clipboard, dialog, ipcMain, Menu, session, WebContentsView } from "electron";
 import { join } from "node:path";
 import { readFile, writeFile } from "node:fs/promises";
 import { createFacebookView, clearFacebookSession } from "./facebook-view";
@@ -12,6 +12,7 @@ import { exportStudioProfile, importStudioProfile, validateObsSceneMappings } fr
 import { ObsAutomationEngine, type ObsAutomationEvent } from "./obs/ObsAutomationEngine";
 import { WinnerPresentationController, type WinnerOverlayState, type WinnerPresentationSettings } from "./winner/WinnerPresentationController";
 import { ActiveGameStore, activeGameFromHostUrl, broadcastUrlFor, validGameId, type ActiveGameContext } from "./active-game";
+import { adjacentZoom, DESKTOP_ZOOM_PRESETS, DesktopZoomStore, normalizeZoom, validDesktopWorkspace, type DesktopWorkspace, type DesktopZoomSettings } from "./zoom-settings";
 
 const hostUrl = process.env.ASYLUM_DESKTOP_HOST_URL ?? `${ASYLUM_ORIGIN}/host`;
 const hostOrigin = new URL(hostUrl).origin;
@@ -29,9 +30,39 @@ let obsController: ObsController;
 let obsSettings: ObsSettingsStore;
 let obsAutomation: ObsAutomationEngine;
 let winnerPresentation: WinnerPresentationController;
+let zoomStore: DesktopZoomStore;
+let zoomSettings: DesktopZoomSettings;
+let currentWorkspace: DesktopWorkspace = "host";
 type BroadcastHealth = { state: string; gameState: string | null; raffleCode: string | null; wheelLabel: string | null; updatedAt: string; status: "live" | "waiting" | "error"; message: string | null };
 let broadcastHealth: BroadcastHealth = { state: "WAITING", gameState: null, raffleCode: null, wheelLabel: null, updatedAt: new Date(0).toISOString(), status: "waiting", message: null };
 const viewStates = { host: "loading", facebook: "loading", broadcast: "loading" } as Record<"host" | "facebook" | "broadcast", "loading" | "ready" | "failed" | "crashed">;
+
+function publishZoom() { windowRef?.webContents.send("desktop:zoom-changed", { workspace: currentWorkspace, factor: zoomSettings[currentWorkspace] }); }
+function applyWorkspaceZoom(workspace: DesktopWorkspace) {
+  const factor = zoomSettings[workspace];
+  if (workspace === "host") hostView?.webContents.setZoomFactor(factor);
+  else if (workspace === "facebook") facebookView?.webContents.setZoomFactor(factor);
+  else if (workspace === "broadcast") broadcastView?.webContents.setZoomFactor(factor);
+  else windowRef?.webContents.send("desktop:studio-zoom", factor);
+}
+async function setWorkspaceZoom(workspace: DesktopWorkspace, factor: unknown) {
+  zoomSettings[workspace] = normalizeZoom(factor); applyWorkspaceZoom(workspace); await zoomStore.save(zoomSettings);
+  if (workspace === currentWorkspace) publishZoom();
+  return { workspace, factor: zoomSettings[workspace] };
+}
+function installApplicationMenu() {
+  const presetItem = (factor: number): Electron.MenuItemConstructorOptions => ({ label: `${Math.round(factor * 100)}%`, type: "radio", checked: zoomSettings[currentWorkspace] === factor, click: () => void setWorkspaceZoom(currentWorkspace, factor).then(installApplicationMenu) });
+  const template: Electron.MenuItemConstructorOptions[] = [
+    ...(process.platform === "darwin" ? [{ role: "appMenu" as const }] : []),
+    { label: "View", submenu: [
+      { label: "Zoom In", accelerator: "CmdOrCtrl+Plus", click: () => void setWorkspaceZoom(currentWorkspace, adjacentZoom(zoomSettings[currentWorkspace], 1)).then(installApplicationMenu) },
+      { label: "Zoom Out", accelerator: "CmdOrCtrl+-", click: () => void setWorkspaceZoom(currentWorkspace, adjacentZoom(zoomSettings[currentWorkspace], -1)).then(installApplicationMenu) },
+      { label: "Actual Size", accelerator: "CmdOrCtrl+0", click: () => void setWorkspaceZoom(currentWorkspace, 1).then(installApplicationMenu) },
+      { type: "separator" }, { label: "Presets", submenu: DESKTOP_ZOOM_PRESETS.map(presetItem) }, { type: "separator" }, { role: "togglefullscreen" },
+    ] },
+  ];
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
 
 function status(target: "host" | "facebook" | "broadcast", state: "loading" | "ready" | "failed" | "crashed") {
   viewStates[target] = state;
@@ -99,6 +130,7 @@ function createWindow() {
   denyPermissions(hostView.webContents);
   restrictNavigation(broadcastView.webContents, (url) => isAsylumUrl(url, hostOrigin)); denyPermissions(broadcastView.webContents);
   track(hostView, "host"); track(facebookView, "facebook"); track(broadcastView, "broadcast");
+  applyWorkspaceZoom("host"); applyWorkspaceZoom("facebook"); applyWorkspaceZoom("broadcast"); applyWorkspaceZoom("studio");
   hostView.webContents.on("did-navigate", (_event, url) => handleHostNavigation(url));
   hostView.webContents.on("did-navigate-in-page", (_event, url) => handleHostNavigation(url));
   broadcastView.webContents.session.webRequest.onCompleted({ urls: [`${hostOrigin}/host/games/*/broadcast*`, `${hostOrigin}/broadcast*`] }, (details) => { if (details.resourceType === "mainFrame" && details.statusCode >= 400 && details.url === currentBroadcastUrl) status("broadcast", "failed"); });
@@ -116,6 +148,13 @@ function validRect(value: unknown): value is Electron.Rectangle {
 function registerIpc() {
   const fromShell = (event: Electron.IpcMainInvokeEvent) => event.sender === windowRef?.webContents;
   ipcMain.handle("desktop:version", (event) => fromShell(event) ? app.getVersion() : "");
+  ipcMain.handle("zoom:get", (event) => fromShell(event) ? { workspace: currentWorkspace, factor: zoomSettings[currentWorkspace], settings: zoomSettings } : null);
+  ipcMain.handle("zoom:set-workspace", (event, workspace: unknown) => {
+    if (!fromShell(event) || !validDesktopWorkspace(workspace)) return null;
+    currentWorkspace = workspace; applyWorkspaceZoom(workspace); installApplicationMenu(); publishZoom();
+    return { workspace, factor: zoomSettings[workspace] };
+  });
+  ipcMain.handle("zoom:set", (event, factor: unknown) => fromShell(event) ? setWorkspaceZoom(currentWorkspace, factor).then((value) => { installApplicationMenu(); return value; }) : null);
   ipcMain.handle("active-game:get", (event) => fromShell(event) ? activeGame : null);
   ipcMain.handle("broadcast:health:get", (event) => fromShell(event) ? broadcastHealth : null);
   ipcMain.handle("layout:update", (event, layout: { host?: unknown; facebook?: unknown; broadcast?: unknown }) => {
@@ -132,7 +171,7 @@ function registerIpc() {
   ipcMain.handle("broadcast:copy-obs-url", async (event) => { if (!fromShell(event)) return { ok: false, error: "Unauthorized request." }; try { const url = await requestObsBroadcastLink(); clipboard.writeText(url); return { ok: true, value: url }; } catch (error) { return { ok: false, error: error instanceof Error ? error.message : "OBS Broadcast URL is unavailable." }; } });
   ipcMain.handle("broadcast:open-obs-url", async (event) => { if (!fromShell(event)) return { ok: false, error: "Unauthorized request." }; try { const url = await requestObsBroadcastLink(); openExternalHttps(url); return { ok: true, value: url }; } catch (error) { return { ok: false, error: error instanceof Error ? error.message : "OBS Broadcast URL is unavailable." }; } });
   ipcMain.handle("broadcast:regenerate-obs-url", async (event) => { if (!fromShell(event)) return { ok: false, error: "Unauthorized request." }; try { const url = await requestObsBroadcastLink(true); return { ok: true, value: url }; } catch (error) { return { ok: false, error: error instanceof Error ? error.message : "Broadcast link could not be regenerated." }; } });
-  ipcMain.handle("broadcast:set-scale", (event, scale: unknown) => { if (!fromShell(event) || !broadcastView || ![1, 1.25, 1.5].includes(Number(scale))) return false; broadcastView.webContents.setZoomFactor(Number(scale)); return true; });
+  ipcMain.handle("broadcast:set-scale", async (event, scale: unknown) => { if (!fromShell(event) || !broadcastView || ![1, 1.25, 1.5].includes(Number(scale))) return false; await setWorkspaceZoom("broadcast", scale); installApplicationMenu(); return true; });
   ipcMain.handle("broadcast:set-safe-areas", (event, visible: unknown) => { if (!fromShell(event) || !broadcastView || typeof visible !== "boolean") return false; void broadcastView.webContents.executeJavaScript(`document.documentElement.classList.toggle("show-broadcast-safe-areas", ${visible})`); return true; });
   ipcMain.handle("active-game:select", (event, gameId: unknown, force: unknown) => { if (!fromShell(event) || !validGameId(gameId) || (force !== undefined && typeof force !== "boolean")) return false; return setActiveGame({ gameId, sourceUrl: "desktop-selection", broadcastUrl: broadcastUrlFor(gameId, hostOrigin), raffleCode: null, gameTitle: null, hostCsrfToken: null, locked: false }, force === true); });
   ipcMain.handle("active-game:set-lock", async (event, locked: unknown) => { if (!fromShell(event) || typeof locked !== "boolean" || !activeGame) return false; activeGame = { ...activeGame, locked }; await activeGameStore.save(activeGame); publishActiveGame(); return true; });
@@ -259,13 +298,14 @@ app.whenReady().then(async () => {
   console.info("[desktop] starting", app.getVersion());
   session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
   obsSettings = new ObsSettingsStore();
+  zoomStore = new DesktopZoomStore(); zoomSettings = await zoomStore.load();
   activeGameStore = new ActiveGameStore(); activeGame = await activeGameStore.load(hostOrigin); if (activeGame) currentBroadcastUrl = activeGame.broadcastUrl;
   obsController = new ObsController();
   obsAutomation = new ObsAutomationEngine(obsController, obsSettings);
   winnerPresentation = new WinnerPresentationController(() => obsSettings.loadWinnerPresentation());
   obsController.subscribe((state) => { if (state.connection !== "CONNECTED") obsAutomation.markUnavailable(); windowRef?.webContents.send("obs:state-changed", state); });
   obsAutomation.subscribe((state) => windowRef?.webContents.send("obs:automation-state-changed", state));
-  registerIpc(); createWindow();
+  registerIpc(); createWindow(); installApplicationMenu();
   app.on("activate", () => { if (BaseWindow.getAllWindows().length === 0) createWindow(); });
 });
 app.on("before-quit", () => { winnerPresentation?.dispose(); obsAutomation?.dispose(); void obsController?.disconnect(); });

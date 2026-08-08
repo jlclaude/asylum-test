@@ -8,8 +8,11 @@ declare global {
   interface ObsSceneMappings { scenes: Record<ObsMappingKey, string | null>; automation: { enabled: boolean; spinToWheel: boolean; revealToWinner: boolean; secondChance: boolean; reward: boolean; acceptToHost: boolean; finishToEnding: boolean }; delays: { wheel: number; winner: number; secondChance: number; reward: number; host: number } }
   interface ObsAutomationStatus { mode: "WAITING" | "WHEEL" | "WINNER" | "SECOND_CHANCE" | "REWARD" | "HOST" | "ENDING"; pending: string | null; log: Array<{ at: string; mode: string; sceneName: string; message: string }> }
   interface WinnerPresentationPublic { enabled: boolean; confetti: boolean; sound: boolean; volume: number; overlayDelay: number; duration: number; audioSelected: boolean }
+  type DesktopWorkspace = "host" | "facebook" | "broadcast" | "studio";
+  interface DesktopZoomState { workspace: DesktopWorkspace; factor: number; settings?: Record<DesktopWorkspace, number> }
   interface Window { asylumDesktop: {
     version(): Promise<string>; layout: { update(layout: DesktopLayout): Promise<void> };
+    zoom: { get(): Promise<DesktopZoomState | null>; set(factor: number): Promise<DesktopZoomState | null>; setWorkspace(workspace: DesktopWorkspace): Promise<DesktopZoomState | null>; onChanged(callback: (value: DesktopZoomState) => void): () => void; onStudioZoom(callback: (factor: number) => void): () => void };
     host: { retry(): Promise<void>; reload(): Promise<void>; openPortal(): Promise<void>; openBroadcast(): Promise<void>; openExternal(): Promise<void> };
     facebook: { back(): Promise<void>; forward(): Promise<void>; reload(): Promise<void>; retry(): Promise<void>; openGroup(): Promise<void>; openExternal(): Promise<void>; clearSession(): Promise<void> };
     broadcast: { retry(): Promise<void>; getObsUrl(): Promise<ObsResult<string>>; copyObsUrl(): Promise<ObsResult<string>>; openObsUrl(): Promise<ObsResult<string>>; regenerateObsUrl(): Promise<ObsResult<string>>; getHealth(): Promise<BroadcastHealth | null>; setScale(scale: number): Promise<boolean>; setSafeAreas(visible: boolean): Promise<boolean> };

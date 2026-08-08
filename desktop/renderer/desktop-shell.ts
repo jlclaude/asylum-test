@@ -30,8 +30,13 @@ function reportLayout() { void window.asylumDesktop.layout.update({ host: panel 
 function applyLayout() {
   hostRegion.hidden = panel !== "host"; facebookPanel.hidden = panel !== "facebook"; broadcastPanel.hidden = panel !== "broadcast"; obsPanel.hidden = panel !== "obs"; divider.hidden = true;
   localStorage.setItem("desktop-panel", panel); requestAnimationFrame(reportLayout);
+  void window.asylumDesktop.zoom.setWorkspace(panel === "obs" ? "studio" : panel);
   updatePreviewPolling();
 }
+function renderZoom(value: DesktopZoomState) { el("zoom-status").textContent = `${Math.round(value.factor * 100)}%`; }
+window.asylumDesktop.zoom.onChanged(renderZoom);
+window.asylumDesktop.zoom.onStudioZoom((factor) => { obsPanel.querySelector<HTMLElement>(".obs-content")!.style.zoom = String(factor); });
+void window.asylumDesktop.zoom.get().then((value) => { if (value) renderZoom(value); });
 const action = (id: string, callback: () => Promise<unknown>) => el(id).addEventListener("click", () => void callback());
 action("back", window.asylumDesktop.facebook.back); action("forward", window.asylumDesktop.facebook.forward); action("reload", window.asylumDesktop.facebook.reload);
 action("group", window.asylumDesktop.facebook.openGroup); action("external", window.asylumDesktop.facebook.openExternal);

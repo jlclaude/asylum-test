@@ -10,7 +10,8 @@ html, body, #shell { height: 100%; margin: 0; overflow: hidden; }
 .desktop-toolbar { display: flex; gap: 6px; margin-left: 12px; letter-spacing: normal; }
 .desktop-toolbar button { padding: 5px 8px; font-size: 12px; }
 .desktop-toolbar button:disabled { cursor: default; opacity: .5; }
-.app-header small { margin-left: auto; color: #8794a3; font-weight: 500; letter-spacing: normal; }
+.zoom-status { margin-left: auto; padding: 4px 8px; border: 1px solid #36424f; border-radius: 999px; color: #cbd4dd; font-size: 11px; font-weight: 800; letter-spacing: normal; }
+.app-header small { color: #8794a3; font-weight: 500; letter-spacing: normal; }
 #divider { cursor: row-resize; background: #232c36; border-block: 1px solid #36424f; }
 #divider:hover, #divider:focus { background: #d32938; outline: none; }
 #facebook-panel { display: grid; grid-template-rows: 30px 42px minmax(0, 1fr); min-height: 0; }
