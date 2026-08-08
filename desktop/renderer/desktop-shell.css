@@ -2,6 +2,10 @@
 * { box-sizing: border-box; }
 html, body, #shell { height: 100%; margin: 0; overflow: hidden; }
 #shell { display: grid; grid-template-rows: 54px minmax(120px, 3fr) 7px minmax(170px, 2fr); }
+.app-header { grid-row: 1; }
+#host-region { grid-row: 2; }
+#divider { grid-row: 3; }
+#facebook-panel, #obs-panel { grid-row: 4; }
 .app-header, .section-title { display: flex; align-items: center; gap: 12px; padding: 0 16px; font-weight: 800; letter-spacing: .14em; background: #10151c; border-bottom: 1px solid #29323d; }
 .desktop-toolbar { display: flex; gap: 6px; margin-left: 12px; letter-spacing: normal; }
 .desktop-toolbar button { padding: 5px 8px; font-size: 12px; }
@@ -10,12 +14,16 @@ html, body, #shell { height: 100%; margin: 0; overflow: hidden; }
 #divider { cursor: row-resize; background: #232c36; border-block: 1px solid #36424f; }
 #divider:hover, #divider:focus { background: #d32938; outline: none; }
 #facebook-panel { display: grid; grid-template-rows: 30px 42px minmax(0, 1fr); min-height: 0; }
-#obs-panel { display: grid; grid-template-rows: 30px minmax(0, 1fr); min-height: 0; background: #10151c; }
+#obs-panel { display: grid; grid-template-rows: 30px minmax(0, 1fr); min-height: 0; height: 100%; overflow: hidden; background: #10151c; color: #eef4f8; }
 #obs-panel[hidden], #facebook-panel[hidden], #divider[hidden] { display: none; }
 .status-pill { margin-left: auto; padding: 3px 8px; border-radius: 999px; background: #303945; color: #cbd4dd; font-size: 10px; letter-spacing: .08em; }
 .status-pill.connected { background: #143c2a; color: #8df0b7; }
 .status-pill.error { background: #4b2026; color: #ffb9bf; }
 .obs-content { padding: 18px; overflow: auto; }
+.studio-baseline h1 { margin: 0 0 6px; font-size: 20px; }
+.studio-baseline p { margin: 0 0 18px; color: #aeb9c4; }
+.studio-error { grid-row: 2; padding: 24px; overflow: auto; background: #10151c; color: #eef4f8; }
+.studio-error h1 { margin-top: 0; }
 .obs-connect, .obs-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; }
 .obs-connect label, .obs-controls label { display: grid; gap: 5px; color: #aeb9c4; font-size: 12px; }
 .obs-connect .check { display: flex; align-items: center; padding-bottom: 7px; }

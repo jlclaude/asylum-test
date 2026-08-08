@@ -6,6 +6,7 @@ const facebookPanel = document.querySelector<HTMLElement>("#facebook-panel")!;
 const obsPanel = document.querySelector<HTMLElement>("#obs-panel")!;
 const hostError = document.querySelector<HTMLElement>("#host-error")!;
 const facebookError = document.querySelector<HTMLElement>("#facebook-error")!;
+const obsApi = window.asylumDesktop?.obs;
 let panel = (localStorage.getItem("desktop-panel") ?? "facebook") as "host" | "facebook" | "obs";
 let ratio = Number(localStorage.getItem("desktop-panel-ratio") ?? "0.4");
 
@@ -37,9 +38,15 @@ el("show-studio").addEventListener("click", () => { panel = "obs"; applyLayout()
 
 function unwrap<T>(result: ObsResult<T>): T | undefined { if (!result.ok) { showObsError(result.error ?? "OBS request failed."); return; } return result.value; }
 function showObsError(message?: string) { const node = el("obs-error"); node.textContent = message ?? ""; node.hidden = !message; }
+function showStudioFailure(message = "OBS controls could not be loaded.") {
+  el("studio-error-message").textContent = message;
+  el("studio-error").hidden = false;
+  el("obs-panel").querySelector<HTMLElement>(".obs-content")!.hidden = true;
+}
 function renderObs(state: ObsState) {
   const connected = state.connection === "CONNECTED";
   const badge = el("obs-status"); badge.textContent = state.connection; badge.className = `status-pill ${state.connection.toLowerCase()}`;
+  el("obs-status-copy").textContent = state.connection === "CONNECTED" ? "Connected" : state.connection === "CONNECTING" ? "Connecting" : state.connection === "ERROR" ? "Error" : "Disconnected";
   el("obs-connect-form").hidden = connected; el("obs-controls").hidden = !connected;
   el("obs-program").textContent = state.currentScene || "—"; el("obs-stream").textContent = state.streaming ? "LIVE" : "OFF"; el("obs-record").textContent = state.recording ? "ON" : "OFF";
   const scenes = el<HTMLSelectElement>("obs-scenes"); const selected = scenes.value; scenes.replaceChildren(...state.scenes.map((name) => new Option(name, name, false, name === (selected || state.currentScene))));
@@ -47,23 +54,28 @@ function renderObs(state: ObsState) {
   el<HTMLButtonElement>("obs-start-recording").disabled = state.recording; el<HTMLButtonElement>("obs-stop-recording").disabled = !state.recording;
   showObsError(state.lastError ?? undefined);
 }
-el<HTMLFormElement>("obs-connect-form").addEventListener("submit", async (event) => {
-  event.preventDefault(); showObsError();
-  const result = await window.asylumDesktop.obs.connect({ host: el<HTMLInputElement>("obs-host").value, port: Number(el<HTMLInputElement>("obs-port").value), password: el<HTMLInputElement>("obs-password").value, rememberSettings: el<HTMLInputElement>("obs-remember").checked });
-  const state = unwrap(result); if (state) { el<HTMLInputElement>("obs-password").value = ""; renderObs(state); }
-});
-action("obs-disconnect", async () => { const state = unwrap(await window.asylumDesktop.obs.disconnect()); if (state) renderObs(state); });
-action("obs-refresh", async () => { const state = unwrap(await window.asylumDesktop.obs.refresh()); if (state) renderObs(state); });
-el<HTMLSelectElement>("obs-scenes").addEventListener("change", async (event) => { const state = unwrap(await window.asylumDesktop.obs.switchScene((event.currentTarget as HTMLSelectElement).value)); if (state) renderObs(state); });
-action("obs-start-stream", async () => { const state = unwrap(await window.asylumDesktop.obs.startStream()); if (state) renderObs(state); });
-action("obs-stop-stream", async () => { if (!confirm("Stop the live stream?")) return; const state = unwrap(await window.asylumDesktop.obs.stopStream()); if (state) renderObs(state); });
-action("obs-start-recording", async () => { const state = unwrap(await window.asylumDesktop.obs.startRecording()); if (state) renderObs(state); });
-action("obs-stop-recording", async () => { if (!confirm("Stop recording?")) return; const state = unwrap(await window.asylumDesktop.obs.stopRecording()); if (state) renderObs(state); });
+el("studio-retry").addEventListener("click", () => location.reload());
+if (obsApi) {
+  el<HTMLFormElement>("obs-connect-form").addEventListener("submit", async (event) => {
+    event.preventDefault(); showObsError();
+    try {
+      const result = await obsApi.connect({ host: el<HTMLInputElement>("obs-host").value, port: Number(el<HTMLInputElement>("obs-port").value), password: el<HTMLInputElement>("obs-password").value, rememberSettings: el<HTMLInputElement>("obs-remember").checked });
+      const state = unwrap(result); if (state) { el<HTMLInputElement>("obs-password").value = ""; renderObs(state); }
+    } catch { showStudioFailure(); }
+  });
+  action("obs-disconnect", async () => { const state = unwrap(await obsApi.disconnect()); if (state) renderObs(state); });
+  action("obs-refresh", async () => { const state = unwrap(await obsApi.refresh()); if (state) renderObs(state); });
+  el<HTMLSelectElement>("obs-scenes").addEventListener("change", async (event) => { const state = unwrap(await obsApi.switchScene((event.currentTarget as HTMLSelectElement).value)); if (state) renderObs(state); });
+  action("obs-start-stream", async () => { const state = unwrap(await obsApi.startStream()); if (state) renderObs(state); });
+  action("obs-stop-stream", async () => { if (!confirm("Stop the live stream?")) return; const state = unwrap(await obsApi.stopStream()); if (state) renderObs(state); });
+  action("obs-start-recording", async () => { const state = unwrap(await obsApi.startRecording()); if (state) renderObs(state); });
+  action("obs-stop-recording", async () => { if (!confirm("Stop recording?")) return; const state = unwrap(await obsApi.stopRecording()); if (state) renderObs(state); });
+  obsApi.onStateChanged(renderObs);
+  void obsApi.settings().then((result) => { const saved = unwrap(result); if (!saved) return; el<HTMLInputElement>("obs-host").value = saved.config.host; el<HTMLInputElement>("obs-port").value = String(saved.config.port); el<HTMLInputElement>("obs-remember").checked = saved.settings.rememberSettings; }).catch(() => showStudioFailure());
+  void obsApi.getState().then((result) => { const state = unwrap(result); if (state) renderObs(state); }).catch(() => showStudioFailure());
+} else showStudioFailure("OBS desktop bridge is unavailable. Restart the desktop application after rebuilding.");
 
 window.asylumDesktop.onStatus(({ target, state }) => { (target === "host" ? hostError : facebookError).hidden = state !== "failed" && state !== "crashed"; });
-window.asylumDesktop.obs.onStateChanged(renderObs);
 window.addEventListener("resize", reportLayout); new ResizeObserver(reportLayout).observe(shell);
 void window.asylumDesktop.version().then((version) => { el("version").textContent = `Asylum Games Desktop ${version}`; });
-void window.asylumDesktop.obs.settings().then((result) => { const saved = unwrap(result); if (!saved) return; el<HTMLInputElement>("obs-host").value = saved.config.host; el<HTMLInputElement>("obs-port").value = String(saved.config.port); el<HTMLInputElement>("obs-remember").checked = saved.settings.rememberSettings; });
-void window.asylumDesktop.obs.getState().then((result) => { const state = unwrap(result); if (state) renderObs(state); });
 applyLayout();

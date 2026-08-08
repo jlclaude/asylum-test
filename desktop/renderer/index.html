@@ -27,9 +27,11 @@
           <button id="host-retry">RETRY</button>
         </div>
       </section>
+      <div id="divider" role="separator" aria-orientation="horizontal" tabindex="0"></div>
       <section id="obs-panel" hidden>
-        <div class="section-title">OBS STUDIO <span id="obs-status" class="status-pill">DISCONNECTED</span></div>
+        <div class="section-title">PRODUCTION STUDIO <span id="obs-status" class="status-pill">DISCONNECTED</span></div>
         <div class="obs-content">
+          <div class="studio-baseline"><h1>Production Studio</h1><p>OBS Status: <strong id="obs-status-copy">Disconnected</strong></p></div>
           <form id="obs-connect-form" class="obs-connect">
             <label>Host <input id="obs-host" value="127.0.0.1" autocomplete="off"></label>
             <label>Port <input id="obs-port" type="number" min="1" max="65535" value="4455"></label>
@@ -47,8 +49,8 @@
           <p id="obs-error" class="obs-error" hidden></p>
           <details><summary>To connect OBS</summary><ol><li>Open OBS Studio.</li><li>Go to Tools → WebSocket Server Settings.</li><li>Enable WebSocket server.</li><li>Use port 4455.</li><li>Enter the same password here if authentication is enabled.</li></ol><p>Only OBS on this computer is supported.</p></details>
         </div>
+        <div id="studio-error" class="studio-error" hidden><h1>Production Studio Error</h1><p id="studio-error-message">OBS controls could not be loaded.</p><button id="studio-retry">Retry</button></div>
       </section>
-      <div id="divider" role="separator" aria-orientation="horizontal" tabindex="0"></div>
       <section id="facebook-panel">
         <div class="section-title">FACEBOOK GROUP</div>
         <nav class="toolbar" aria-label="Facebook navigation">

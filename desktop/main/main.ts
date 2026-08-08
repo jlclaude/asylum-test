@@ -45,6 +45,7 @@ function createWindow() {
     webPreferences: { preload: join(__dirname, "../preload/preload.js"), contextIsolation: true, nodeIntegration: false, sandbox: true },
   });
   windowRef.loadFile(join(__dirname, "../renderer/index.html"));
+  if (!app.isPackaged) windowRef.webContents.openDevTools({ mode: "detach" });
   windowRef.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   denyPermissions(windowRef.webContents);
 
