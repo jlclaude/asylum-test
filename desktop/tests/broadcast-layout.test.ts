@@ -17,10 +17,11 @@ async function run() {
   const engine = await readFile(join(process.cwd(), "main/obs/ObsAutomationEngine.ts"), "utf8");
   assert.doesNotMatch(publicRoute, /<button|<form|<nav|GameModeToolbar|useFetcher/, "public broadcast must remain viewer-only");
   assert.match(publicRoute, /<BroadcastPresentation/); assert.match(gameRoute, /<BroadcastPresentation/); assert.match(hostRoute, /BroadcastModePage/);
-  assert.match(gameRoute, /<WheelSection/); assert.match(publicRoute, /<WheelCanvas/); assert.match(presentation, /broadcast-presentation-main/);
-  assert.match(css, /grid-template-columns:minmax\(230px,280px\) minmax\(650px,1fr\) minmax\(230px,300px\)/);
-  assert.match(css, /width:clamp\(580px,62vh,780px\)/); assert.match(css, /opacity:\.045/); assert.match(css, /height:78px/);
-  assert.match(css, /broadcast-information-left/); assert.match(css, /broadcast-information-right/); assert.doesNotMatch(gameRoute, /BroadcastWheelRail|BroadcastGameHeader/);
+  assert.match(gameRoute, /<WheelSection/); assert.match(publicRoute, /<WheelCanvas/); assert.match(presentation, /broadcast-presentation-stage/);
+  assert.match(presentation, /broadcast-presentation-lower/); assert.match(presentation, /ASYLUM GAMES LIVE/);
+  assert.match(css, /grid-template-rows:12vh auto minmax\(0,1fr\) 15vh 4vh/);
+  assert.match(css, /width:min\(94vh,1280px,100%\)/); assert.doesNotMatch(css, /broadcast-information-left|broadcast-information-right|broadcast-presentation-watermark/);
+  assert.doesNotMatch(gameRoute, /BroadcastWheelRail|BroadcastGameHeader/);
   assert.match(publicRoute, /Math\.min\(1_000 \* 2 \*\* failures\.current, 15_000\)/); assert.match(publicRoute, /data\.broadcast \?\? lastKnown/);
   assert.doesNotMatch(model, /randomInt|winnerEntryIndex\s*=/, "broadcast model must never calculate winners");
   assert.doesNotMatch(model, /facebookHandle|claimId|prizeClaim|payment/i, "broadcast payload must omit sensitive claim data");
