@@ -1,15 +1,18 @@
 const shell = document.querySelector<HTMLElement>("#shell")!;
 const hostRegion = document.querySelector<HTMLElement>("#host-region")!;
 const facebookRegion = document.querySelector<HTMLElement>("#facebook-region")!;
+const broadcastRegion = document.querySelector<HTMLElement>("#broadcast-region")!;
 const divider = document.querySelector<HTMLElement>("#divider")!;
 const facebookPanel = document.querySelector<HTMLElement>("#facebook-panel")!;
 const obsPanel = document.querySelector<HTMLElement>("#obs-panel")!;
+const broadcastPanel = document.querySelector<HTMLElement>("#broadcast-panel")!;
 const hostError = document.querySelector<HTMLElement>("#host-error")!;
 const facebookError = document.querySelector<HTMLElement>("#facebook-error")!;
+const broadcastError = document.querySelector<HTMLElement>("#broadcast-error")!;
 const obsApi = window.asylumDesktop?.obs;
 const winnerApi = window.asylumDesktop?.winner;
-let panel = (localStorage.getItem("desktop-panel") ?? "facebook") as "host" | "facebook" | "obs";
-let ratio = Number(localStorage.getItem("desktop-panel-ratio") ?? "0.4");
+let panel = (localStorage.getItem("desktop-panel") ?? "host") as "host" | "facebook" | "broadcast" | "obs";
+const nativeStates: Record<"host" | "facebook" | "broadcast", DesktopStatus["state"]> = { host: "loading", facebook: "loading", broadcast: "loading" };
 let currentObsState: ObsState | null = null;
 let previewTimer: number | null = null;
 let previewInFlight = false;
@@ -20,31 +23,25 @@ let sceneMappings: ObsSceneMappings = { scenes: { host: null, wheel: null, winne
 
 const el = <T extends HTMLElement>(id: string) => document.querySelector<T>(`#${id}`)!;
 function rect(element: HTMLElement) { const value = element.getBoundingClientRect(); return { x: Math.round(value.x), y: Math.round(value.y), width: Math.round(value.width), height: Math.round(value.height) }; }
-function reportLayout() { void window.asylumDesktop.layout.update({ host: rect(hostRegion), facebook: panel === "facebook" ? rect(facebookRegion) : null }); }
+function reportLayout() { void window.asylumDesktop.layout.update({ host: panel === "host" && !["failed","crashed"].includes(nativeStates.host) ? rect(hostRegion) : null, facebook: panel === "facebook" && !["failed","crashed"].includes(nativeStates.facebook) ? rect(facebookRegion) : null, broadcast: panel === "broadcast" && !["failed","crashed"].includes(nativeStates.broadcast) ? rect(broadcastRegion) : null }); }
 function applyLayout() {
-  const open = panel !== "host";
-  facebookPanel.hidden = panel !== "facebook"; obsPanel.hidden = panel !== "obs"; divider.hidden = !open;
-  shell.style.gridTemplateRows = open ? `54px minmax(120px, ${1 - ratio}fr) 7px minmax(260px, ${ratio}fr)` : "54px minmax(120px, 1fr) 0 0";
+  hostRegion.hidden = panel !== "host"; facebookPanel.hidden = panel !== "facebook"; broadcastPanel.hidden = panel !== "broadcast"; obsPanel.hidden = panel !== "obs"; divider.hidden = true;
   localStorage.setItem("desktop-panel", panel); requestAnimationFrame(reportLayout);
   updatePreviewPolling();
 }
-divider.addEventListener("pointerdown", (start) => {
-  divider.setPointerCapture(start.pointerId);
-  const move = (event: PointerEvent) => { ratio = Math.min(.7, Math.max(.25, (innerHeight - event.clientY) / (innerHeight - 61))); localStorage.setItem("desktop-panel-ratio", String(ratio)); applyLayout(); };
-  divider.addEventListener("pointermove", move); divider.addEventListener("pointerup", () => divider.removeEventListener("pointermove", move), { once: true });
-});
 const action = (id: string, callback: () => Promise<unknown>) => el(id).addEventListener("click", () => void callback());
 action("back", window.asylumDesktop.facebook.back); action("forward", window.asylumDesktop.facebook.forward); action("reload", window.asylumDesktop.facebook.reload);
 action("group", window.asylumDesktop.facebook.openGroup); action("external", window.asylumDesktop.facebook.openExternal);
 action("copy-link", window.asylumDesktop.integration.copyGameLink); action("copy-post", window.asylumDesktop.integration.copyFacebookPost);
 action("host-retry", window.asylumDesktop.host.retry); action("reload-host", window.asylumDesktop.host.reload); action("external-host", window.asylumDesktop.host.openExternal);
 action("facebook-retry", window.asylumDesktop.facebook.retry); action("facebook-error-external", window.asylumDesktop.facebook.openExternal);
+action("broadcast-retry", window.asylumDesktop.broadcast.retry);
 action("clear-login", async () => { if (confirm("Clear the saved Facebook login and site data for this desktop app?")) await window.asylumDesktop.facebook.clearSession(); });
 action("collapse", async () => { panel = "host"; applyLayout(); });
-el("show-host").addEventListener("click", () => { panel = "host"; applyLayout(); void window.asylumDesktop.host.openPortal(); });
+el("show-host").addEventListener("click", () => { panel = "host"; applyLayout(); });
 el("show-facebook").addEventListener("click", () => { panel = "facebook"; applyLayout(); });
 el("show-studio").addEventListener("click", () => { panel = "obs"; applyLayout(); });
-el("open-broadcast").addEventListener("click", () => { panel = "host"; applyLayout(); void window.asylumDesktop.host.openBroadcast(); });
+el("show-broadcast").addEventListener("click", () => { panel = "broadcast"; applyLayout(); });
 
 function unwrap<T>(result: ObsResult<T>): T | undefined { if (!result.ok) { showObsError(result.error ?? "OBS request failed."); return; } return result.value; }
 function showObsError(message?: string) { const node = el("obs-error"); node.textContent = message ?? ""; node.hidden = !message; }
@@ -218,7 +215,8 @@ if (winnerApi) {
   el("winner-test").addEventListener("click",()=>void winnerApi.test("overlay")); el("winner-test-confetti").addEventListener("click",()=>void winnerApi.test("confetti")); el("winner-test-sound").addEventListener("click",()=>void winnerApi.test("sound")); el("winner-replay").addEventListener("click",()=>void winnerApi.replay()); el("winner-hide").addEventListener("click",()=>void winnerApi.hide());
 }
 
-window.asylumDesktop.onStatus(({ target, state }) => { (target === "host" ? hostError : facebookError).hidden = state !== "failed" && state !== "crashed"; });
+window.asylumDesktop.onStatus(({ target, state }) => { nativeStates[target] = state; (target === "host" ? hostError : target === "facebook" ? facebookError : broadcastError).hidden = state !== "failed" && state !== "crashed"; reportLayout(); });
+window.asylumDesktop.onActiveGame((context) => { el("broadcast-context").textContent = `${context.activeRaffleCode} · ${context.activeGameTitle}`; });
 window.addEventListener("resize", reportLayout); new ResizeObserver(reportLayout).observe(shell);
 document.addEventListener("visibilitychange", updatePreviewPolling);
 window.addEventListener("beforeunload", () => stopPreviewPolling());

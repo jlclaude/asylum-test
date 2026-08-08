@@ -14,8 +14,8 @@
         <nav class="desktop-toolbar" aria-label="Desktop panels">
           <button id="show-host">Host Portal</button>
           <button id="show-facebook">Facebook</button>
+          <button id="show-broadcast">Broadcast</button>
           <button id="show-studio">Studio</button>
-          <button id="open-broadcast">Open Broadcast</button>
           <button id="reload-host">Reload Portal</button>
           <button id="external-host">Open Portal Externally</button>
         </nav>
@@ -29,6 +29,12 @@
         </div>
       </section>
       <div id="divider" role="separator" aria-orientation="horizontal" tabindex="0"></div>
+      <section id="broadcast-panel" hidden>
+        <div class="section-title">BROADCAST <span id="broadcast-context">NO ACTIVE RAFFLE</span></div>
+        <div id="broadcast-region" class="view-region">
+          <div id="broadcast-error" class="error-card" hidden><strong>BROADCAST COULD NOT LOAD</strong><button id="broadcast-retry">Retry</button></div>
+        </div>
+      </section>
       <section id="obs-panel" hidden>
         <div class="section-title">PRODUCTION STUDIO <span id="obs-status" class="status-pill">DISCONNECTED</span></div>
         <div class="obs-content">

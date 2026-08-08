@@ -3,7 +3,7 @@ import { denyPermissions, isFacebookUrl, restrictNavigation } from "./security";
 
 export const FACEBOOK_PARTITION = "persist:asylum-facebook";
 
-export function createFacebookView(): WebContentsView {
+export function createFacebookView(devTools = true): WebContentsView {
   const facebookSession = session.fromPartition(FACEBOOK_PARTITION);
   const view = new WebContentsView({
     webPreferences: {
@@ -11,6 +11,7 @@ export function createFacebookView(): WebContentsView {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      devTools,
     },
   });
   view.setBackgroundColor("#11151b");

@@ -11,14 +11,15 @@ async function run() {
   const wheel = await readFile(join(process.cwd(), "../app/components/wheel/WheelSection.tsx"), "utf8");
   const winnerOverlay = await readFile(join(process.cwd(), "renderer/winner-overlay.ts"), "utf8");
   const winnerController = await readFile(join(process.cwd(), "main/winner/WinnerPresentationController.ts"), "utf8");
-  assert.ok(html.indexOf('id="divider"') < html.indexOf('id="obs-panel"'), "divider must precede every lower panel");
+  for (const id of ["show-host", "show-facebook", "show-broadcast", "show-studio", "broadcast-panel", "broadcast-region"]) assert.match(html, new RegExp(`id="${id}"`));
   assert.match(html, /Production Studio/); assert.match(html, /OBS Status:/); assert.match(html, /id="studio-error"/);
   assert.match(html, /Program Preview/); assert.match(html, /id="program-preview-image"/); assert.match(html, /Preview status:/);
   assert.match(html, /img-src 'self' data:/, "CSP must permit in-memory OBS preview data URLs");
-  assert.match(css, /#divider\s*\{\s*grid-row:\s*3/); assert.match(css, /#facebook-panel, #obs-panel\s*\{\s*grid-row:\s*4/);
+  assert.match(css, /Four isolated, full-window workspaces/); assert.match(css, /#host-region,#facebook-panel,#broadcast-panel,#obs-panel/);
   assert.doesNotMatch(css, /#obs-panel[^,{]*:hover|\.studio[^,{]*:hover/i, "Studio root must not have a hover background");
   assert.doesNotMatch(css, /#(?:f00|ff0000)|\b(?:red|crimson)\b/i, "desktop CSS must not contain red debug fills");
-  assert.match(renderer, /panel === "facebook" \? rect\(facebookRegion\) : null/, "Studio must hide the Facebook native view");
+  for (const view of ["host", "facebook", "broadcast"]) assert.match(renderer, new RegExp(`panel === "${view}"`), `layout must explicitly gate ${view}`);
+  assert.match(renderer, /broadcast: panel === "broadcast"/); assert.match(renderer, /host: panel === "host"/);
   assert.match(renderer, /window\.asylumDesktop\?\.obs/, "Studio must guard a missing OBS preload bridge");
   assert.match(renderer, /showStudioFailure/, "renderer errors must produce the Studio fallback");
   assert.match(renderer, /PREVIEW_INTERVAL_MS = 1_000/); assert.match(renderer, /previewInFlight/);
@@ -43,6 +44,8 @@ async function run() {
   assert.match(wheel, /data\.secondChance\?\.beforeDisplayName/); assert.doesNotMatch(wheel, /claimId.*CELEBRATE|username.*CELEBRATE/i);
   assert.match(winnerController, /handled\.has\(identity\)/); assert.match(winnerController, /audioDataUrl/); assert.doesNotMatch(renderer, /audioFile/, "shell renderer must not receive audio filesystem paths");
   assert.match(winnerOverlay, /prefers-reduced-motion/); assert.doesNotMatch(winnerOverlay, /loop\s*=/);
+  assert.match(main, /ASYLUM_DESKTOP_DEVTOOLS === "1"/); assert.doesNotMatch(main, /if \(!app\.isPackaged\).*openDevTools/);
+  assert.match(main, /new WebContentsView\(\{ webPreferences: \{ partition: "persist:asylum-broadcast"/);
   console.info("Studio layout and fallback tests passed");
 }
 void run().catch((error) => { console.error(error); process.exitCode = 1; });

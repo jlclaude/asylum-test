@@ -12,6 +12,7 @@ import {
   type GameControlRouteMode,
 } from "../../lib/game-control-routes";
 import type { GameControlCenterData } from "../../services/game-control-center.server";
+import { updateDesktopActiveGame } from "../../lib/desktop-automation.client";
 
 type ActionData = {
   error?: string;
@@ -181,6 +182,7 @@ export function GameControlCenter({
     csrfToken,
   } = data;
   const routes = gameControlRoutes(routeMode, game.id, csrfToken);
+  useEffect(() => { if (routeMode !== "HOST_PORTAL") return; const origin = window.location.origin; updateDesktopActiveGame({ activeGameId: game.id, activeRaffleCode: game.raffleCode, activeGameTitle: game.title, broadcastUrl: `${origin}/broadcast?gameId=${encodeURIComponent(game.id)}`, publicClaimUrl: publicUrl, facebookPost: `${game.title} · ${game.raffleCode}` }); }, [game.id, game.raffleCode, game.title, publicUrl, routeMode]);
   const csrfField = csrfToken ? (
     <input type="hidden" name="csrfToken" value={csrfToken} />
   ) : null;

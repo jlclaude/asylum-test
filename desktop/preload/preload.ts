@@ -23,6 +23,7 @@ contextBridge.exposeInMainWorld("asylumDesktop", {
     openExternal: () => invoke("facebook:open-external"),
     clearSession: () => invoke("facebook:clear-session"),
   },
+  broadcast: { retry: () => invoke("broadcast:retry") },
   integration: {
     copyGameLink: () => invoke("integration:copy-game-link"),
     copyFacebookPost: () => invoke("integration:copy-facebook-post"),
@@ -62,4 +63,5 @@ contextBridge.exposeInMainWorld("asylumDesktop", {
     ipcRenderer.on("desktop:status", listener);
     return () => ipcRenderer.removeListener("desktop:status", listener);
   },
+  onActiveGame: (callback: (context: unknown) => void) => { const listener = (_event: Electron.IpcRendererEvent, context: unknown) => callback(context); ipcRenderer.on("desktop:active-game", listener); return () => ipcRenderer.removeListener("desktop:active-game", listener); },
 });

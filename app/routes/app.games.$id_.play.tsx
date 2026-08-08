@@ -45,7 +45,7 @@ import {
 import { authenticate } from "../shopify.server";
 import { handleGameModeAction, loadGameModeData } from "../services/game-mode.server";
 import { shopifyOperator } from "../lib/operator-context.server";
-import { emitDesktopAutomationEvent } from "../lib/desktop-automation.client";
+import { emitDesktopAutomationEvent, updateDesktopActiveGame } from "../lib/desktop-automation.client";
 
 import "../styles/asylum-brand.css";
 import "../styles/game-results.css";
@@ -93,6 +93,7 @@ export default function GameModePage() {
     useLoaderData<typeof loader>();
   const routeBase =
     routeMode === "HOST_PORTAL" ? ("/host" as const) : ("/app" as const);
+  useEffect(() => { if (routeMode !== "HOST_PORTAL") return; const origin = window.location.origin; updateDesktopActiveGame({ activeGameId: game.id, activeRaffleCode: game.raffleCode, activeGameTitle: game.title, broadcastUrl: `${origin}/broadcast?gameId=${encodeURIComponent(game.id)}`, publicClaimUrl: `${origin}/games/${game.id}`, facebookPost: `${game.title} · ${game.raffleCode}` }); }, [game.id, game.raffleCode, game.title, routeMode]);
   useWheelMusicSession(`game:${game.id}:play`);
 
   const orderedWheels = useMemo(

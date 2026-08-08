@@ -4,7 +4,10 @@ import { contextBridge, ipcRenderer } from "electron";
 // typed context payload and never exposes Electron, cookies, or filesystem access.
 contextBridge.exposeInMainWorld("asylumDesktopHost", {
   updateIntegrationContext: (context: {
-    gameId: string;
+    activeGameId: string;
+    activeRaffleCode: string;
+    activeGameTitle: string;
+    broadcastUrl: string;
     publicClaimUrl: string;
     facebookPost: string;
   }) => ipcRenderer.invoke("integration:update", context),

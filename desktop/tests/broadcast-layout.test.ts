@@ -13,7 +13,7 @@ async function run() {
   assert.doesNotMatch(model, /randomInt|winnerEntryIndex\s*=/, "broadcast model must never calculate winners");
   assert.doesNotMatch(model, /facebookHandle|claimId|prizeClaim|payment/i, "broadcast payload must omit sensitive claim data");
   assert.match(engine, /runtimeEnabled = false/); assert.match(main, /new ObsAutomationEngine\(obsController, obsSettings\)/, "production automation must remain hard-disabled");
-  assert.match(main, /host:open-broadcast/); assert.match(route, /BROADCAST_GAME_ID/);
+  assert.match(main, /broadcast:retry/); assert.match(main, /candidate\.broadcastUrl/); assert.match(route, /BROADCAST_GAME_ID/);
   console.info("Broadcast foundation and automation rollback tests passed");
 }
 void run().catch((error) => { console.error(error); process.exitCode = 1; });
