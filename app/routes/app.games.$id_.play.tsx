@@ -93,7 +93,7 @@ export default function GameModePage() {
     useLoaderData<typeof loader>();
   const routeBase =
     routeMode === "HOST_PORTAL" ? ("/host" as const) : ("/app" as const);
-  useEffect(() => { if (routeMode !== "HOST_PORTAL") return; const origin = window.location.origin; updateDesktopActiveGame({ activeGameId: game.id, activeRaffleCode: game.raffleCode, activeGameTitle: game.title, broadcastUrl: `${origin}/host/games/${encodeURIComponent(game.id)}/broadcast`, publicClaimUrl: `${origin}/games/${game.id}`, facebookPost: `${game.title} · ${game.raffleCode}` }); }, [game.id, game.raffleCode, game.title, routeMode]);
+  useEffect(() => { if (routeMode !== "HOST_PORTAL" || !csrfToken) return; const origin = window.location.origin; updateDesktopActiveGame({ activeGameId: game.id, activeRaffleCode: game.raffleCode, activeGameTitle: game.title, hostCsrfToken: csrfToken, broadcastUrl: `${origin}/host/games/${encodeURIComponent(game.id)}/broadcast`, publicClaimUrl: `${origin}/games/${game.id}`, facebookPost: `${game.title} · ${game.raffleCode}` }); }, [csrfToken, game.id, game.raffleCode, game.title, routeMode]);
   useWheelMusicSession(`game:${game.id}:play`);
 
   const orderedWheels = useMemo(

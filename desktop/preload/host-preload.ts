@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld("asylumDesktopHost", {
     activeGameId: string;
     activeRaffleCode: string;
     activeGameTitle: string;
+    hostCsrfToken: string;
     broadcastUrl: string;
     publicClaimUrl: string;
     facebookPost: string;

@@ -4,13 +4,13 @@ export type WinnerOverlayPayload = { identity: string; raffleCode: string; gameT
 declare global {
   interface Window {
     asylumDesktopHost?: {
-      updateIntegrationContext(context: { activeGameId: string; activeRaffleCode: string; activeGameTitle: string; broadcastUrl: string; publicClaimUrl: string; facebookPost: string }): Promise<unknown>;
+      updateIntegrationContext(context: { activeGameId: string; activeRaffleCode: string; activeGameTitle: string; hostCsrfToken: string; broadcastUrl: string; publicClaimUrl: string; facebookPost: string }): Promise<unknown>;
       emitAutomationEvent(event: { event: DesktopAutomationEvent; wheelId?: string; winner?: WinnerOverlayPayload }): void;
     };
   }
 }
 
-export function updateDesktopActiveGame(context: { activeGameId: string; activeRaffleCode: string; activeGameTitle: string; broadcastUrl: string; publicClaimUrl: string; facebookPost: string }) {
+export function updateDesktopActiveGame(context: { activeGameId: string; activeRaffleCode: string; activeGameTitle: string; hostCsrfToken: string; broadcastUrl: string; publicClaimUrl: string; facebookPost: string }) {
   void window.asylumDesktopHost?.updateIntegrationContext(context);
 }
 

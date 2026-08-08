@@ -52,7 +52,7 @@ async function run() {
   assert.match(renderer, /confirm\("Clear the active raffle/); assert.match(renderer, /Switch anyway/); assert.match(renderer, /Broadcast state may be stale|broadcast-stale/);
   assert.match(main, /activeGame\?\.locked/); assert.match(main, /active-game:set-lock/); assert.match(main, /event\.sender !== broadcastView\?\.webContents/);
   assert.match(main, /broadcast:set-scale/); assert.match(main, /broadcast:set-safe-areas/); assert.match(main, /broadcast-preload\.js/);
-  assert.match(html, /Copy Broadcast URL/); assert.match(html, /Copy OBS Broadcast URL/); assert.match(main, /broadcast:copy-obs-url/);
+  assert.match(html, /OBS Browser Source URL/); assert.match(html, /id="copy-obs-broadcast-url"/); assert.match(html, /id="regenerate-obs-broadcast-url"/); assert.match(main, /broadcast:copy-obs-url/);
   console.info("Studio layout and fallback tests passed");
 }
 void run().catch((error) => { console.error(error); process.exitCode = 1; });

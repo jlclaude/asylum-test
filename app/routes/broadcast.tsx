@@ -4,20 +4,17 @@ import { useLoaderData, useRevalidator } from "react-router";
 import { BroadcastPresentation } from "../components/broadcast/BroadcastPresentation";
 import { WheelCanvas } from "../components/wheel/WheelCanvas";
 import type { WheelEntry } from "../components/wheel/types";
-import { getBroadcastState } from "../models/broadcast.server";
+import { loadReadOnlyBroadcast } from "../lib/broadcast-loader.server";
 import "../styles/wheel-studio.css";
 import "../styles/production-broadcast.css";
 import "../styles/broadcast-presentation.css";
 
 export const meta: MetaFunction = () => [{ title: "Asylum Games Broadcast" }];
 export async function loader({ request }: LoaderFunctionArgs) {
-  const url = new URL(request.url); const gameId = url.searchParams.get("gameId") ?? process.env.BROADCAST_GAME_ID ?? "";
-  if (!gameId) return { broadcast: null, error: "NO_ACTIVE_GAME" as const };
-  try { const broadcast = await getBroadcastState(gameId); return { broadcast, error: broadcast ? null : "GAME_NOT_FOUND" as const }; }
-  catch { return { broadcast: null, error: "UNAVAILABLE" as const }; }
+  const url = new URL(request.url); return loadReadOnlyBroadcast(url.searchParams.get("gameId") ?? "", url.searchParams.get("token") ?? "");
 }
 
-type BroadcastPayload = Awaited<ReturnType<typeof getBroadcastState>>;
+type BroadcastPayload = Awaited<ReturnType<typeof loader>>["broadcast"];
 type HealthBridge = { reportHealth(value: { state: string; gameState: string | null; raffleCode: string | null; wheelLabel: string | null; status: "live" | "waiting" | "error"; message: string | null }): void };
 
 export default function ProductionBroadcast() {
@@ -38,7 +35,7 @@ export default function ProductionBroadcast() {
   const secondChanceNames = broadcast?.secondChance ? [broadcast.secondChance.beforeDisplayName, broadcast.secondChance.afterDisplayName].filter((name): name is string => Boolean(name)) : [];
   useEffect(() => { const bridge = (window as typeof window & { asylumBroadcastDesktop?: HealthBridge }).asylumBroadcastDesktop; bridge?.reportHealth({ state, gameState: broadcast?.game.status ?? null, raffleCode: broadcast?.game.raffleCode ?? null, wheelLabel: wheel?.label ?? null, status: connectionLost ? "error" : broadcast ? "live" : "waiting", message: connectionLost ? "Server connection lost" : data.error }); }, [broadcast, connectionLost, data.error, state, wheel?.label]);
   const wheelVisible = Boolean(wheel && entries.length && state !== "WAITING");
-  const waitingMessage = data.error === "NO_ACTIVE_GAME" ? "SELECT AN ACTIVE RAFFLE" : data.error === "GAME_NOT_FOUND" ? "BROADCAST TEMPORARILY UNAVAILABLE" : "WAITING TO BEGIN";
+  const waitingMessage = data.error === "INVALID_LINK" ? "BROADCAST LINK IS INVALID OR EXPIRED" : "WAITING TO BEGIN";
   return <main className={`production-broadcast state-${state.toLowerCase()}`}><BroadcastPresentation
     healthState={state}
     info={{ gameTitle: broadcast?.game.title ?? "Broadcast Standby", raffleCode: broadcast?.game.raffleCode ?? "—", gameStatus: broadcast?.game.status ?? "WAITING", wheelLabel: wheel?.label ?? null, wheelSequence: null, wheelStatus: state === "READY" ? "READY TO SPIN" : state, entryCount: entries.length, winner: !reward ? persistedResult : null, secondChance: secondChanceNames.map((name, index) => ({ label: index === 0 ? "BEFORE" : "AFTER", value: name })), upNext: broadcast?.upcomingPrize ?? null, reward: broadcast?.completed.reward ?? (reward ? persistedResult : null), bonus: broadcast?.upcomingPrize ?? null, spinning: state === "SPINNING" }}

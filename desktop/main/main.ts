@@ -11,7 +11,7 @@ import { validateObsConfig } from "./obs/obs-validation";
 import { exportStudioProfile, importStudioProfile, validateObsSceneMappings } from "./obs/obs-scene-mappings";
 import { ObsAutomationEngine, type ObsAutomationEvent } from "./obs/ObsAutomationEngine";
 import { WinnerPresentationController, type WinnerOverlayState, type WinnerPresentationSettings } from "./winner/WinnerPresentationController";
-import { ActiveGameStore, activeGameFromHostUrl, broadcastUrlFor, obsBroadcastUrlFor, validGameId, type ActiveGameContext } from "./active-game";
+import { ActiveGameStore, activeGameFromHostUrl, broadcastUrlFor, validGameId, type ActiveGameContext } from "./active-game";
 
 const hostUrl = process.env.ASYLUM_DESKTOP_HOST_URL ?? `${ASYLUM_ORIGIN}/host`;
 const hostOrigin = new URL(hostUrl).origin;
@@ -51,7 +51,25 @@ function safeOrigin(rawUrl: string) { try { return new URL(rawUrl).origin; } cat
 function publishActiveGame() { windowRef?.webContents.send("desktop:active-game", activeGame); }
 function setActiveGame(context: ActiveGameContext, force = false) { if (activeGame?.locked && activeGame.gameId !== context.gameId && !force) return false; activeGame = { ...context, locked: force ? false : context.locked }; currentBroadcastUrl = context.broadcastUrl; void activeGameStore.save(activeGame); if (broadcastView?.webContents.getURL() !== context.broadcastUrl) void navigate(broadcastView!.webContents, context.broadcastUrl); publishActiveGame(); return true; }
 async function clearActiveGame() { activeGame = null; currentBroadcastUrl = `${hostOrigin}/broadcast`; await activeGameStore.clear(); if (broadcastView && broadcastView.webContents.getURL() !== currentBroadcastUrl) await navigate(broadcastView.webContents, currentBroadcastUrl); publishActiveGame(); }
-function handleHostNavigation(url: string) { const context = activeGameFromHostUrl(url, hostOrigin); if (context) setActiveGame({ ...context, raffleCode: activeGame?.gameId === context.gameId ? activeGame.raffleCode : null, gameTitle: activeGame?.gameId === context.gameId ? activeGame.gameTitle : null, locked: activeGame?.gameId === context.gameId ? activeGame.locked : false }); }
+function handleHostNavigation(url: string) { const context = activeGameFromHostUrl(url, hostOrigin); if (context) setActiveGame({ ...context, raffleCode: activeGame?.gameId === context.gameId ? activeGame.raffleCode : null, gameTitle: activeGame?.gameId === context.gameId ? activeGame.gameTitle : null, hostCsrfToken: activeGame?.gameId === context.gameId ? activeGame.hostCsrfToken : null, locked: activeGame?.gameId === context.gameId ? activeGame.locked : false }); }
+
+async function requestObsBroadcastLink(regenerate = false) {
+  if (!activeGame) throw new Error("Select an active raffle first.");
+  const endpoint = `${hostOrigin}/host/games/${encodeURIComponent(activeGame.gameId)}/broadcast-link`;
+  const hostSession = session.fromPartition("persist:asylum-host");
+  let csrfToken = activeGame.hostCsrfToken;
+  if (regenerate && !csrfToken) {
+    const initial = await hostSession.fetch(endpoint); if (!initial.ok) throw new Error("OBS Broadcast URL is unavailable.");
+    const value = await initial.json() as { csrfToken?: unknown }; csrfToken = typeof value.csrfToken === "string" ? value.csrfToken : null;
+  }
+  const response = await hostSession.fetch(endpoint, regenerate ? { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", Origin: hostOrigin }, body: new URLSearchParams({ csrfToken: csrfToken ?? "" }).toString() } : undefined);
+  if (!response.ok) throw new Error(regenerate ? "Broadcast link could not be regenerated." : "OBS Broadcast URL is unavailable.");
+  const value = await response.json() as { url?: unknown; csrfToken?: unknown };
+  if (typeof value.url !== "string" || !isAsylumUrl(value.url, hostOrigin)) throw new Error("Invalid OBS Broadcast URL response.");
+  const url = new URL(value.url); if (url.pathname !== `/broadcast/${activeGame.gameId}` || !url.searchParams.get("token")) throw new Error("Invalid OBS Broadcast URL response.");
+  if (typeof value.csrfToken === "string") activeGame = { ...activeGame, hostCsrfToken: value.csrfToken };
+  return value.url;
+}
 
 function createWindow() {
   const devToolsEnabled = !app.isPackaged || process.env.ASYLUM_DESKTOP_DEVTOOLS === "1";
@@ -110,11 +128,13 @@ function registerIpc() {
   ipcMain.handle("host:reload", (event) => { if (fromShell(event)) hostView?.webContents.reload(); });
   ipcMain.handle("host:open-portal", (event) => fromShell(event) && hostView ? navigate(hostView.webContents, hostUrl) : undefined);
   ipcMain.handle("broadcast:retry", (event) => fromShell(event) && broadcastView ? navigate(broadcastView.webContents, currentBroadcastUrl) : undefined);
-  ipcMain.handle("broadcast:copy-url", (event) => { if (!fromShell(event) || !activeGame) return false; clipboard.writeText(activeGame.broadcastUrl); return true; });
-  ipcMain.handle("broadcast:copy-obs-url", (event) => { if (!fromShell(event) || !activeGame) return false; clipboard.writeText(obsBroadcastUrlFor(activeGame.gameId, hostOrigin)); return true; });
+  ipcMain.handle("broadcast:get-obs-url", async (event) => { if (!fromShell(event)) return { ok: false, error: "Unauthorized request." }; try { return { ok: true, value: await requestObsBroadcastLink() }; } catch (error) { return { ok: false, error: error instanceof Error ? error.message : "OBS Broadcast URL is unavailable." }; } });
+  ipcMain.handle("broadcast:copy-obs-url", async (event) => { if (!fromShell(event)) return { ok: false, error: "Unauthorized request." }; try { const url = await requestObsBroadcastLink(); clipboard.writeText(url); return { ok: true, value: url }; } catch (error) { return { ok: false, error: error instanceof Error ? error.message : "OBS Broadcast URL is unavailable." }; } });
+  ipcMain.handle("broadcast:open-obs-url", async (event) => { if (!fromShell(event)) return { ok: false, error: "Unauthorized request." }; try { const url = await requestObsBroadcastLink(); openExternalHttps(url); return { ok: true, value: url }; } catch (error) { return { ok: false, error: error instanceof Error ? error.message : "OBS Broadcast URL is unavailable." }; } });
+  ipcMain.handle("broadcast:regenerate-obs-url", async (event) => { if (!fromShell(event)) return { ok: false, error: "Unauthorized request." }; try { const url = await requestObsBroadcastLink(true); return { ok: true, value: url }; } catch (error) { return { ok: false, error: error instanceof Error ? error.message : "Broadcast link could not be regenerated." }; } });
   ipcMain.handle("broadcast:set-scale", (event, scale: unknown) => { if (!fromShell(event) || !broadcastView || ![1, 1.25, 1.5].includes(Number(scale))) return false; broadcastView.webContents.setZoomFactor(Number(scale)); return true; });
   ipcMain.handle("broadcast:set-safe-areas", (event, visible: unknown) => { if (!fromShell(event) || !broadcastView || typeof visible !== "boolean") return false; void broadcastView.webContents.executeJavaScript(`document.documentElement.classList.toggle("show-broadcast-safe-areas", ${visible})`); return true; });
-  ipcMain.handle("active-game:select", (event, gameId: unknown, force: unknown) => { if (!fromShell(event) || !validGameId(gameId) || (force !== undefined && typeof force !== "boolean")) return false; return setActiveGame({ gameId, sourceUrl: "desktop-selection", broadcastUrl: broadcastUrlFor(gameId, hostOrigin), raffleCode: null, gameTitle: null, locked: false }, force === true); });
+  ipcMain.handle("active-game:select", (event, gameId: unknown, force: unknown) => { if (!fromShell(event) || !validGameId(gameId) || (force !== undefined && typeof force !== "boolean")) return false; return setActiveGame({ gameId, sourceUrl: "desktop-selection", broadcastUrl: broadcastUrlFor(gameId, hostOrigin), raffleCode: null, gameTitle: null, hostCsrfToken: null, locked: false }, force === true); });
   ipcMain.handle("active-game:set-lock", async (event, locked: unknown) => { if (!fromShell(event) || typeof locked !== "boolean" || !activeGame) return false; activeGame = { ...activeGame, locked }; await activeGameStore.save(activeGame); publishActiveGame(); return true; });
   ipcMain.handle("active-game:clear", async (event) => { if (!fromShell(event)) return false; await clearActiveGame(); return true; });
   ipcMain.on("broadcast:health", (event, value: unknown) => {
@@ -140,12 +160,13 @@ function registerIpc() {
     if (typeof candidate.activeGameId !== "string" || candidate.activeGameId.length > 200) return false;
     if (typeof candidate.activeRaffleCode !== "string" || candidate.activeRaffleCode.length > 100) return false;
     if (typeof candidate.activeGameTitle !== "string" || candidate.activeGameTitle.length > 512) return false;
+    if (typeof candidate.hostCsrfToken !== "string" || candidate.hostCsrfToken.length > 512) return false;
     if (typeof candidate.broadcastUrl !== "string" || !isAsylumUrl(candidate.broadcastUrl, hostOrigin)) return false;
     const broadcastUrl = new URL(candidate.broadcastUrl); if (broadcastUrl.pathname !== `/host/games/${candidate.activeGameId}/broadcast` || broadcastUrl.search) return false;
     if (typeof candidate.publicClaimUrl !== "string" || !isAsylumUrl(candidate.publicClaimUrl, hostOrigin)) return false;
     if (typeof candidate.facebookPost !== "string" || candidate.facebookPost.length > 10_000) return false;
     currentGameLink = candidate.publicClaimUrl;
-    setActiveGame({ gameId: candidate.activeGameId, sourceUrl: hostView.webContents.getURL(), broadcastUrl: candidate.broadcastUrl, raffleCode: candidate.activeRaffleCode, gameTitle: candidate.activeGameTitle, locked: activeGame?.gameId === candidate.activeGameId ? activeGame.locked : false });
+    setActiveGame({ gameId: candidate.activeGameId, sourceUrl: hostView.webContents.getURL(), broadcastUrl: candidate.broadcastUrl, raffleCode: candidate.activeRaffleCode, gameTitle: candidate.activeGameTitle, hostCsrfToken: candidate.hostCsrfToken, locked: activeGame?.gameId === candidate.activeGameId ? activeGame.locked : false });
     currentFacebookPost = candidate.facebookPost;
     return true;
   });

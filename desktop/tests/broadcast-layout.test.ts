@@ -3,6 +3,10 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 async function run() {
   const publicRoute = await readFile(join(process.cwd(), "../app/routes/broadcast.tsx"), "utf8");
+  const tokenRoute = await readFile(join(process.cwd(), "../app/routes/broadcast.$gameId.tsx"), "utf8");
+  const broadcastLoader = await readFile(join(process.cwd(), "../app/lib/broadcast-loader.server.ts"), "utf8");
+  const hostLinkRoute = await readFile(join(process.cwd(), "../app/routes/host_.games.$id_.broadcast-link.ts"), "utf8");
+  const tokenService = await readFile(join(process.cwd(), "../app/lib/broadcast-token.server.ts"), "utf8");
   const gameRoute = await readFile(join(process.cwd(), "../app/routes/app.games.$id_.broadcast.tsx"), "utf8");
   const hostRoute = await readFile(join(process.cwd(), "../app/routes/host_.games.$id_.broadcast.tsx"), "utf8");
   const presentation = await readFile(join(process.cwd(), "../app/components/broadcast/BroadcastPresentation.tsx"), "utf8");
@@ -21,7 +25,9 @@ async function run() {
   assert.doesNotMatch(model, /randomInt|winnerEntryIndex\s*=/, "broadcast model must never calculate winners");
   assert.doesNotMatch(model, /facebookHandle|claimId|prizeClaim|payment/i, "broadcast payload must omit sensitive claim data");
   assert.match(engine, /runtimeEnabled = false/); assert.match(main, /new ObsAutomationEngine\(obsController, obsSettings\)/);
-  assert.match(activeGame, /host\/games\/\$\{encodeURIComponent\(gameId\)\}\/broadcast/); assert.match(activeGame, /obsBroadcastUrlFor/);
+  assert.match(activeGame, /host\/games\/\$\{encodeURIComponent\(gameId\)\}\/broadcast/); assert.doesNotMatch(activeGame, /\/broadcast\?gameId/);
+  assert.match(broadcastLoader, /validBroadcastToken/); assert.match(tokenRoute, /status: 405/); assert.match(tokenRoute, /loadReadOnlyBroadcast/);
+  assert.match(hostLinkRoute, /requireHostPermission/); assert.match(hostLinkRoute, /requireHostMutation/); assert.match(tokenService, /createHmac/); assert.match(tokenService, /randomBytes\(32\)/); assert.doesNotMatch(tokenService, /console\./);
   assert.match(main, /partition: "persist:asylum-host"[\s\S]*broadcast-preload\.js/); assert.match(main, /broadcast:copy-obs-url/);
   console.info("Shared Broadcast presentation and routing tests passed");
 }

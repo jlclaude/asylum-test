@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
-import { activeGameFromHostUrl, broadcastUrlFor, obsBroadcastUrlFor, validGameId } from "../main/active-game";
+import { activeGameFromHostUrl, broadcastUrlFor, validGameId } from "../main/active-game";
 const origin = "https://asylum-test.onrender.com"; const id = "cm1234567890_game";
 for (const path of [`/host/games/${id}`, `/host/games/${id}/play`, `/host/games/${id}/broadcast`]) assert.equal(activeGameFromHostUrl(`${origin}${path}`, origin)?.gameId, id);
 assert.equal(activeGameFromHostUrl(`${origin}/host/games/${id}`, origin)?.locked, false);
 assert.equal(activeGameFromHostUrl(`${origin}/host/games/new`, origin), null);
 assert.equal(activeGameFromHostUrl(`https://facebook.com/host/games/${id}`, origin), null);
 assert.equal(activeGameFromHostUrl(`${origin}/host/games/${id}/edit`, origin), null);
-assert.equal(validGameId("../unsafe"), false); assert.equal(broadcastUrlFor(id, origin), `${origin}/host/games/${id}/broadcast`); assert.equal(obsBroadcastUrlFor(id, origin), `${origin}/broadcast?gameId=${id}`);
+assert.equal(validGameId("../unsafe"), false); assert.equal(broadcastUrlFor(id, origin), `${origin}/host/games/${id}/broadcast`);
 console.info("Active game route parser tests passed");
