@@ -20,6 +20,7 @@ let previewScene: string | null = null;
 const PREVIEW_INTERVAL_MS = 1_000;
 const mappingKeys: ObsMappingKey[] = ["host", "wheel", "winner", "secondChance", "reward", "break", "ending"];
 let sceneMappings: ObsSceneMappings = { scenes: { host: null, wheel: null, winner: null, secondChance: null, reward: null, break: null, ending: null }, automation: { enabled: false, spinToWheel: false, revealToWinner: false, secondChance: false, reward: false, acceptToHost: false, finishToEnding: false }, delays: { wheel: 0, winner: 1_000, secondChance: 1_000, reward: 1_000, host: 3_000 } };
+let activeGameContext: ActiveGameContext | null = null;
 
 const el = <T extends HTMLElement>(id: string) => document.querySelector<T>(`#${id}`)!;
 function rect(element: HTMLElement) { const value = element.getBoundingClientRect(); return { x: Math.round(value.x), y: Math.round(value.y), width: Math.round(value.width), height: Math.round(value.height) }; }
@@ -36,6 +37,8 @@ action("copy-link", window.asylumDesktop.integration.copyGameLink); action("copy
 action("host-retry", window.asylumDesktop.host.retry); action("reload-host", window.asylumDesktop.host.reload); action("external-host", window.asylumDesktop.host.openExternal);
 action("facebook-retry", window.asylumDesktop.facebook.retry); action("facebook-error-external", window.asylumDesktop.facebook.openExternal);
 action("broadcast-retry", window.asylumDesktop.broadcast.retry);
+el("select-active-game").addEventListener("click", async () => { const value = prompt("Enter the active game ID:")?.trim(); if (value) await window.asylumDesktop.activeGame.select(value); });
+el("clear-active-game").addEventListener("click", () => void window.asylumDesktop.activeGame.clear());
 action("clear-login", async () => { if (confirm("Clear the saved Facebook login and site data for this desktop app?")) await window.asylumDesktop.facebook.clearSession(); });
 action("collapse", async () => { panel = "host"; applyLayout(); });
 el("show-host").addEventListener("click", () => { panel = "host"; applyLayout(); });
@@ -215,8 +218,10 @@ if (winnerApi) {
   el("winner-test").addEventListener("click",()=>void winnerApi.test("overlay")); el("winner-test-confetti").addEventListener("click",()=>void winnerApi.test("confetti")); el("winner-test-sound").addEventListener("click",()=>void winnerApi.test("sound")); el("winner-replay").addEventListener("click",()=>void winnerApi.replay()); el("winner-hide").addEventListener("click",()=>void winnerApi.hide());
 }
 
-window.asylumDesktop.onStatus(({ target, state }) => { nativeStates[target] = state; (target === "host" ? hostError : target === "facebook" ? facebookError : broadcastError).hidden = state !== "failed" && state !== "crashed"; reportLayout(); });
-window.asylumDesktop.onActiveGame((context) => { el("broadcast-context").textContent = `${context.activeRaffleCode} · ${context.activeGameTitle}`; });
+function renderActiveGame(context: ActiveGameContext | null) { activeGameContext = context; el("broadcast-context").textContent = context ? `ACTIVE RAFFLE · ${context.raffleCode ?? context.gameId}${context.gameTitle ? ` · ${context.gameTitle}` : ""}` : "NO ACTIVE RAFFLE"; }
+window.asylumDesktop.onStatus(({ target, state }) => { nativeStates[target] = state; (target === "host" ? hostError : target === "facebook" ? facebookError : broadcastError).hidden = state !== "failed" && state !== "crashed"; if (target === "broadcast" && state === "loading" && activeGameContext) el("broadcast-context").textContent = "Loading Broadcast..."; else if (target === "broadcast" && state === "ready") renderActiveGame(activeGameContext); reportLayout(); });
+window.asylumDesktop.onActiveGame(renderActiveGame);
+void window.asylumDesktop.activeGame.get().then(renderActiveGame);
 window.addEventListener("resize", reportLayout); new ResizeObserver(reportLayout).observe(shell);
 document.addEventListener("visibilitychange", updatePreviewPolling);
 window.addEventListener("beforeunload", () => stopPreviewPolling());

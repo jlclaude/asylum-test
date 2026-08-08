@@ -24,6 +24,7 @@ contextBridge.exposeInMainWorld("asylumDesktop", {
     clearSession: () => invoke("facebook:clear-session"),
   },
   broadcast: { retry: () => invoke("broadcast:retry") },
+  activeGame: { get: () => invoke("active-game:get"), select: (gameId: string) => invoke("active-game:select", gameId), clear: () => invoke("active-game:clear") },
   integration: {
     copyGameLink: () => invoke("integration:copy-game-link"),
     copyFacebookPost: () => invoke("integration:copy-facebook-post"),

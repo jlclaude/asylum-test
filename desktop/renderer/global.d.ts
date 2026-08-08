@@ -13,6 +13,7 @@ declare global {
     host: { retry(): Promise<void>; reload(): Promise<void>; openPortal(): Promise<void>; openBroadcast(): Promise<void>; openExternal(): Promise<void> };
     facebook: { back(): Promise<void>; forward(): Promise<void>; reload(): Promise<void>; retry(): Promise<void>; openGroup(): Promise<void>; openExternal(): Promise<void>; clearSession(): Promise<void> };
     broadcast: { retry(): Promise<void> };
+    activeGame: { get(): Promise<ActiveGameContext | null>; select(gameId: string): Promise<boolean>; clear(): Promise<boolean> };
     integration: { copyGameLink(): Promise<boolean>; copyFacebookPost(): Promise<boolean> };
     winner: { getSettings(): Promise<ObsResult<WinnerPresentationPublic>>; saveSettings(value: unknown): Promise<ObsResult<WinnerPresentationPublic>>; chooseAudio(): Promise<ObsResult<WinnerPresentationPublic | null>>; test(mode: "overlay" | "confetti" | "sound"): Promise<ObsResult<boolean>>; replay(): Promise<ObsResult<boolean>>; hide(): Promise<ObsResult<void>> };
     obs: {
@@ -27,5 +28,5 @@ declare global {
   } }
   interface DesktopLayout { host: { x: number; y: number; width: number; height: number } | null; facebook: { x: number; y: number; width: number; height: number } | null; broadcast: { x: number; y: number; width: number; height: number } | null; }
   interface DesktopStatus { target: "host" | "facebook" | "broadcast"; state: "loading" | "ready" | "failed" | "crashed"; }
-  interface ActiveGameContext { activeGameId: string; activeRaffleCode: string; activeGameTitle: string; broadcastUrl: string; }
+  interface ActiveGameContext { gameId: string; sourceUrl: string; broadcastUrl: string; raffleCode: string | null; gameTitle: string | null; }
 }
