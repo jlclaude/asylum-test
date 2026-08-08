@@ -25,6 +25,7 @@ contextBridge.exposeInMainWorld("asylumDesktop", {
     copyGameLink: () => invoke("integration:copy-game-link"),
     copyFacebookPost: () => invoke("integration:copy-facebook-post"),
   },
+  winner: { getSettings: () => invoke("winner:get-settings"), saveSettings: (value: unknown) => invoke("winner:save-settings", value), chooseAudio: () => invoke("winner:choose-audio"), test: (mode: string) => invoke("winner:test", mode), replay: () => invoke("winner:replay"), hide: () => invoke("winner:hide") },
   obs: {
     settings: () => invoke("obs:settings"),
     getState: () => invoke("obs:get-state"),

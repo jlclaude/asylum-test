@@ -456,6 +456,7 @@ export default function GameModePage() {
                       resultAccepted={acceptedIds.has(wheel.id)}
                       onAcceptResult={acceptResult}
                       csrfToken={csrfToken}
+                      presentation={{ raffleCode: game.raffleCode, gameTitle: game.title }}
                     />
                   ),
                 )}

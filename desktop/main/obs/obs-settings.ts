@@ -4,12 +4,14 @@ import { join } from "node:path";
 import type { ObsConnectConfig, ObsSceneMappings, ObsStoredSettings } from "./obs-types";
 import { DEFAULT_OBS_SCENE_MAPPINGS, validateObsSceneMappings } from "./obs-scene-mappings";
 import { OBS_DEFAULT_HOST, OBS_DEFAULT_PORT, validateObsConfig } from "./obs-validation";
+import { DEFAULT_WINNER_PRESENTATION, type WinnerPresentationSettings } from "../winner/WinnerPresentationController";
 
 type SettingsFile = {
   host?: string;
   port?: number;
   encryptedPassword?: string;
   sceneMappings?: ObsSceneMappings;
+  winnerPresentation?: WinnerPresentationSettings;
 };
 
 export class ObsSettingsStore {
@@ -70,4 +72,6 @@ export class ObsSettingsStore {
   async saveSceneMappings(value: ObsSceneMappings): Promise<void> {
     const stored = await this.read(); stored.sceneMappings = value; await this.write(stored);
   }
+  async loadWinnerPresentation(): Promise<WinnerPresentationSettings> { const stored = await this.read(); const value = { ...DEFAULT_WINNER_PRESENTATION, ...stored.winnerPresentation }; return { enabled: Boolean(value.enabled), confetti: Boolean(value.confetti), sound: Boolean(value.sound), volume: Math.max(0, Math.min(1, Number(value.volume) || 0)), overlayDelay: Math.max(0, Math.min(60_000, Math.round(Number(value.overlayDelay) || 0))), duration: Math.max(250, Math.min(60_000, Math.round(Number(value.duration) || 4_000))), audioFile: typeof value.audioFile === "string" ? value.audioFile : null }; }
+  async saveWinnerPresentation(value: WinnerPresentationSettings): Promise<void> { const stored = await this.read(); stored.winnerPresentation = value; await this.write(stored); }
 }

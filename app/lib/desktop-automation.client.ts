@@ -1,14 +1,15 @@
-export type DesktopAutomationEvent = "SPIN" | "WINNER" | "SECOND_CHANCE" | "REWARD" | "ACCEPT_RESULT" | "RAFFLE_FINISHED";
+export type DesktopAutomationEvent = "SPIN" | "WINNER" | "SECOND_CHANCE" | "REWARD" | "ACCEPT_RESULT" | "RAFFLE_FINISHED" | "CELEBRATE";
+export type WinnerOverlayPayload = { identity: string; raffleCode: string; gameTitle: string; wheelLabel: string; wheelType: "NAME" | "VALUE"; winnerDisplayName: string | null; rewardValue: string | null; secondChanceBefore: string | null; secondChanceAfter: string | null };
 
 declare global {
   interface Window {
     asylumDesktopHost?: {
       updateIntegrationContext(context: { gameId: string; publicClaimUrl: string; facebookPost: string }): Promise<unknown>;
-      emitAutomationEvent(event: { event: DesktopAutomationEvent; wheelId?: string }): void;
+      emitAutomationEvent(event: { event: DesktopAutomationEvent; wheelId?: string; winner?: WinnerOverlayPayload }): void;
     };
   }
 }
 
-export function emitDesktopAutomationEvent(event: DesktopAutomationEvent, wheelId?: string) {
-  window.asylumDesktopHost?.emitAutomationEvent({ event, ...(wheelId ? { wheelId } : {}) });
+export function emitDesktopAutomationEvent(event: DesktopAutomationEvent, wheelId?: string, winner?: WinnerOverlayPayload) {
+  window.asylumDesktopHost?.emitAutomationEvent({ event, ...(wheelId ? { wheelId } : {}), ...(winner ? { winner } : {}) });
 }

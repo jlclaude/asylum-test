@@ -6,4 +6,6 @@ await mkdir(target, { recursive: true });
 await Promise.all([
   cp(new URL("index.html", source), new URL("index.html", target)),
   cp(new URL("desktop-shell.css", source), new URL("desktop-shell.css", target)),
+  cp(new URL("winner-overlay.html", source), new URL("winner-overlay.html", target)),
+  cp(new URL("winner-overlay.css", source), new URL("winner-overlay.css", target)),
 ]);

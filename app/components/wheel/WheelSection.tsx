@@ -60,6 +60,7 @@ type WheelSectionProps = {
   resultAccepted?: boolean;
   onAcceptResult?: (wheelId: string) => void;
   csrfToken?: string | null;
+  presentation?: { raffleCode: string; gameTitle: string };
 };
 
 function entryLabel(entry: WheelData["entries"][number]) {
@@ -84,6 +85,7 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(
       resultAccepted = false,
       onAcceptResult,
       csrfToken = null,
+      presentation,
     },
     operatorRef,
   ) {
@@ -282,7 +284,6 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(
       wheel.id,
       wheel.label,
       wheel.status,
-      wheel.type,
     ]);
 
     useImperativeHandle(
@@ -609,9 +610,10 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(
           emitDesktopAutomationEvent("WINNER", wheel.id);
           if (data.secondChance) emitDesktopAutomationEvent("SECOND_CHANCE", wheel.id);
         }
+        if (presentation) emitDesktopAutomationEvent("CELEBRATE", wheel.id, { identity: `${wheel.id}:${data.winnerDisplayName ?? data.winnerValue ?? "result"}`, raffleCode: presentation.raffleCode, gameTitle: presentation.gameTitle, wheelLabel: wheel.label, wheelType: wheel.type, winnerDisplayName: data.winnerDisplayName ?? null, rewardValue: data.winnerValue ?? null, secondChanceBefore: data.secondChance?.beforeDisplayName ?? null, secondChanceAfter: data.secondChance?.afterDisplayName ?? null });
         onCompleted(wheel.id);
       }
-    }, [fetcher.data, onCompleted, revalidator, wheel.id, wheel.type]);
+    }, [fetcher.data, onCompleted, presentation, revalidator, wheel.id, wheel.label, wheel.type]);
 
     const actionMessage = recoveryError
       ? { error: recoveryError }

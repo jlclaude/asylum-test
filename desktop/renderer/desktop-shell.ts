@@ -7,6 +7,7 @@ const obsPanel = document.querySelector<HTMLElement>("#obs-panel")!;
 const hostError = document.querySelector<HTMLElement>("#host-error")!;
 const facebookError = document.querySelector<HTMLElement>("#facebook-error")!;
 const obsApi = window.asylumDesktop?.obs;
+const winnerApi = window.asylumDesktop?.winner;
 let panel = (localStorage.getItem("desktop-panel") ?? "facebook") as "host" | "facebook" | "obs";
 let ratio = Number(localStorage.getItem("desktop-panel-ratio") ?? "0.4");
 let currentObsState: ObsState | null = null;
@@ -207,6 +208,14 @@ if (obsApi) {
   obsApi.onAutomationStateChanged(renderAutomationStatus);
   void obsApi.getAutomationStatus().then((result) => { const status = unwrap(result); if (status) renderAutomationStatus(status); });
 } else showStudioFailure("OBS desktop bridge is unavailable. Restart the desktop application after rebuilding.");
+
+if (winnerApi) {
+  const applyWinner = (s: WinnerPresentationPublic) => { el<HTMLInputElement>("winner-enabled").checked=s.enabled; el<HTMLInputElement>("winner-confetti").checked=s.confetti; el<HTMLInputElement>("winner-sound").checked=s.sound; el<HTMLInputElement>("winner-volume").value=String(Math.round(s.volume*100)); el<HTMLInputElement>("winner-delay").value=String(s.overlayDelay); el<HTMLInputElement>("winner-duration").value=String(s.duration); };
+  void winnerApi.getSettings().then((r) => { const s=unwrap(r); if(s) applyWinner(s); });
+  el("winner-save").addEventListener("click", async()=>{const s=unwrap(await winnerApi.saveSettings({enabled:el<HTMLInputElement>("winner-enabled").checked,confetti:el<HTMLInputElement>("winner-confetti").checked,sound:el<HTMLInputElement>("winner-sound").checked,volume:Number(el<HTMLInputElement>("winner-volume").value)/100,overlayDelay:Number(el<HTMLInputElement>("winner-delay").value),duration:Number(el<HTMLInputElement>("winner-duration").value)}));if(s){applyWinner(s);el("winner-status").textContent="Saved locally."}});
+  el("winner-choose-audio").addEventListener("click",async()=>{const s=unwrap(await winnerApi.chooseAudio());if(s){applyWinner(s);el("winner-status").textContent="Audio selected."}});
+  el("winner-test").addEventListener("click",()=>void winnerApi.test("overlay")); el("winner-test-confetti").addEventListener("click",()=>void winnerApi.test("confetti")); el("winner-test-sound").addEventListener("click",()=>void winnerApi.test("sound")); el("winner-replay").addEventListener("click",()=>void winnerApi.replay()); el("winner-hide").addEventListener("click",()=>void winnerApi.hide());
+}
 
 window.asylumDesktop.onStatus(({ target, state }) => { (target === "host" ? hostError : facebookError).hidden = state !== "failed" && state !== "crashed"; });
 window.addEventListener("resize", reportLayout); new ResizeObserver(reportLayout).observe(shell);

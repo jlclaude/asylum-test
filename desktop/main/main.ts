@@ -10,6 +10,7 @@ import type { ObsConnectConfig, ObsMappingKey } from "./obs/obs-types";
 import { validateObsConfig } from "./obs/obs-validation";
 import { exportStudioProfile, importStudioProfile, validateObsSceneMappings } from "./obs/obs-scene-mappings";
 import { ObsAutomationEngine, type ObsAutomationEvent } from "./obs/ObsAutomationEngine";
+import { WinnerPresentationController, type WinnerOverlayState, type WinnerPresentationSettings } from "./winner/WinnerPresentationController";
 
 const hostUrl = process.env.ASYLUM_DESKTOP_HOST_URL ?? `${ASYLUM_ORIGIN}/host`;
 const hostOrigin = new URL(hostUrl).origin;
@@ -22,6 +23,7 @@ let currentFacebookPost = "";
 let obsController: ObsController;
 let obsSettings: ObsSettingsStore;
 let obsAutomation: ObsAutomationEngine;
+let winnerPresentation: WinnerPresentationController;
 const viewStates = { host: "loading", facebook: "loading" } as Record<"host" | "facebook", "loading" | "ready" | "failed" | "crashed">;
 
 function status(target: "host" | "facebook", state: "loading" | "ready" | "failed" | "crashed") {
@@ -32,7 +34,7 @@ function status(target: "host" | "facebook", state: "loading" | "ready" | "faile
 }
 
 function track(view: WebContentsView, target: "host" | "facebook") {
-  view.webContents.on("did-start-loading", () => status(target, "loading"));
+  view.webContents.on("did-start-loading", () => { if (target === "host") winnerPresentation?.reset(); status(target, "loading"); });
   view.webContents.on("did-finish-load", () => status(target, "ready"));
   view.webContents.on("did-fail-load", (_event, code, _description, url, isMainFrame) => {
     if (isMainFrame && code !== -3) { console.warn(`[desktop] ${target} navigation failed`, { code, origin: safeOrigin(url) }); status(target, "failed"); }
@@ -113,9 +115,18 @@ function registerIpc() {
   ipcMain.on("automation:event", (event, payload: unknown) => {
     if (event.sender !== hostView?.webContents || !payload || typeof payload !== "object") return;
     const candidate = payload as Record<string, unknown>;
-    const allowed: ObsAutomationEvent[] = ["SPIN", "WINNER", "SECOND_CHANCE", "REWARD", "ACCEPT_RESULT", "RAFFLE_FINISHED"];
-    if (typeof candidate.event !== "string" || !allowed.includes(candidate.event as ObsAutomationEvent)) return;
+    const allowed = ["SPIN", "WINNER", "SECOND_CHANCE", "REWARD", "ACCEPT_RESULT", "RAFFLE_FINISHED", "CELEBRATE"] as const;
+    if (typeof candidate.event !== "string" || !allowed.includes(candidate.event as typeof allowed[number])) return;
     if (candidate.wheelId !== undefined && (typeof candidate.wheelId !== "string" || candidate.wheelId.length > 200)) return;
+    if (candidate.event === "CELEBRATE") {
+      const value = candidate.winner as Record<string, unknown> | undefined; if (!value) return;
+      const text = (key: string, nullable = false) => { const raw = value[key]; if (nullable && (raw === null || raw === undefined)) return null; return typeof raw === "string" && raw.length <= 512 ? raw : undefined; };
+      const identity = text("identity"), raffleCode = text("raffleCode"), gameTitle = text("gameTitle"), wheelLabel = text("wheelLabel"), wheelType = text("wheelType"), winnerDisplayName = text("winnerDisplayName", true), rewardValue = text("rewardValue", true), secondChanceBefore = text("secondChanceBefore", true), secondChanceAfter = text("secondChanceAfter", true);
+      if (!identity || !raffleCode || !gameTitle || !wheelLabel || (wheelType !== "NAME" && wheelType !== "VALUE") || winnerDisplayName === undefined || rewardValue === undefined || secondChanceBefore === undefined || secondChanceAfter === undefined) return;
+      const state: WinnerOverlayState = { visible: true, raffleCode, gameTitle, wheelLabel, wheelType, winnerDisplayName, rewardValue, secondChanceBefore, secondChanceAfter, revealedAt: new Date().toISOString() };
+      void obsSettings.loadSceneMappings().then((settings) => winnerPresentation.present(identity, state, false, wheelType === "VALUE" ? settings.delays.reward : settings.delays.winner)); return;
+    }
+    if (candidate.event === "ACCEPT_RESULT") winnerPresentation.hide();
     void obsAutomation.handle(candidate.event as ObsAutomationEvent).catch(() => console.warn("[desktop][obs] automation event failed safely"));
   });
   const obsAction = (channel: string, action: (...args: unknown[]) => Promise<unknown> | unknown) => {
@@ -135,6 +146,13 @@ function registerIpc() {
   obsAction("obs:test-program-preview", () => obsController.getProgramPreview(true));
   obsAction("obs:get-scene-mappings", () => obsSettings.loadSceneMappings());
   obsAction("obs:get-automation-status", () => obsAutomation.getStatus());
+  const publicWinnerSettings = (value: WinnerPresentationSettings) => ({ enabled: value.enabled, confetti: value.confetti, sound: value.sound, volume: value.volume, overlayDelay: value.overlayDelay, duration: value.duration, audioSelected: Boolean(value.audioFile) });
+  obsAction("winner:get-settings", async () => publicWinnerSettings(await obsSettings.loadWinnerPresentation()));
+  obsAction("winner:save-settings", async (value) => { if (!value || typeof value !== "object") throw new Error("Invalid winner settings."); const v = value as WinnerPresentationSettings; const current = await obsSettings.loadWinnerPresentation(); const settings: WinnerPresentationSettings = { enabled: v.enabled === true, confetti: v.confetti === true, sound: v.sound === true, volume: Math.max(0, Math.min(1, Number(v.volume))), overlayDelay: Math.max(0, Math.min(60_000, Math.round(Number(v.overlayDelay)))), duration: Math.max(250, Math.min(60_000, Math.round(Number(v.duration)))), audioFile: current.audioFile }; await obsSettings.saveWinnerPresentation(settings); return publicWinnerSettings(settings); });
+  obsAction("winner:choose-audio", async () => { const result = await dialog.showOpenDialog({ title: "Winner Celebration Sound", filters: [{ name: "Audio", extensions: ["mp3", "wav", "ogg"] }], properties: ["openFile"] }); if (result.canceled || !result.filePaths[0]) return null; const settings = await obsSettings.loadWinnerPresentation(); settings.audioFile = result.filePaths[0]; await obsSettings.saveWinnerPresentation(settings); return publicWinnerSettings(settings); });
+  obsAction("winner:test", async (mode) => { if (mode !== "overlay" && mode !== "confetti" && mode !== "sound") throw new Error("Invalid winner test."); return winnerPresentation.present(`test-winner-${mode}`, { visible: true, raffleCode: "ASY-TEST-000001", gameTitle: "Asylum Games Test", wheelLabel: "Test Containment", wheelType: "NAME", winnerDisplayName: "TEST WINNER", rewardValue: null, secondChanceBefore: null, secondChanceAfter: null, revealedAt: new Date().toISOString() }, true, 0, { enabled: true, overlayDelay: 0, confetti: mode !== "sound", sound: mode !== "confetti" }); });
+  obsAction("winner:replay", () => winnerPresentation.replay());
+  obsAction("winner:hide", () => winnerPresentation.hide());
   obsAction("obs:save-scene-mappings", async (value) => {
     const mappings = validateObsSceneMappings(value, obsController.getScenes());
     await obsSettings.saveSceneMappings(mappings);
@@ -185,10 +203,11 @@ app.whenReady().then(() => {
   obsSettings = new ObsSettingsStore();
   obsController = new ObsController();
   obsAutomation = new ObsAutomationEngine(obsController, obsSettings);
+  winnerPresentation = new WinnerPresentationController(() => obsSettings.loadWinnerPresentation());
   obsController.subscribe((state) => { if (state.connection !== "CONNECTED") obsAutomation.markUnavailable(); windowRef?.webContents.send("obs:state-changed", state); });
   obsAutomation.subscribe((state) => windowRef?.webContents.send("obs:automation-state-changed", state));
   registerIpc(); createWindow();
   app.on("activate", () => { if (BaseWindow.getAllWindows().length === 0) createWindow(); });
 });
-app.on("before-quit", () => { obsAutomation?.dispose(); void obsController?.disconnect(); });
+app.on("before-quit", () => { winnerPresentation?.dispose(); obsAutomation?.dispose(); void obsController?.disconnect(); });
 app.on("window-all-closed", () => { if (process.platform !== "darwin") app.quit(); });

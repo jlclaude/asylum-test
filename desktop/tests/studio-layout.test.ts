@@ -9,6 +9,8 @@ async function run() {
   const hostPreload = await readFile(join(process.cwd(), "preload/host-preload.ts"), "utf8");
   const main = await readFile(join(process.cwd(), "main/main.ts"), "utf8");
   const wheel = await readFile(join(process.cwd(), "../app/components/wheel/WheelSection.tsx"), "utf8");
+  const winnerOverlay = await readFile(join(process.cwd(), "renderer/winner-overlay.ts"), "utf8");
+  const winnerController = await readFile(join(process.cwd(), "main/winner/WinnerPresentationController.ts"), "utf8");
   assert.ok(html.indexOf('id="divider"') < html.indexOf('id="obs-panel"'), "divider must precede every lower panel");
   assert.match(html, /Production Studio/); assert.match(html, /OBS Status:/); assert.match(html, /id="studio-error"/);
   assert.match(html, /Program Preview/); assert.match(html, /id="program-preview-image"/); assert.match(html, /Preview status:/);
@@ -34,9 +36,13 @@ async function run() {
   assert.match(html, /Live Show Automation/); assert.match(html, /id="automation-state"/); assert.match(html, /id="automation-log"/);
   assert.match(renderer, /getAutomationStatus/); assert.match(renderer, /onAutomationStateChanged/);
   assert.match(hostPreload, /emitAutomationEvent/); assert.doesNotMatch(hostPreload, /switchScene|obs-websocket|GetSourceScreenshot/, "host preload must expose semantic events only");
-  assert.match(main, /event\.sender !== hostView\?\.webContents/); assert.match(main, /const allowed: ObsAutomationEvent\[\]/);
+  assert.match(main, /event\.sender !== hostView\?\.webContents/); assert.match(main, /const allowed = \["SPIN"/);
   assert.match(wheel, /data\?\.intent !== "spin-wheel"[\s\S]*wheel\.type === "VALUE" \? "REWARD" : "SPIN"/); assert.doesNotMatch(wheel, /emitDesktopAutomationEvent\("SHUFFLE"/);
   assert.doesNotMatch(wheel, /onReveal\(\)[\s\S]{0,100}emitDesktopAutomationEvent/, "winner automation must not be sourced from reveal animation callbacks");
+  assert.match(html, /Test Winner Overlay/); assert.match(html, /Replay Last Winner/); assert.match(html, /Hide Overlay/);
+  assert.match(wheel, /data\.secondChance\?\.beforeDisplayName/); assert.doesNotMatch(wheel, /claimId.*CELEBRATE|username.*CELEBRATE/i);
+  assert.match(winnerController, /handled\.has\(identity\)/); assert.match(winnerController, /audioDataUrl/); assert.doesNotMatch(renderer, /audioFile/, "shell renderer must not receive audio filesystem paths");
+  assert.match(winnerOverlay, /prefers-reduced-motion/); assert.doesNotMatch(winnerOverlay, /loop\s*=/);
   console.info("Studio layout and fallback tests passed");
 }
 void run().catch((error) => { console.error(error); process.exitCode = 1; });
