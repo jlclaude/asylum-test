@@ -59,7 +59,7 @@ el("broadcast-exit-fullscreen").addEventListener("click", () => setBroadcastFull
 function setCleanOutput(value: boolean) { document.body.classList.toggle("broadcast-clean", value); el<HTMLInputElement>("broadcast-clean").checked = value; el("broadcast-exit-clean").hidden = !value; requestAnimationFrame(reportLayout); }
 el<HTMLInputElement>("broadcast-clean").addEventListener("change", (event) => setCleanOutput((event.currentTarget as HTMLInputElement).checked));
 el("broadcast-exit-clean").addEventListener("click", () => setCleanOutput(false));
-el<HTMLSelectElement>("broadcast-scale").addEventListener("change", (event) => { const value = (event.currentTarget as HTMLSelectElement).value; void window.asylumDesktop.broadcast.setScale(value === "fit" ? 1 : Number(value)); });
+el<HTMLSelectElement>("broadcast-scale").addEventListener("change", (event) => { const raw = (event.currentTarget as HTMLSelectElement).value; const value = raw === "fit" ? "fit" : Number(raw) as 1 | 1.25 | 1.5; void window.asylumDesktop.broadcast.setScale(value); });
 el<HTMLInputElement>("broadcast-safe-areas").addEventListener("change", (event) => { void window.asylumDesktop.broadcast.setSafeAreas((event.currentTarget as HTMLInputElement).checked); });
 
 function unwrap<T>(result: ObsResult<T>): T | undefined { if (!result.ok) { showObsError(result.error ?? "OBS request failed."); return; } return result.value; }

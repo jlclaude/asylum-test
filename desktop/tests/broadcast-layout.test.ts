@@ -19,8 +19,9 @@ async function run() {
   assert.match(publicRoute, /<BroadcastPresentation/); assert.match(gameRoute, /<BroadcastPresentation/); assert.match(hostRoute, /BroadcastModePage/);
   assert.match(gameRoute, /<WheelSection/); assert.match(publicRoute, /<WheelCanvas/); assert.match(presentation, /broadcast-presentation-stage/);
   assert.match(presentation, /broadcast-presentation-lower/); assert.match(presentation, /ASYLUM GAMES LIVE/);
-  assert.match(css, /grid-template-rows:12vh auto minmax\(0,1fr\) 15vh 4vh/);
-  assert.match(css, /width:min\(94vh,1280px,100%\)/); assert.doesNotMatch(css, /broadcast-information-left|broadcast-information-right|broadcast-presentation-watermark/);
+  assert.match(css, /width: 1920px/); assert.match(css, /height: 1080px/);
+  assert.match(css, /broadcast-viewport-operator\.is-manual[\s\S]*overflow: auto/); assert.match(css, /broadcast-viewport-output[\s\S]*overflow: hidden/);
+  assert.match(css, /width: 670px/); assert.match(css, /broadcast-presentation-wheel[\s\S]*overflow: visible/); assert.doesNotMatch(css, /broadcast-information-left|broadcast-information-right|broadcast-presentation-watermark/);
   assert.doesNotMatch(gameRoute, /BroadcastWheelRail|BroadcastGameHeader/);
   assert.match(publicRoute, /Math\.min\(1_000 \* 2 \*\* failures\.current, 15_000\)/); assert.match(publicRoute, /data\.broadcast \?\? lastKnown/);
   assert.doesNotMatch(model, /randomInt|winnerEntryIndex\s*=/, "broadcast model must never calculate winners");
@@ -29,7 +30,7 @@ async function run() {
   assert.match(activeGame, /host\/games\/\$\{encodeURIComponent\(gameId\)\}\/broadcast/); assert.doesNotMatch(activeGame, /\/broadcast\?gameId/);
   assert.match(broadcastLoader, /validBroadcastToken/); assert.match(tokenRoute, /status: 405/); assert.match(tokenRoute, /loadReadOnlyBroadcast/);
   assert.match(hostLinkRoute, /requireHostPermission/); assert.match(hostLinkRoute, /requireHostMutation/); assert.match(tokenService, /createHmac/); assert.match(tokenService, /randomBytes\(32\)/); assert.doesNotMatch(tokenService, /console\./);
-  assert.match(main, /partition: "persist:asylum-host"[\s\S]*broadcast-preload\.js/); assert.match(main, /broadcast:copy-obs-url/);
+  assert.match(main, /partition: "persist:asylum-host"[\s\S]*broadcast-preload\.js/); assert.match(main, /broadcast:copy-obs-url/); assert.match(main, /asylum-broadcast-scale/);
   console.info("Shared Broadcast presentation and routing tests passed");
 }
 void run().catch((error) => { console.error(error); process.exitCode = 1; });
