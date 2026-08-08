@@ -53,6 +53,26 @@
             <button id="obs-start-recording">Start recording</button><button id="obs-stop-recording">Stop recording</button>
             <button id="obs-refresh">Refresh</button><button id="obs-disconnect">Disconnect</button>
           </div>
+          <section class="scene-mapping" aria-labelledby="scene-mapping-title">
+            <h2 id="scene-mapping-title">OBS Scene Mapping</h2>
+            <p>Optional desktop-only assignments. Automation is saved but not active yet.</p>
+            <div class="mapping-grid">
+              <label>Host Scene <select id="mapping-host"></select></label>
+              <label>Wheel Scene <select id="mapping-wheel"></select></label>
+              <label>Winner Scene <select id="mapping-winner"></select></label>
+              <label>Break Scene <select id="mapping-break"></select></label>
+              <label>Ending Scene <select id="mapping-ending"></select></label>
+            </div>
+            <p id="mapping-warning" class="mapping-warning" hidden></p>
+            <div class="mapping-tests"><button id="test-host-scene">Test Host Scene</button><button id="test-wheel-scene">Test Wheel Scene</button><button id="test-winner-scene">Test Winner Scene</button></div>
+            <div class="automation-options">
+              <label><input id="automation-spin-wheel" type="checkbox"> Switch to Wheel Scene when Spin starts</label>
+              <label><input id="automation-reveal-winner" type="checkbox"> Switch to Winner Scene when Winner is revealed</label>
+              <label><input id="automation-accept-host" type="checkbox"> Return to Host Scene after Accept Result</label>
+              <label><input id="automation-finish-ending" type="checkbox"> Switch to Ending Scene when raffle finishes</label>
+            </div>
+            <button id="save-scene-mappings">Save Scene Mappings</button><span id="mapping-save-status" role="status"></span>
+          </section>
           <p id="obs-error" class="obs-error" hidden></p>
           <details><summary>To connect OBS</summary><ol><li>Open OBS Studio.</li><li>Go to Tools → WebSocket Server Settings.</li><li>Enable WebSocket server.</li><li>Use port 4455.</li><li>Enter the same password here if authentication is enabled.</li></ol><p>Only OBS on this computer is supported.</p></details>
         </div>

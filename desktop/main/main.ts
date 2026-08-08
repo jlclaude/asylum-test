@@ -7,6 +7,7 @@ import { ObsController } from "./obs/ObsController";
 import { ObsSettingsStore } from "./obs/obs-settings";
 import type { ObsConnectConfig } from "./obs/obs-types";
 import { validateObsConfig } from "./obs/obs-validation";
+import { validateObsSceneMappings } from "./obs/obs-scene-mappings";
 
 const hostUrl = process.env.ASYLUM_DESKTOP_HOST_URL ?? `${ASYLUM_ORIGIN}/host`;
 const hostOrigin = new URL(hostUrl).origin;
@@ -121,6 +122,12 @@ function registerIpc() {
   obsAction("obs:get-scenes", () => obsController.getScenes());
   obsAction("obs:get-program-preview", () => obsController.getProgramPreview());
   obsAction("obs:test-program-preview", () => obsController.getProgramPreview(true));
+  obsAction("obs:get-scene-mappings", () => obsSettings.loadSceneMappings());
+  obsAction("obs:save-scene-mappings", async (value) => {
+    const mappings = validateObsSceneMappings(value, obsController.getScenes());
+    await obsSettings.saveSceneMappings(mappings);
+    return mappings;
+  });
   obsAction("obs:connect", async (payload) => {
     if (!payload || typeof payload !== "object") throw new Error("Invalid OBS connection settings.");
     const candidate = payload as ObsConnectConfig & { rememberSettings?: boolean };

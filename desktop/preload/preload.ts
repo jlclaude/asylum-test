@@ -31,6 +31,8 @@ contextBridge.exposeInMainWorld("asylumDesktop", {
     getScenes: () => invoke("obs:get-scenes"),
     getProgramPreview: () => invoke("obs:get-program-preview"),
     testProgramPreview: () => invoke("obs:test-program-preview"),
+    getSceneMappings: () => invoke("obs:get-scene-mappings"),
+    saveSceneMappings: (mappings: unknown) => invoke("obs:save-scene-mappings", mappings),
     connect: (settings: unknown) => invoke("obs:connect", settings),
     disconnect: () => invoke("obs:disconnect"),
     refresh: () => invoke("obs:refresh"),

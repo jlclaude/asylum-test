@@ -24,6 +24,11 @@ export type ObsProgramPreview = {
   sceneName: string | null;
 };
 
+export type ObsSceneMappings = {
+  scenes: { host: string | null; wheel: string | null; winner: string | null; break: string | null; ending: string | null };
+  automation: { spinToWheel: boolean; revealToWinner: boolean; acceptToHost: boolean; finishToEnding: boolean };
+};
+
 export type ObsStoredSettings = {
   host: string;
   port: number;

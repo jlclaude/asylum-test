@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { ObsController } from "../main/obs/ObsController";
 import { obsWebSocketUrl, validateObsConfig, validateSceneName } from "../main/obs/obs-validation";
 import type { ObsClient, ObsTimer } from "../main/obs/obs-types";
+import { validateObsSceneMappings } from "../main/obs/obs-scene-mappings";
 
 class FakeObs implements ObsClient {
   handlers = new Map<string, (event?: unknown) => void>();
@@ -47,6 +48,9 @@ async function run() {
   assert.throws(() => validateObsConfig({ host: "localhost", port: 70000 }), /port/);
   assert.equal(obsWebSocketUrl({ host: "::1", port: 4455 }), "ws://[::1]:4455");
   assert.throws(() => validateSceneName(""), /scene/i);
+  const mapping = validateObsSceneMappings({ scenes: { host: "Main", wheel: null, winner: "Break", break: null, ending: null }, automation: { spinToWheel: true, revealToWinner: false, acceptToHost: true, finishToEnding: false } }, ["Main", "Break"]);
+  assert.equal(mapping.scenes.host, "Main"); assert.equal(mapping.automation.spinToWheel, true);
+  assert.throws(() => validateObsSceneMappings({ scenes: { host: "Deleted", wheel: null, winner: null, break: null, ending: null }, automation: { spinToWheel: false, revealToWinner: false, acceptToHost: false, finishToEnding: false } }, ["Main"]), /no longer exists/);
 
   const fake = new FakeObs(); const logs: string[] = [];
   const controller = new ObsController(fake, { info: (message, details) => logs.push(`${message}${JSON.stringify(details)}`), warn: () => undefined });
@@ -84,6 +88,8 @@ async function run() {
   assert.match(preload, /getScenes: \(\) => invoke\("obs:get-scenes"\)/);
   assert.match(preload, /getProgramPreview: \(\) => invoke\("obs:get-program-preview"\)/);
   assert.match(preload, /testProgramPreview: \(\) => invoke\("obs:test-program-preview"\)/);
+  assert.match(preload, /getSceneMappings: \(\) => invoke\("obs:get-scene-mappings"\)/);
+  assert.match(preload, /saveSceneMappings: \(mappings: unknown\) => invoke\("obs:save-scene-mappings", mappings\)/);
   assert.doesNotMatch(preload, /\bcall:\s*|rawObs|child_process|\bWebSocket\s*:/i, "preload must not expose arbitrary OBS or system access");
   const renderer = await readFile(join(process.cwd(), "renderer/desktop-shell.ts"), "utf8");
   assert.doesNotMatch(renderer, /localStorage[^\n]*password|password[^\n]*localStorage/i);
