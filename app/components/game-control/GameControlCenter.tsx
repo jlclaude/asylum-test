@@ -1,5 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
-import { useActionData, useFetcher, useNavigate } from "react-router";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useActionData,
+  useFetcher,
+  useNavigate,
+  useRevalidator,
+} from "react-router";
 import { GameResultsSummary } from "../results/GameResultsSummary";
 import { GameAdministration } from "../games/GameAdministration";
 import { GameReadinessPanel } from "../games/GameReadinessPanel";
@@ -13,6 +18,10 @@ import {
 } from "../../lib/game-control-routes";
 import type { GameControlCenterData } from "../../services/game-control-center.server";
 import { updateDesktopActiveGame } from "../../lib/desktop-automation.client";
+import {
+  LIVE_CLAIM_REVALIDATION_INTERVAL_MS,
+  shouldPollLiveClaims,
+} from "../../lib/live-claim-updates";
 
 type ActionData = {
   error?: string;
@@ -40,6 +49,9 @@ function formatDate(value: string) {
   }).format(new Date(value));
 }
 
+const NEW_CLAIM_HIGHLIGHT_DURATION_MS = 3_000;
+const REVALIDATION_FAILURE_WARNING_THRESHOLD = 3;
+
 const styles = `
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
@@ -66,6 +78,11 @@ const styles = `
   .control-progress-head { display:flex; justify-content:space-between; gap:15px; margin-bottom:10px; font-size:12px; font-weight:750; }
   .control-progress-track { height:10px; overflow:hidden; border-radius:999px; background:#111113; }
   .control-progress-fill { height:100%; border-radius:999px; background:linear-gradient(90deg,#942532,#df4859); }
+  .control-live-sync { display:flex; align-items:center; justify-content:flex-end; gap:9px; min-height:28px; margin:-10px 0 8px; color:#77787e; font-size:11px; }
+  .control-live-sync-dot { width:7px; height:7px; border-radius:50%; background:#55bf78; box-shadow:0 0 0 4px rgba(85,191,120,.1); }
+  .control-live-sync-new { color:#a7e8ba; font-weight:850; }
+  .control-live-sync-warning { justify-content:space-between; margin:0 0 18px; padding:11px 13px; border:1px solid #66562c; border-radius:10px; color:#e5cc82; background:rgba(105,82,20,.22); font-size:12px; }
+  .control-refresh-button { padding:6px 9px; border:1px solid #806a31; border-radius:7px; color:#f0d991; background:#302817; cursor:pointer; font:inherit; font-size:11px; font-weight:850; }
   .control-message { margin-bottom:18px; padding:13px 15px; border-radius:10px; font-size:13px; }
   .control-message-error { border:1px solid #73313a; color:#ffabb3; background:rgba(106,28,39,.3); }
   .control-message-success { border:1px solid #305c40; color:#a7e8ba; background:rgba(29,92,51,.25); }
@@ -103,6 +120,8 @@ const styles = `
   .control-filter-active { border-color:#be3b4a; color:#fff; background:#7f202c; }
   .control-list { display:grid; gap:11px; }
   .control-claim { padding:16px; border:1px solid #35353a; border-radius:12px; background:rgba(12,12,14,.46); }
+  .control-claim-new { border-color:#437a54; animation:control-new-claim 3s ease-out; }
+  @keyframes control-new-claim { 0% { background:rgba(50,126,75,.34); box-shadow:0 0 0 3px rgba(85,191,120,.12); } 100% { background:rgba(12,12,14,.46); box-shadow:none; } }
   .control-claim-top { display:flex; align-items:flex-start; justify-content:space-between; gap:15px; }
   .control-claim-order { display:flex; align-items:flex-start; gap:12px; }
   .control-claim-number { display:grid; place-items:center; min-width:35px; height:35px; border:1px solid #4b2a2f; border-radius:9px; color:#ee7180; background:#27171a; font-size:11px; font-weight:850; }
@@ -168,6 +187,7 @@ export function GameControlCenter({
 }) {
   const actionData = useActionData<ActionData>();
   const navigate = useNavigate();
+  const revalidator = useRevalidator();
   const fetcher = useFetcher<ActionData>();
   const nameFetcher = useFetcher<ActionData>();
   const {
@@ -206,6 +226,96 @@ export function GameControlCenter({
   const [search, setSearch] = useState("");
   const [copied, setCopied] = useState(false);
   const [editingClaimId, setEditingClaimId] = useState<string | null>(null);
+  const [newClaimIds, setNewClaimIds] = useState<Set<string>>(() => new Set());
+  const [newClaimCount, setNewClaimCount] = useState(0);
+  const [revalidationFailures, setRevalidationFailures] = useState(0);
+  const revalidatorRef = useRef(revalidator);
+  const revalidationInFlightRef = useRef(false);
+  const trackedGameIdRef = useRef(game.id);
+  const knownClaimIdsRef = useRef(new Set(claims.map((claim) => claim.id)));
+  const highlightTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    revalidatorRef.current = revalidator;
+  }, [revalidator]);
+
+  const revalidateControlCenter = useCallback(async () => {
+    if (
+      revalidationInFlightRef.current ||
+      revalidatorRef.current.state !== "idle"
+    ) {
+      return;
+    }
+
+    revalidationInFlightRef.current = true;
+    try {
+      await revalidatorRef.current.revalidate();
+      setRevalidationFailures(0);
+    } catch {
+      setRevalidationFailures((count) => count + 1);
+    } finally {
+      revalidationInFlightRef.current = false;
+    }
+  }, []);
+
+  const liveClaimUpdatesEnabled = shouldPollLiveClaims(game);
+
+  useEffect(() => {
+    if (!liveClaimUpdatesEnabled) return;
+
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") {
+        void revalidateControlCenter();
+      }
+    };
+    const timer = window.setInterval(
+      refreshWhenVisible,
+      LIVE_CLAIM_REVALIDATION_INTERVAL_MS,
+    );
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, [liveClaimUpdatesEnabled, revalidateControlCenter]);
+
+  useEffect(() => {
+    if (trackedGameIdRef.current !== game.id) {
+      trackedGameIdRef.current = game.id;
+      knownClaimIdsRef.current = new Set(claims.map((claim) => claim.id));
+      setNewClaimIds(new Set());
+      setNewClaimCount(0);
+      return;
+    }
+
+    const currentIds = new Set(claims.map((claim) => claim.id));
+    const addedIds = claims
+      .map((claim) => claim.id)
+      .filter((claimId) => !knownClaimIdsRef.current.has(claimId));
+    knownClaimIdsRef.current = currentIds;
+    if (addedIds.length === 0) return;
+
+    if (highlightTimerRef.current !== null) {
+      window.clearTimeout(highlightTimerRef.current);
+    }
+    setNewClaimIds(new Set(addedIds));
+    setNewClaimCount(addedIds.length);
+    highlightTimerRef.current = window.setTimeout(() => {
+      setNewClaimIds(new Set());
+      setNewClaimCount(0);
+      highlightTimerRef.current = null;
+    }, NEW_CLAIM_HIGHLIGHT_DURATION_MS);
+  }, [claims, game.id]);
+
+  useEffect(
+    () => () => {
+      if (highlightTimerRef.current !== null) {
+        window.clearTimeout(highlightTimerRef.current);
+      }
+    },
+    [],
+  );
 
   const isSubmitting = fetcher.state !== "idle";
   const isSavingName = nameFetcher.state !== "idle";
@@ -355,6 +465,40 @@ export function GameControlCenter({
               />
             </div>
           </section>
+
+          {liveClaimUpdatesEnabled ? (
+            <div className="control-live-sync" aria-live="polite">
+              <span className="control-live-sync-dot" aria-hidden="true" />
+              <span
+                className={newClaimCount > 0 ? "control-live-sync-new" : ""}
+              >
+                {newClaimCount > 0
+                  ? `${newClaimCount > 1 ? `+${newClaimCount} ` : ""}New claim${newClaimCount > 1 ? "s" : ""} received`
+                  : revalidator.state !== "idle"
+                    ? "Updating claims…"
+                    : "Live claim updates active"}
+              </span>
+            </div>
+          ) : null}
+
+          {revalidationFailures >= REVALIDATION_FAILURE_WARNING_THRESHOLD ? (
+            <div
+              className="control-live-sync control-live-sync-warning"
+              role="status"
+            >
+              <span>
+                Live claim updates are temporarily unavailable. Existing data is
+                still displayed.
+              </span>
+              <button
+                className="control-refresh-button"
+                type="button"
+                onClick={() => void revalidateControlCenter()}
+              >
+                Refresh now
+              </button>
+            </div>
+          ) : null}
 
           {game.archivedAt ? (
             <div className="control-message control-message-error">
@@ -592,7 +736,13 @@ export function GameControlCenter({
               ) : (
                 <div className="control-list">
                   {filteredClaims.map((claim) => (
-                    <div className="control-claim" key={claim.id}>
+                    <div
+                      className={[
+                        "control-claim",
+                        newClaimIds.has(claim.id) ? "control-claim-new" : "",
+                      ].join(" ")}
+                      key={claim.id}
+                    >
                       <div className="control-claim-top">
                         <div className="control-claim-order">
                           <span className="control-claim-number">

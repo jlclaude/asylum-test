@@ -5,6 +5,28 @@ import {
   hostGameControlPermissions,
   shopifyGameControlPermissions,
 } from "../app/lib/game-control-routes.ts";
+import {
+  LIVE_CLAIM_REVALIDATION_INTERVAL_MS,
+  shouldPollLiveClaims,
+} from "../app/lib/live-claim-updates.ts";
+
+test("live claim polling is limited to active OPEN games", () => {
+  assert.equal(LIVE_CLAIM_REVALIDATION_INTERVAL_MS, 2_500);
+  assert.equal(
+    shouldPollLiveClaims({ status: "OPEN", archivedAt: null }),
+    true,
+  );
+  assert.equal(
+    shouldPollLiveClaims({
+      status: "OPEN",
+      archivedAt: "2026-08-08T12:00:00.000Z",
+    }),
+    false,
+  );
+  for (const status of ["CLOSED", "READY", "IN_PROGRESS", "COMPLETED"]) {
+    assert.equal(shouldPollLiveClaims({ status, archivedAt: null }), false);
+  }
+});
 
 test("Shopify and Host Game Control Center links stay in their authenticated route families", () => {
   const shopify = gameControlRoutes("SHOPIFY_ADMIN", "game-1");
