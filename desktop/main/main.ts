@@ -22,7 +22,6 @@ let facebookView: WebContentsView | null = null;
 let broadcastView: WebContentsView | null = null;
 let currentGameLink = "";
 let currentFacebookPost = "";
-let currentGameId = "";
 let currentBroadcastUrl = `${hostOrigin}/broadcast`;
 let activeGame: ActiveGameContext | null = null;
 let activeGameStore: ActiveGameStore;
@@ -48,8 +47,8 @@ function track(view: WebContentsView, target: "host" | "facebook" | "broadcast")
 
 function safeOrigin(rawUrl: string) { try { return new URL(rawUrl).origin; } catch { return "invalid-url"; } }
 function publishActiveGame() { windowRef?.webContents.send("desktop:active-game", activeGame); }
-function setActiveGame(context: ActiveGameContext) { activeGame = context; currentGameId = context.gameId; currentBroadcastUrl = context.broadcastUrl; void activeGameStore.save(context); if (broadcastView?.webContents.getURL() !== context.broadcastUrl) void navigate(broadcastView!.webContents, context.broadcastUrl); publishActiveGame(); }
-async function clearActiveGame() { activeGame = null; currentGameId = ""; currentBroadcastUrl = `${hostOrigin}/broadcast`; await activeGameStore.clear(); if (broadcastView && broadcastView.webContents.getURL() !== currentBroadcastUrl) await navigate(broadcastView.webContents, currentBroadcastUrl); publishActiveGame(); }
+function setActiveGame(context: ActiveGameContext) { activeGame = context; currentBroadcastUrl = context.broadcastUrl; void activeGameStore.save(context); if (broadcastView?.webContents.getURL() !== context.broadcastUrl) void navigate(broadcastView!.webContents, context.broadcastUrl); publishActiveGame(); }
+async function clearActiveGame() { activeGame = null; currentBroadcastUrl = `${hostOrigin}/broadcast`; await activeGameStore.clear(); if (broadcastView && broadcastView.webContents.getURL() !== currentBroadcastUrl) await navigate(broadcastView.webContents, currentBroadcastUrl); publishActiveGame(); }
 function handleHostNavigation(url: string) { const context = activeGameFromHostUrl(url, hostOrigin); if (context) setActiveGame({ ...context, raffleCode: activeGame?.gameId === context.gameId ? activeGame.raffleCode : null, gameTitle: activeGame?.gameId === context.gameId ? activeGame.gameTitle : null }); }
 
 function createWindow() {
@@ -224,7 +223,7 @@ app.whenReady().then(async () => {
   console.info("[desktop] starting", app.getVersion());
   session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
   obsSettings = new ObsSettingsStore();
-  activeGameStore = new ActiveGameStore(); activeGame = await activeGameStore.load(hostOrigin); if (activeGame) { currentGameId = activeGame.gameId; currentBroadcastUrl = activeGame.broadcastUrl; }
+  activeGameStore = new ActiveGameStore(); activeGame = await activeGameStore.load(hostOrigin); if (activeGame) currentBroadcastUrl = activeGame.broadcastUrl;
   obsController = new ObsController();
   obsAutomation = new ObsAutomationEngine(obsController, obsSettings);
   winnerPresentation = new WinnerPresentationController(() => obsSettings.loadWinnerPresentation());

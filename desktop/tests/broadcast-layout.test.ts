@@ -9,7 +9,11 @@ async function run() {
   const engine = await readFile(join(process.cwd(), "main/obs/ObsAutomationEngine.ts"), "utf8");
   assert.doesNotMatch(route, /<button|<form|<nav|GameModeToolbar|useFetcher/, "production broadcast must remain viewer-only");
   for (const state of ["WAITING", "READY", "SPINNING", "WINNER", "SECOND_CHANCE", "REWARD_CHAMBER", "COMPLETED"]) assert.match(model, new RegExp(`"${state}"`));
-  assert.match(route, /revalidator\.revalidate/); assert.match(route, /1_000/); assert.match(css, /overflow:hidden/); assert.match(css, /prefers-reduced-motion/);
+  assert.match(route, /revalidator\.revalidate/); assert.match(route, /1_000/); assert.match(css, /overflow:\s*hidden/); assert.match(css, /prefers-reduced-motion/);
+  assert.match(css, /grid-template-rows: 110px minmax\(0, 1fr\) 58px/); assert.match(css, /grid-template-columns: minmax\(240px, 280px\) minmax\(620px, 1fr\) minmax\(240px, 300px\)/);
+  assert.match(css, /width: clamp\(520px, 62vh, 760px\)/); assert.match(css, /\.broadcast-brand-logo[^}]*height: 84px/s);
+  assert.match(css, /@media \(max-width: 1399px\)/); assert.match(css, /@media \(max-width: 1099px\)/); assert.match(css, /@media \(max-width: 899px\)/);
+  assert.doesNotMatch(route, /broadcast-lower|winner-area|second-area/); assert.match(route, /broadcast-status-panel/); assert.match(route, /broadcast-result/);
   assert.doesNotMatch(model, /randomInt|winnerEntryIndex\s*=/, "broadcast model must never calculate winners");
   assert.doesNotMatch(model, /facebookHandle|claimId|prizeClaim|payment/i, "broadcast payload must omit sensitive claim data");
   assert.match(engine, /runtimeEnabled = false/); assert.match(main, /new ObsAutomationEngine\(obsController, obsSettings\)/, "production automation must remain hard-disabled");
