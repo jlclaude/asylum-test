@@ -69,7 +69,7 @@ const styles = `
   .control-message { margin-bottom:18px; padding:13px 15px; border-radius:10px; font-size:13px; }
   .control-message-error { border:1px solid #73313a; color:#ffabb3; background:rgba(106,28,39,.3); }
   .control-message-success { border:1px solid #305c40; color:#a7e8ba; background:rgba(29,92,51,.25); }
-  .control-grid { display:grid; grid-template-columns:minmax(0,1.55fr) minmax(300px,.7fr); gap:18px; }
+  .control-grid { display:flex; flex-direction:column; gap:18px; }
   .readiness-panel { margin-bottom:18px; }
   .readiness-head { display:flex;align-items:center;justify-content:space-between;gap:16px;border-bottom:1px solid #35353a;padding-bottom:15px }
   .readiness-head h2 { margin:0;font-size:24px }
@@ -132,6 +132,9 @@ const styles = `
   .control-payment-status p { margin:0 0 5px; color:#898a90; font-size:10px; font-weight:850; letter-spacing:.08em; text-transform:uppercase; }
   .control-payment-status strong { display:block; margin-bottom:10px; }
   .control-copy-status { min-height:19px; margin:11px 0 0; color:#84d49d; font-size:12px; text-align:center; }
+  .control-public-link { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:14px; margin-bottom:18px; }
+  .control-public-link code { min-width:0; overflow:hidden; color:#d4d4d8; font-size:13px; text-overflow:ellipsis; white-space:nowrap; }
+  .control-workflow-section { margin-top:18px; }
   .control-divider { height:1px; margin:21px 0; background:#303034; }
   .control-form { display:grid; gap:13px; }
   .control-field { display:grid; gap:6px; }
@@ -148,7 +151,7 @@ const styles = `
   .game-danger-zone p { color:#c29ba0; line-height:1.55; }
   .game-danger-zone summary { margin-bottom:14px; cursor:pointer; font-weight:850; }
   @media (max-width:1000px) { .control-stats{grid-template-columns:repeat(3,minmax(0,1fr));}.control-grid{grid-template-columns:1fr;} }
-  @media (max-width:700px) { .control-page{padding:18px;}.control-header{align-items:flex-start;flex-direction:column;}.control-stats{grid-template-columns:repeat(2,minmax(0,1fr));}.control-toolbar{flex-direction:column;} }
+  @media (max-width:700px) { .control-page{padding:18px;}.control-header{align-items:flex-start;flex-direction:column;}.control-stats{grid-template-columns:repeat(2,minmax(0,1fr));}.control-toolbar{flex-direction:column;}.control-public-link{grid-template-columns:1fr}.control-public-link code{white-space:normal;overflow-wrap:anywhere;} }
   @media (max-width:460px) { .control-page{padding:13px;}.control-card{padding:18px;}.control-stats{grid-template-columns:1fr;}.control-claim-top{flex-direction:column;}.control-claim-comment{margin-left:0;} }
 `;
 
@@ -182,7 +185,19 @@ export function GameControlCenter({
     csrfToken,
   } = data;
   const routes = gameControlRoutes(routeMode, game.id, csrfToken);
-  useEffect(() => { if (routeMode !== "HOST_PORTAL" || !csrfToken) return; const origin = window.location.origin; updateDesktopActiveGame({ activeGameId: game.id, activeRaffleCode: game.raffleCode, activeGameTitle: game.title, hostCsrfToken: csrfToken, broadcastUrl: `${origin}/host/games/${encodeURIComponent(game.id)}/broadcast`, publicClaimUrl: publicUrl, facebookPost: `${game.title} · ${game.raffleCode}` }); }, [csrfToken, game.id, game.raffleCode, game.title, publicUrl, routeMode]);
+  useEffect(() => {
+    if (routeMode !== "HOST_PORTAL" || !csrfToken) return;
+    const origin = window.location.origin;
+    updateDesktopActiveGame({
+      activeGameId: game.id,
+      activeRaffleCode: game.raffleCode,
+      activeGameTitle: game.title,
+      hostCsrfToken: csrfToken,
+      broadcastUrl: `${origin}/host/games/${encodeURIComponent(game.id)}/broadcast`,
+      publicClaimUrl: publicUrl,
+      facebookPost: `${game.title} · ${game.raffleCode}`,
+    });
+  }, [csrfToken, game.id, game.raffleCode, game.title, publicUrl, routeMode]);
   const csrfField = csrfToken ? (
     <input type="hidden" name="csrfToken" value={csrfToken} />
   ) : null;
@@ -364,6 +379,24 @@ export function GameControlCenter({
             </div>
           ) : null}
 
+          <section
+            className="control-card control-public-link"
+            aria-labelledby="public-claim-link-heading"
+          >
+            <div className="control-section-head">
+              <h2 id="public-claim-link-heading">Public Claim Link</h2>
+              <p>Share this link with raffle participants.</p>
+              <code>{publicUrl}</code>
+            </div>
+            <button
+              className="control-button control-button-primary"
+              type="button"
+              onClick={copyPublicLink}
+            >
+              {copied ? "Copied" : "Copy Link"}
+            </button>
+          </section>
+
           <GameReadinessPanel
             gameStatus={game.status}
             archived={Boolean(game.archivedAt)}
@@ -377,38 +410,6 @@ export function GameControlCenter({
             canManage={permissions.canManageGame}
             canStart={permissions.canStartGame}
           />
-
-          {results ? (
-            <GameResultsSummary
-              results={results}
-              heading={
-                game.status === "COMPLETED"
-                  ? "Completed wheels"
-                  : "Wheel progress"
-              }
-              action={
-                <a
-                  className="game-results-action"
-                  href={`${routes.play}#game-results`}
-                >
-                  Open Game Results
-                </a>
-              }
-            />
-          ) : null}
-          <SecondChanceSummary
-            offset={game.secondChanceOffset}
-            result={secondChance}
-          />
-          {permissions.canCreatePrizeClaims ? (
-            <GamePrizeClaims
-              eligibleWheels={eligiblePrizeWheels}
-              claims={prizeClaims}
-              csrfToken={csrfToken}
-              routeBase={routes.base}
-              routeMode={routeMode}
-            />
-          ) : null}
 
           {fetcher.data?.error ? (
             <div className="control-message control-message-error">
@@ -432,6 +433,112 @@ export function GameControlCenter({
           ) : null}
 
           <section className="control-grid">
+            <section className="control-card control-quick-actions">
+              <div className="control-section-head">
+                <h2>Quick actions</h2>
+                <p>Manage the public game and wheel session.</p>
+              </div>
+              <div className="control-actions">
+                {permissions.canStartGame ? (
+                  <fetcher.Form method="post">
+                    {csrfField}
+                    <button
+                      className="control-button control-button-primary control-button-full"
+                      type="submit"
+                      name="intent"
+                      value="open-wheels"
+                      disabled={isSubmitting}
+                    >
+                      {wheelButtonLabel}
+                    </button>
+                  </fetcher.Form>
+                ) : null}
+                {permissions.canStartGame && results ? (
+                  <fetcher.Form method="post">
+                    {csrfField}
+                    <button
+                      className="control-button control-button-full"
+                      type="submit"
+                      name="intent"
+                      value="open-broadcast"
+                      disabled={isSubmitting}
+                    >
+                      OPEN BROADCAST MODE
+                    </button>
+                  </fetcher.Form>
+                ) : null}
+                <button
+                  className="control-button control-button-secondary control-button-full"
+                  type="button"
+                  onClick={copyPublicLink}
+                >
+                  Copy public claim link
+                </button>
+                {permissions.canManageTemplates ? (
+                  <fetcher.Form className="control-form" method="post">
+                    {csrfField}
+                    <input
+                      type="hidden"
+                      name="intent"
+                      value="save-game-template"
+                    />
+                    <div className="control-field">
+                      <label htmlFor="setupTemplateName">Template name</label>
+                      <input
+                        className="control-input"
+                        id="setupTemplateName"
+                        name="templateName"
+                        maxLength={100}
+                        required
+                        placeholder="Reusable setup name"
+                      />
+                    </div>
+                    <button
+                      className="control-button control-button-secondary control-button-full"
+                      type="submit"
+                      disabled={isSubmitting}
+                    >
+                      Save Game Setup as Template
+                    </button>
+                  </fetcher.Form>
+                ) : null}
+
+                {game.status === "OPEN" ? (
+                  permissions.canManageGame ? (
+                    <fetcher.Form method="post">
+                      {csrfField}
+                      <input type="hidden" name="intent" value="close-game" />
+                      <button
+                        className="control-button control-button-warning control-button-full"
+                        type="submit"
+                        disabled={isSubmitting}
+                      >
+                        Close game
+                      </button>
+                    </fetcher.Form>
+                  ) : null
+                ) : game.status === "CLOSED" ? (
+                  permissions.canManageGame ? (
+                    <fetcher.Form method="post">
+                      {csrfField}
+                      <input type="hidden" name="intent" value="reopen-game" />
+                      <button
+                        className="control-button control-button-secondary control-button-full"
+                        type="submit"
+                        disabled={isSubmitting}
+                      >
+                        Reopen game
+                      </button>
+                    </fetcher.Form>
+                  ) : null
+                ) : null}
+              </div>
+
+              <p className="control-copy-status">
+                {copied ? "Public link copied." : ""}
+              </p>
+            </section>
+
             <article className="control-card">
               <div className="control-section-head">
                 <h2>Claim queue</h2>
@@ -500,7 +607,8 @@ export function GameControlCenter({
                               </span>
                               {claim.facebookHandle ? (
                                 <span>
-                                  Facebook @username (optional): {claim.facebookHandle}
+                                  Facebook @username (optional):{" "}
+                                  {claim.facebookHandle}
                                 </span>
                               ) : null}
                               <span>{formatDate(claim.createdAt)}</span>
@@ -661,149 +769,31 @@ export function GameControlCenter({
               )}
             </article>
 
-            <aside className="control-card">
+            <section className="control-card control-payment-controls">
               <div className="control-section-head">
-                <h2>Quick actions</h2>
-                <p>Manage the public game and wheel session.</p>
+                <h2>Payment Controls</h2>
+                <p>
+                  Review payment readiness and enter claims submitted directly
+                  in your group.
+                </p>
               </div>
-              <div className="control-actions">
-                <div className="control-payment-status">
-                  <p>Payment instructions</p>
-                  <strong>
-                    {paymentInstructionsConfigured
-                      ? "Configured"
-                      : "Not configured"}
-                  </strong>
-                  {permissions.canEditPaymentInstructions ? (
-                    <button
-                      className="control-button control-button-secondary control-button-full"
-                      type="button"
-                      onClick={() => navigate(routes.settings)}
-                    >
-                      Edit Payment Instructions
-                    </button>
-                  ) : null}
-                </div>
-                {permissions.canStartGame ? (
-                  <fetcher.Form method="post">
-                    {csrfField}
-                    <button
-                      className="control-button control-button-primary control-button-full"
-                      type="submit"
-                      name="intent"
-                      value="open-wheels"
-                      disabled={isSubmitting}
-                    >
-                      {wheelButtonLabel}
-                    </button>
-                  </fetcher.Form>
-                ) : null}
-                {permissions.canStartGame && results ? (
-                  <fetcher.Form method="post">
-                    {csrfField}
-                    <button
-                      className="control-button control-button-full"
-                      type="submit"
-                      name="intent"
-                      value="open-broadcast"
-                      disabled={isSubmitting}
-                    >
-                      OPEN BROADCAST MODE
-                    </button>
-                  </fetcher.Form>
-                ) : null}
-                <button
-                  className="control-button control-button-secondary control-button-full"
-                  type="button"
-                  onClick={copyPublicLink}
-                >
-                  Copy public claim link
-                </button>
-                {permissions.canExport ? (
-                  <>
-                    <a
-                      className="control-button control-button-secondary control-button-full"
-                      href={routes.exportUrl("raffle-json")}
-                    >
-                      Export Raffle JSON
-                    </a>
-                    <a
-                      className="control-button control-button-secondary control-button-full"
-                      href={routes.exportUrl("claims-csv")}
-                    >
-                      Export Claims CSV
-                    </a>
-                    <a
-                      className="control-button control-button-secondary control-button-full"
-                      href={routes.exportUrl("winners-csv")}
-                    >
-                      Export Winners CSV
-                    </a>
-                  </>
-                ) : null}
-                {permissions.canManageTemplates ? (
-                  <fetcher.Form className="control-form" method="post">
-                    {csrfField}
-                    <input
-                      type="hidden"
-                      name="intent"
-                      value="save-game-template"
-                    />
-                    <div className="control-field">
-                      <label htmlFor="setupTemplateName">Template name</label>
-                      <input
-                        className="control-input"
-                        id="setupTemplateName"
-                        name="templateName"
-                        maxLength={100}
-                        required
-                        placeholder="Reusable setup name"
-                      />
-                    </div>
-                    <button
-                      className="control-button control-button-secondary control-button-full"
-                      type="submit"
-                      disabled={isSubmitting}
-                    >
-                      Save Game Setup as Template
-                    </button>
-                  </fetcher.Form>
-                ) : null}
-
-                {game.status === "OPEN" ? (
-                  permissions.canManageGame ? (
-                    <fetcher.Form method="post">
-                      {csrfField}
-                      <input type="hidden" name="intent" value="close-game" />
-                      <button
-                        className="control-button control-button-warning control-button-full"
-                        type="submit"
-                        disabled={isSubmitting}
-                      >
-                        Close game
-                      </button>
-                    </fetcher.Form>
-                  ) : null
-                ) : game.status === "CLOSED" ? (
-                  permissions.canManageGame ? (
-                    <fetcher.Form method="post">
-                      {csrfField}
-                      <input type="hidden" name="intent" value="reopen-game" />
-                      <button
-                        className="control-button control-button-secondary control-button-full"
-                        type="submit"
-                        disabled={isSubmitting}
-                      >
-                        Reopen game
-                      </button>
-                    </fetcher.Form>
-                  ) : null
+              <div className="control-payment-status">
+                <p>Payment instructions</p>
+                <strong>
+                  {paymentInstructionsConfigured
+                    ? "Configured"
+                    : "Not configured"}
+                </strong>
+                {permissions.canEditPaymentInstructions ? (
+                  <button
+                    className="control-button control-button-secondary control-button-full"
+                    type="button"
+                    onClick={() => navigate(routes.settings)}
+                  >
+                    Edit Payment Instructions
+                  </button>
                 ) : null}
               </div>
-
-              <p className="control-copy-status">
-                {copied ? "Public link copied." : ""}
-              </p>
               <div className="control-divider" />
               <div className="control-section-head">
                 <h2>Add Facebook claim</h2>
@@ -854,8 +844,8 @@ export function GameControlCenter({
                       }
                     />
                     <small>
-                      Optional. Used only to help identify your Facebook
-                      profile if you know it.
+                      Optional. Used only to help identify your Facebook profile
+                      if you know it.
                     </small>
                   </div>
                   <div className="control-field">
@@ -905,8 +895,70 @@ export function GameControlCenter({
                   </button>
                 </fetcher.Form>
               )}
-            </aside>
+            </section>
           </section>
+          <div className="control-workflow-section">
+            <SecondChanceSummary
+              offset={game.secondChanceOffset}
+              result={secondChance}
+            />
+          </div>
+          {permissions.canExport ? (
+            <section
+              className="control-card control-workflow-section"
+              aria-labelledby="exports-heading"
+            >
+              <div className="control-section-head">
+                <h2 id="exports-heading">Exports</h2>
+                <p>Download persisted raffle, claim, and winner records.</p>
+              </div>
+              <div className="control-actions">
+                <a
+                  className="control-button control-button-secondary control-button-full"
+                  href={routes.exportUrl("raffle-json")}
+                >
+                  Export Raffle JSON
+                </a>
+                <a
+                  className="control-button control-button-secondary control-button-full"
+                  href={routes.exportUrl("claims-csv")}
+                >
+                  Export Claims CSV
+                </a>
+                <a
+                  className="control-button control-button-secondary control-button-full"
+                  href={routes.exportUrl("winners-csv")}
+                >
+                  Export Winners CSV
+                </a>
+              </div>
+            </section>
+          ) : null}
+          {permissions.canCreatePrizeClaims ? (
+            <GamePrizeClaims
+              gameId={game.id}
+              eligibleWheels={eligiblePrizeWheels}
+              claims={prizeClaims}
+              csrfToken={csrfToken}
+              routeBase={routes.base}
+              routeMode={routeMode}
+            />
+          ) : null}
+          <GameResultsSummary
+            results={results}
+            secondChance={secondChance}
+            storageKey={`asylum:official-record:${game.id}`}
+            action={
+              results ? (
+                <a
+                  className="game-results-action"
+                  href={`${routes.play}#game-results`}
+                >
+                  Open Game Results
+                </a>
+              ) : null
+            }
+          />
           <GameAdministration
             game={game}
             csrfToken={csrfToken}
