@@ -39,10 +39,11 @@ export default function ProductionBroadcast() {
   const wheelVisible = Boolean(wheel && entries.length && state !== "WAITING");
   return <main className={`production-broadcast state-${state.toLowerCase()}`}>
     <div className="broadcast-safe-zone" aria-hidden="true" />
+    <AsylumLogo className="broadcast-watermark" />
     <header className="broadcast-header">
-      <div className="header-identity"><span>RAFFLE CODE</span><strong>{broadcast?.game.raffleCode ?? "—"}</strong><small>{broadcast?.game.title ?? "Broadcast Standby"}</small></div>
+      <div className="header-identity"><span>RAFFLE CODE</span><strong>{broadcast?.game.raffleCode ?? "—"}</strong><small><b>GAME</b>{broadcast?.game.title ?? "Broadcast Standby"}</small></div>
       <AsylumLogo className="broadcast-brand-logo" />
-      <div className="header-wheel"><span>CURRENT WHEEL</span><strong>{wheel?.label ?? "Awaiting production"}</strong><small>{entries.length ? `${entries.length} entries` : "No entries loaded"}</small></div>
+      <div className="header-wheel"><span>CURRENT WHEEL</span><strong>{wheel?.label ?? "Awaiting production"}</strong><small><b>ENTRIES</b>{entries.length || "—"}</small></div>
     </header>
     <section className="broadcast-main" aria-live="polite">
       {state === "WAITING" ? <section className="broadcast-state-card waiting-card"><AsylumLogo className="waiting-logo" /><span>ASYLUM GAMES</span><strong>Raffle {broadcast?.game.raffleCode ?? "—"}</strong><h1>{data.error === "NO_ACTIVE_GAME" ? "SELECT AN ACTIVE RAFFLE" : data.error === "GAME_NOT_FOUND" ? "BROADCAST TEMPORARILY UNAVAILABLE" : "WAITING TO BEGIN"}</h1><small>{data.error ? "Retrying…" : "Drawing starting soon"}</small></section> : null}
@@ -50,18 +51,22 @@ export default function ProductionBroadcast() {
       {state !== "WAITING" && state !== "COMPLETED" ? <>
         <aside className="broadcast-status-panel">
           <div><span>CURRENT STATUS</span><strong>{state === "READY" ? "READY TO SPIN" : state.replace("_", " ")}</strong></div>
-          {persistedResult ? <div><span>{reward ? "CURRENT REWARD" : "CURRENT WINNER"}</span><strong>{persistedResult}</strong></div> : null}
-          {secondChanceNames.length ? <div className="compact-second-chance"><span>SECOND CHANCE</span>{secondChanceNames.map((name, index) => <strong key={`${name}-${index}`}>{name}</strong>)}</div> : null}
+          <div><span>CURRENT WINNER</span><strong>{!reward && persistedResult ? persistedResult : "AWAITING RESULT"}</strong></div>
+          <div className="compact-second-chance"><span>SECOND CHANCE</span>{secondChanceNames.length ? secondChanceNames.map((name, index) => <strong key={`${name}-${index}`}>{name}</strong>) : <strong>PENDING</strong>}</div>
         </aside>
         <section className="broadcast-stage">
           {wheelVisible ? <div className={`broadcast-wheel ${state === "SPINNING" ? "is-spinning" : ""}`}><WheelCanvas entries={entries} type={wheel!.type} themeKey="classic" rotation={0} spinning={state === "SPINNING"} duration={null} pointerTick={0} pointerIntensity={state === "SPINNING" ? 1 : .35} winnerEntryIndex={wheel!.winnerEntryIndex} celebrating={wheel!.status === "COMPLETED"} /></div> : null}
           {state === "SPINNING" ? <div className="spinning-bug">SPINNING</div> : null}
           {persistedResult ? <div className="broadcast-result"><span>{reward ? "REWARD CHAMBER RESULT" : "WINNER"}</span><strong>{persistedResult}</strong></div> : null}
         </section>
-        <aside className="broadcast-next-panel"><span>UP NEXT</span><strong>{broadcast?.upcomingPrize ?? "TO BE ANNOUNCED"}</strong><small>{reward ? "REWARD CHAMBER" : "ASYLUM GAMES LIVE"}</small></aside>
+        <aside className="broadcast-next-panel">
+          <div><span>UP NEXT</span><strong>{broadcast?.upcomingPrize ?? "TO BE ANNOUNCED"}</strong></div>
+          <div><span>REWARD CHAMBER</span><strong>{broadcast?.completed.reward ?? (reward ? persistedResult ?? "IN PROGRESS" : "PENDING")}</strong></div>
+          <div><span>UPCOMING PRIZE</span><strong>{broadcast?.upcomingPrize ?? "TO BE ANNOUNCED"}</strong></div>
+        </aside>
       </> : null}
     </section>
     {connectionLost ? <div className="broadcast-connection-overlay"><strong>BROADCAST TEMPORARILY UNAVAILABLE</strong><span>Connection lost · Retrying…</span></div> : null}
-    <footer><span>ASYLUMGAMES.COM</span><span>FACEBOOK · ASYLUM GAMES</span><span>UPCOMING PRIZE · {broadcast?.upcomingPrize ?? "TO BE ANNOUNCED"}</span></footer>
+    <footer><span>ASYLUMGAMES.COM</span><span>FACEBOOK · ASYLUM GAMES</span><span>BONUS PRIZE · {broadcast?.upcomingPrize ?? "TO BE ANNOUNCED"}</span></footer>
   </main>;
 }

@@ -10,8 +10,8 @@ async function run() {
   assert.doesNotMatch(route, /<button|<form|<nav|GameModeToolbar|useFetcher/, "production broadcast must remain viewer-only");
   for (const state of ["WAITING", "READY", "SPINNING", "WINNER", "SECOND_CHANCE", "REWARD_CHAMBER", "COMPLETED"]) assert.match(model, new RegExp(`"${state}"`));
   assert.match(route, /revalidator\.revalidate/); assert.match(route, /1_000/); assert.match(css, /overflow:\s*hidden/); assert.match(css, /prefers-reduced-motion/);
-  assert.match(css, /grid-template-rows: 110px minmax\(0, 1fr\) 58px/); assert.match(css, /grid-template-columns: minmax\(240px, 280px\) minmax\(620px, 1fr\) minmax\(240px, 300px\)/);
-  assert.match(css, /width: clamp\(520px, 62vh, 760px\)/); assert.match(css, /\.broadcast-brand-logo[^}]*height: 84px/s);
+  assert.match(css, /grid-template-rows: 110px minmax\(0, 1fr\) 60px/); assert.match(css, /grid-template-columns: 260px minmax\(0, 1fr\) 260px/);
+  assert.match(css, /width: min\(65vw, 82vh, 890px, calc\(100vh - 190px\)\)/); assert.match(css, /\.broadcast-brand-logo[^}]*height: 84px/s); assert.match(css, /\.broadcast-watermark[^}]*opacity: \.05/s);
   assert.match(css, /@media \(max-width: 1399px\)/); assert.match(css, /@media \(max-width: 1099px\)/); assert.match(css, /@media \(max-width: 899px\)/);
   assert.doesNotMatch(route, /broadcast-lower|winner-area|second-area/); assert.match(route, /broadcast-status-panel/); assert.match(route, /broadcast-result/);
   assert.match(route, /BROADCAST TEMPORARILY UNAVAILABLE/); assert.match(route, /SELECT AN ACTIVE RAFFLE/); assert.match(route, /RAFFLE COMPLETE/); assert.match(route, /READY TO SPIN/); assert.match(route, /REWARD CHAMBER RESULT/);
