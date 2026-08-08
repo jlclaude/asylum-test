@@ -11,7 +11,7 @@ import { validateObsConfig } from "./obs/obs-validation";
 import { exportStudioProfile, importStudioProfile, validateObsSceneMappings } from "./obs/obs-scene-mappings";
 import { ObsAutomationEngine, type ObsAutomationEvent } from "./obs/ObsAutomationEngine";
 import { WinnerPresentationController, type WinnerOverlayState, type WinnerPresentationSettings } from "./winner/WinnerPresentationController";
-import { ActiveGameStore, activeGameFromHostUrl, broadcastUrlFor, validGameId, type ActiveGameContext } from "./active-game";
+import { ActiveGameStore, activeGameFromHostUrl, broadcastUrlFor, obsBroadcastUrlFor, validGameId, type ActiveGameContext } from "./active-game";
 
 const hostUrl = process.env.ASYLUM_DESKTOP_HOST_URL ?? `${ASYLUM_ORIGIN}/host`;
 const hostOrigin = new URL(hostUrl).origin;
@@ -73,7 +73,7 @@ function createWindow() {
     sandbox: true, devTools: devToolsEnabled,
   } });
   facebookView = createFacebookView(devToolsEnabled);
-  broadcastView = new WebContentsView({ webPreferences: { partition: "persist:asylum-broadcast", preload: join(__dirname, "../preload/broadcast-preload.js"), contextIsolation: true, nodeIntegration: false, sandbox: true, devTools: devToolsEnabled } });
+  broadcastView = new WebContentsView({ webPreferences: { partition: "persist:asylum-host", preload: join(__dirname, "../preload/broadcast-preload.js"), contextIsolation: true, nodeIntegration: false, sandbox: true, devTools: devToolsEnabled } });
   windowRef.contentView.addChildView(hostView);
   windowRef.contentView.addChildView(facebookView);
   windowRef.contentView.addChildView(broadcastView);
@@ -83,7 +83,7 @@ function createWindow() {
   track(hostView, "host"); track(facebookView, "facebook"); track(broadcastView, "broadcast");
   hostView.webContents.on("did-navigate", (_event, url) => handleHostNavigation(url));
   hostView.webContents.on("did-navigate-in-page", (_event, url) => handleHostNavigation(url));
-  broadcastView.webContents.session.webRequest.onCompleted({ urls: [`${hostOrigin}/broadcast*`] }, (details) => { if (details.resourceType === "mainFrame" && details.statusCode >= 400 && details.url === currentBroadcastUrl) status("broadcast", "failed"); });
+  broadcastView.webContents.session.webRequest.onCompleted({ urls: [`${hostOrigin}/host/games/*/broadcast*`, `${hostOrigin}/broadcast*`] }, (details) => { if (details.resourceType === "mainFrame" && details.statusCode >= 400 && details.url === currentBroadcastUrl) status("broadcast", "failed"); });
   void navigate(hostView.webContents, hostUrl);
   void navigate(facebookView.webContents, facebookGroupUrl);
   void navigate(broadcastView.webContents, currentBroadcastUrl);
@@ -110,6 +110,8 @@ function registerIpc() {
   ipcMain.handle("host:reload", (event) => { if (fromShell(event)) hostView?.webContents.reload(); });
   ipcMain.handle("host:open-portal", (event) => fromShell(event) && hostView ? navigate(hostView.webContents, hostUrl) : undefined);
   ipcMain.handle("broadcast:retry", (event) => fromShell(event) && broadcastView ? navigate(broadcastView.webContents, currentBroadcastUrl) : undefined);
+  ipcMain.handle("broadcast:copy-url", (event) => { if (!fromShell(event) || !activeGame) return false; clipboard.writeText(activeGame.broadcastUrl); return true; });
+  ipcMain.handle("broadcast:copy-obs-url", (event) => { if (!fromShell(event) || !activeGame) return false; clipboard.writeText(obsBroadcastUrlFor(activeGame.gameId, hostOrigin)); return true; });
   ipcMain.handle("broadcast:set-scale", (event, scale: unknown) => { if (!fromShell(event) || !broadcastView || ![1, 1.25, 1.5].includes(Number(scale))) return false; broadcastView.webContents.setZoomFactor(Number(scale)); return true; });
   ipcMain.handle("broadcast:set-safe-areas", (event, visible: unknown) => { if (!fromShell(event) || !broadcastView || typeof visible !== "boolean") return false; void broadcastView.webContents.executeJavaScript(`document.documentElement.classList.toggle("show-broadcast-safe-areas", ${visible})`); return true; });
   ipcMain.handle("active-game:select", (event, gameId: unknown, force: unknown) => { if (!fromShell(event) || !validGameId(gameId) || (force !== undefined && typeof force !== "boolean")) return false; return setActiveGame({ gameId, sourceUrl: "desktop-selection", broadcastUrl: broadcastUrlFor(gameId, hostOrigin), raffleCode: null, gameTitle: null, locked: false }, force === true); });
@@ -139,7 +141,7 @@ function registerIpc() {
     if (typeof candidate.activeRaffleCode !== "string" || candidate.activeRaffleCode.length > 100) return false;
     if (typeof candidate.activeGameTitle !== "string" || candidate.activeGameTitle.length > 512) return false;
     if (typeof candidate.broadcastUrl !== "string" || !isAsylumUrl(candidate.broadcastUrl, hostOrigin)) return false;
-    const broadcastUrl = new URL(candidate.broadcastUrl); if (broadcastUrl.pathname !== "/broadcast" || broadcastUrl.searchParams.get("gameId") !== candidate.activeGameId) return false;
+    const broadcastUrl = new URL(candidate.broadcastUrl); if (broadcastUrl.pathname !== `/host/games/${candidate.activeGameId}/broadcast` || broadcastUrl.search) return false;
     if (typeof candidate.publicClaimUrl !== "string" || !isAsylumUrl(candidate.publicClaimUrl, hostOrigin)) return false;
     if (typeof candidate.facebookPost !== "string" || candidate.facebookPost.length > 10_000) return false;
     currentGameLink = candidate.publicClaimUrl;

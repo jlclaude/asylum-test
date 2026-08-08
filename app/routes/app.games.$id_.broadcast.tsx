@@ -2,10 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useFetcher, useLoaderData, useLocation, useRevalidator } from "react-router";
 
 import { BroadcastCompletion } from "../components/broadcast/BroadcastCompletion";
-import { SpinMusicControls } from "../components/audio/SpinMusicControls";
-import { BroadcastGameHeader } from "../components/broadcast/BroadcastGameHeader";
+import { BroadcastPresentation } from "../components/broadcast/BroadcastPresentation";
 import { BroadcastResultAcceptance } from "../components/broadcast/BroadcastResultAcceptance";
-import { BroadcastWheelRail } from "../components/broadcast/BroadcastWheelRail";
 import { GameModeShortcuts } from "../components/wheel/GameModeShortcuts";
 import { GameModeToolbar } from "../components/wheel/GameModeToolbar";
 import { WheelSection } from "../components/wheel/WheelSection";
@@ -24,6 +22,7 @@ import "../styles/asylum-brand.css";
 import "../styles/game-results.css";
 import "../styles/wheel-studio.css";
 import "../styles/broadcast-mode.css";
+import "../styles/broadcast-presentation.css";
 
 export const loader = gameModeLoader;
 export const action = gameModeAction;
@@ -132,29 +131,27 @@ export default function BroadcastModePage() {
     "--theme-muted": theme.muted,
     "--theme-value": theme.valuePrimary,
   } as React.CSSProperties;
+  const activeIndex = activeWheel ? wheels.indexOf(activeWheel) : -1;
+  const nextWheel = activeIndex >= 0 ? wheels.slice(activeIndex + 1).find((wheel) => wheel.status !== "COMPLETED") ?? null : null;
+  const rewardWheel = [...wheels].reverse().find((wheel) => wheel.type === "VALUE" && wheel.status === "COMPLETED" && wheel.winnerValue) ?? null;
+  const activeResult = activeWheel?.winnerDisplayName ?? activeWheel?.winnerValue ?? null;
+  const secondChanceItems = secondChance ? [
+    ...(secondChance.beforeDisplayName ? [{ label: `−${game.secondChanceOffset} OFFSET`, value: secondChance.beforeDisplayName }] : []),
+    ...(secondChance.afterDisplayName ? [{ label: `+${game.secondChanceOffset} OFFSET`, value: secondChance.afterDisplayName }] : []),
+  ] : [];
+  const triggerOperatorAction = (operatorAction: WheelOperatorAction) => { const response = runAction(operatorAction); if (response.message) setMessage(response.message); };
 
   return (
     <main ref={fullscreenTarget} className="studio-page broadcast-page" style={variables}>
-      <div className="broadcast-shell">
-        <BroadcastGameHeader title={game.title} raffleCode={game.raffleCode} status={game.status} />
-
-        <div className="broadcast-toolbar">
-          <a href={`${routeBase}/games/${game.id}/play`} onClick={stopAllWheelMusic}>← Normal Game Mode</a>
-          <select value={themeKey} onChange={(event) => setThemeKey(event.target.value as AsylumThemeKey)} aria-label="Asylum theme">
-            {Object.values(ASYLUM_THEMES).map((option) => <option key={option.key} value={option.key}>{option.label}</option>)}
-          </select>
-        </div>
-
-        <GameModeToolbar
-          activeWheel={operatorState ?? (activeWheel ? { id: activeWheel.id, label: activeWheel.label, status: activeWheel.status, selectedDuration: activeWheel.spinDurationSeconds, spinning: activeWheel.status === "SPINNING" } : null)}
-          muted={muted}
-          fullscreen={isFullscreen}
-          onToggleMuted={toggleMuted}
-          onToggleFullscreen={() => { void toggleBroadcastFullscreen(); }}
-        />
-        <SpinMusicControls />
-
-        {activeWheel ? (
+      <BroadcastPresentation
+        healthState={finalResultAccepted ? "COMPLETED" : activeWheel?.type === "VALUE" && activeWheel.status !== "READY" ? "REWARD_CHAMBER" : activeWheel?.status === "SPINNING" || operatorState?.spinning ? "SPINNING" : activeWheel?.status === "COMPLETED" ? secondChanceItems.length ? "SECOND_CHANCE" : "WINNER" : activeWheel ? "READY" : "WAITING"}
+        info={{ gameTitle: game.title, raffleCode: game.raffleCode, gameStatus: game.status, wheelLabel: activeWheel?.label ?? null, wheelSequence: activeWheel ? `${activeIndex + 1} / ${wheels.length}` : null, wheelStatus: operatorState?.spinning ? "SPINNING" : activeWheel?.status ?? "WAITING", entryCount: activeWheel?.entries.length ?? 0, winner: activeWheel?.type === "NAME" ? activeResult : null, secondChance: secondChanceItems, upNext: nextWheel?.label ?? null, reward: rewardWheel?.winnerValue ?? (activeWheel?.type === "VALUE" ? activeResult : null), bonus: nextWheel?.label ?? null, spinning: operatorState?.spinning ?? activeWheel?.status === "SPINNING" }}
+        operatorTools={<>
+          <div className="broadcast-toolbar"><a href={`${routeBase}/games/${game.id}/play`} onClick={stopAllWheelMusic}>← Normal Game Mode</a><select value={themeKey} onChange={(event) => setThemeKey(event.target.value as AsylumThemeKey)} aria-label="Asylum theme">{Object.values(ASYLUM_THEMES).map((option) => <option key={option.key} value={option.key}>{option.label}</option>)}</select></div>
+          <div className="broadcast-operator-actions"><button type="button" onClick={() => { const response = navigateWheel(-1); if (response.message) setMessage(response.message); }}>Previous Wheel</button><button type="button" onClick={() => triggerOperatorAction("shuffle-wheel")}>Shuffle</button><button type="button" onClick={() => triggerOperatorAction("select-duration")}>Random Time</button><button type="button" onClick={() => triggerOperatorAction("spin-wheel")}>Spin</button><button type="button" onClick={() => { const response = navigateWheel(1); if (response.message) setMessage(response.message); }}>Next Wheel</button></div>
+          <GameModeToolbar activeWheel={operatorState ?? (activeWheel ? { id: activeWheel.id, label: activeWheel.label, status: activeWheel.status, selectedDuration: activeWheel.spinDurationSeconds, spinning: activeWheel.status === "SPINNING" } : null)} muted={muted} fullscreen={isFullscreen} onToggleMuted={toggleMuted} onToggleFullscreen={() => { void toggleBroadcastFullscreen(); }} />
+        </>}
+        wheel={activeWheel ? (
           <section className="broadcast-stage" aria-label={`Active wheel: ${activeWheel.label}`}>
             <WheelSection
               ref={wheelRef}
@@ -177,27 +174,18 @@ export default function BroadcastModePage() {
         ) : (
           <section className="broadcast-empty"><h2>Broadcast unavailable</h2><p>Begin Game Mode to build the containment wheels.</p></section>
         )}
-
-        {activeWheel?.status === "COMPLETED" && (activeWheel.winnerDisplayName ?? activeWheel.winnerValue) ? (
+        resultAction={activeWheel?.status === "COMPLETED" && activeResult ? (
           <BroadcastResultAcceptance
             key={activeWheel.id}
             type={activeWheel.type}
-            result={(activeWheel.winnerDisplayName ?? activeWheel.winnerValue) as string}
+            result={activeResult}
             accepted={acceptedIds.has(activeWheel.id)}
             onAccept={() => acceptResult(activeWheel.id)}
           />
         ) : null}
-
-        <BroadcastWheelRail wheels={wheels} activeId={activeWheel?.id ?? null} onSelect={setActiveId} />
-        {results?.completedAt && finalResultAccepted ? <BroadcastCompletion gameId={game.id} gameTitle={game.title} results={results} secondChance={secondChance} routeBase={routeBase} /> : null}
+        overlay={results?.completedAt && finalResultAccepted ? <BroadcastCompletion gameId={game.id} gameTitle={game.title} results={results} secondChance={secondChance} routeBase={routeBase} /> : null}
+      />
         <GameModeShortcuts message={message} />
-
-        <footer className="studio-statusbar broadcast-statusbar">
-          <div><i aria-hidden="true" /> BROADCAST LINK ACTIVE</div>
-          <strong>ASYLUM CONTAINMENT SYSTEM</strong>
-          <span>S · T · SPACE · ↑/↓ · F · M</span>
-        </footer>
-      </div>
     </main>
   );
 }

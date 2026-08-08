@@ -6,7 +6,8 @@ export type ActiveGameContext = { gameId: string; sourceUrl: string; broadcastUr
 const GAME_ID = /^[A-Za-z0-9_-]{8,200}$/;
 
 export function validGameId(value: unknown): value is string { return typeof value === "string" && value !== "new" && GAME_ID.test(value); }
-export function broadcastUrlFor(gameId: string, trustedOrigin: string) { return `${trustedOrigin}/broadcast?gameId=${encodeURIComponent(gameId)}`; }
+export function broadcastUrlFor(gameId: string, trustedOrigin: string) { return `${trustedOrigin}/host/games/${encodeURIComponent(gameId)}/broadcast`; }
+export function obsBroadcastUrlFor(gameId: string, trustedOrigin: string) { return `${trustedOrigin}/broadcast?gameId=${encodeURIComponent(gameId)}`; }
 export function activeGameFromHostUrl(rawUrl: string, trustedOrigin: string): ActiveGameContext | null {
   try {
     const url = new URL(rawUrl); if (url.origin !== trustedOrigin) return null;

@@ -23,7 +23,7 @@ contextBridge.exposeInMainWorld("asylumDesktop", {
     openExternal: () => invoke("facebook:open-external"),
     clearSession: () => invoke("facebook:clear-session"),
   },
-  broadcast: { retry: () => invoke("broadcast:retry"), getHealth: () => invoke("broadcast:health:get"), setScale: (scale: number) => invoke("broadcast:set-scale", scale), setSafeAreas: (visible: boolean) => invoke("broadcast:set-safe-areas", visible) },
+  broadcast: { retry: () => invoke("broadcast:retry"), copyUrl: () => invoke("broadcast:copy-url"), copyObsUrl: () => invoke("broadcast:copy-obs-url"), getHealth: () => invoke("broadcast:health:get"), setScale: (scale: number) => invoke("broadcast:set-scale", scale), setSafeAreas: (visible: boolean) => invoke("broadcast:set-safe-areas", visible) },
   activeGame: { get: () => invoke("active-game:get"), select: (gameId: string, force = false) => invoke("active-game:select", gameId, force), setLock: (locked: boolean) => invoke("active-game:set-lock", locked), clear: () => invoke("active-game:clear") },
   integration: {
     copyGameLink: () => invoke("integration:copy-game-link"),

@@ -182,7 +182,7 @@ export function GameControlCenter({
     csrfToken,
   } = data;
   const routes = gameControlRoutes(routeMode, game.id, csrfToken);
-  useEffect(() => { if (routeMode !== "HOST_PORTAL") return; const origin = window.location.origin; updateDesktopActiveGame({ activeGameId: game.id, activeRaffleCode: game.raffleCode, activeGameTitle: game.title, broadcastUrl: `${origin}/broadcast?gameId=${encodeURIComponent(game.id)}`, publicClaimUrl: publicUrl, facebookPost: `${game.title} · ${game.raffleCode}` }); }, [game.id, game.raffleCode, game.title, publicUrl, routeMode]);
+  useEffect(() => { if (routeMode !== "HOST_PORTAL") return; const origin = window.location.origin; updateDesktopActiveGame({ activeGameId: game.id, activeRaffleCode: game.raffleCode, activeGameTitle: game.title, broadcastUrl: `${origin}/host/games/${encodeURIComponent(game.id)}/broadcast`, publicClaimUrl: publicUrl, facebookPost: `${game.title} · ${game.raffleCode}` }); }, [game.id, game.raffleCode, game.title, publicUrl, routeMode]);
   const csrfField = csrfToken ? (
     <input type="hidden" name="csrfToken" value={csrfToken} />
   ) : null;

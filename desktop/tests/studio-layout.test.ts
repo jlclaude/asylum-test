@@ -45,13 +45,14 @@ async function run() {
   assert.match(winnerController, /handled\.has\(identity\)/); assert.match(winnerController, /audioDataUrl/); assert.doesNotMatch(renderer, /audioFile/, "shell renderer must not receive audio filesystem paths");
   assert.match(winnerOverlay, /prefers-reduced-motion/); assert.doesNotMatch(winnerOverlay, /loop\s*=/);
   assert.match(main, /ASYLUM_DESKTOP_DEVTOOLS === "1"/); assert.doesNotMatch(main, /if \(!app\.isPackaged\).*openDevTools/);
-  assert.match(main, /new WebContentsView\(\{ webPreferences: \{ partition: "persist:asylum-broadcast"/);
+  assert.match(main, /new WebContentsView\(\{ webPreferences: \{ partition: "persist:asylum-host"[\s\S]*broadcast-preload\.js/);
   for (const id of ["broadcast-status-strip", "broadcast-fullscreen", "broadcast-clean", "broadcast-scale", "broadcast-safe-areas", "lock-active-game", "broadcast-updated"]) assert.match(html, new RegExp(`id="${id}"`));
   assert.match(css, /aspect-ratio:16 \/ 9/); assert.match(css, /body\.broadcast-clean/); assert.match(css, /body\.broadcast-fullscreen/);
   assert.match(renderer, /event\.key === "F11"/); assert.match(renderer, /input, textarea, select, \[contenteditable=true\]/); assert.match(renderer, /\{ b: "broadcast", h: "host", f: "facebook", s: "obs" \}/);
   assert.match(renderer, /confirm\("Clear the active raffle/); assert.match(renderer, /Switch anyway/); assert.match(renderer, /Broadcast state may be stale|broadcast-stale/);
   assert.match(main, /activeGame\?\.locked/); assert.match(main, /active-game:set-lock/); assert.match(main, /event\.sender !== broadcastView\?\.webContents/);
   assert.match(main, /broadcast:set-scale/); assert.match(main, /broadcast:set-safe-areas/); assert.match(main, /broadcast-preload\.js/);
+  assert.match(html, /Copy Broadcast URL/); assert.match(html, /Copy OBS Broadcast URL/); assert.match(main, /broadcast:copy-obs-url/);
   console.info("Studio layout and fallback tests passed");
 }
 void run().catch((error) => { console.error(error); process.exitCode = 1; });

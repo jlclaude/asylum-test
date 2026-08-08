@@ -39,6 +39,8 @@ action("copy-link", window.asylumDesktop.integration.copyGameLink); action("copy
 action("host-retry", window.asylumDesktop.host.retry); action("reload-host", window.asylumDesktop.host.reload); action("external-host", window.asylumDesktop.host.openExternal);
 action("facebook-retry", window.asylumDesktop.facebook.retry); action("facebook-error-external", window.asylumDesktop.facebook.openExternal);
 action("broadcast-retry", window.asylumDesktop.broadcast.retry);
+action("copy-broadcast-url", async () => { if (await window.asylumDesktop.broadcast.copyUrl()) el("broadcast-context").textContent = "Authenticated Host Broadcast URL copied."; });
+action("copy-obs-broadcast-url", async () => { if (await window.asylumDesktop.broadcast.copyObsUrl()) el("broadcast-context").textContent = "Public read-only OBS Broadcast URL copied."; });
 el("select-active-game").addEventListener("click", async () => { const value = prompt("Enter the active game ID:")?.trim(); if (!value) return; const force = Boolean(activeGameContext?.locked && activeGameContext.gameId !== value); if (force && !confirm(`Active raffle is locked to ${activeGameContext?.raffleCode ?? activeGameContext?.gameId}. Switch anyway?`)) return; await window.asylumDesktop.activeGame.select(value, force); });
 el("clear-active-game").addEventListener("click", () => { if (confirm("Clear the active raffle from Broadcast?")) void window.asylumDesktop.activeGame.clear(); });
 el("lock-active-game").addEventListener("click", () => { if (activeGameContext) void window.asylumDesktop.activeGame.setLock(!activeGameContext.locked); });
