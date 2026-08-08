@@ -16,10 +16,11 @@ async function run() {
   assert.match(renderer, /panel === "facebook" \? rect\(facebookRegion\) : null/, "Studio must hide the Facebook native view");
   assert.match(renderer, /window\.asylumDesktop\?\.obs/, "Studio must guard a missing OBS preload bridge");
   assert.match(renderer, /showStudioFailure/, "renderer errors must produce the Studio fallback");
-  assert.match(renderer, /PREVIEW_INTERVAL_MS = 500/); assert.match(renderer, /previewInFlight/);
+  assert.match(renderer, /PREVIEW_INTERVAL_MS = 1_000/); assert.match(renderer, /previewInFlight/);
   assert.match(renderer, /document\.visibilityState === "visible"/); assert.match(renderer, /panel === "obs"/);
   assert.match(renderer, /beforeunload.*stopPreviewPolling/); assert.doesNotMatch(renderer, /writeFile|imageFilePath/);
   assert.match(renderer, /candidate\.onerror/); assert.match(renderer, /new Image\(\)/, "frames must decode before replacing the visible preview");
+  assert.match(html, /Test Preview/); assert.match(html, /Preview bytes:/); assert.match(renderer, /testProgramPreview/);
   console.info("Studio layout and fallback tests passed");
 }
 void run().catch((error) => { console.error(error); process.exitCode = 1; });

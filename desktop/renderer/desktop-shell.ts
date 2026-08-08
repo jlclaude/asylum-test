@@ -13,7 +13,7 @@ let currentObsState: ObsState | null = null;
 let previewTimer: number | null = null;
 let previewInFlight = false;
 let previewScene: string | null = null;
-const PREVIEW_INTERVAL_MS = 500;
+const PREVIEW_INTERVAL_MS = 1_000;
 
 const el = <T extends HTMLElement>(id: string) => document.querySelector<T>(`#${id}`)!;
 function rect(element: HTMLElement) { const value = element.getBoundingClientRect(); return { x: Math.round(value.x), y: Math.round(value.y), width: Math.round(value.width), height: Math.round(value.height) }; }
@@ -56,20 +56,25 @@ function setPreviewPlaceholder(message: string, status = message) {
   el("preview-status").textContent = status;
 }
 function previewShouldRun() { return Boolean(obsApi && panel === "obs" && document.visibilityState === "visible" && currentObsState?.connection === "CONNECTED"); }
-async function requestPreviewFrame() {
+function previewByteLength(dataUrl: string) { const base64 = dataUrl.slice(dataUrl.indexOf(",") + 1); return Math.max(0, Math.floor(base64.length * 3 / 4) - (base64.endsWith("==") ? 2 : base64.endsWith("=") ? 1 : 0)); }
+async function requestPreviewFrame(diagnostic = false) {
   if (!previewShouldRun() || previewInFlight || !obsApi) return;
   previewInFlight = true; el("preview-status").textContent = "Updating";
   try {
-    const result = await obsApi.getProgramPreview();
+    const result = diagnostic ? await obsApi.testProgramPreview() : await obsApi.getProgramPreview();
     if (!previewShouldRun()) return;
-    if (!result.ok || !result.value?.imageDataUrl) { setPreviewPlaceholder(result.error ?? "Preview temporarily unavailable.", "Error"); return; }
+    if (!result.ok || !result.value?.imageDataUrl) {
+      const message = result.error === "Preview source unavailable." ? result.error : "Preview unavailable\nOBS is connected, but no preview frame was returned.";
+      setPreviewPlaceholder(message, "Error"); return;
+    }
     const candidate = new Image();
     await new Promise<void>((resolve, reject) => { candidate.onload = () => resolve(); candidate.onerror = () => reject(new Error("invalid preview image")); candidate.src = result.value!.imageDataUrl!; });
     if (!previewShouldRun()) return;
     const image = el<HTMLImageElement>("program-preview-image");
     image.src = candidate.src; image.hidden = false; el("program-preview-placeholder").hidden = true;
     previewScene = result.value.sceneName; el("preview-scene").textContent = previewScene ?? "—"; el("preview-status").textContent = "Live";
-  } catch { if (previewShouldRun()) setPreviewPlaceholder("Preview temporarily unavailable.", "Error"); }
+    el("preview-bytes").textContent = String(previewByteLength(result.value.imageDataUrl)); el("preview-source").textContent = previewScene ?? "—"; el("preview-last-frame").textContent = new Date().toLocaleTimeString();
+  } catch { if (previewShouldRun()) setPreviewPlaceholder("Preview unavailable\nOBS is connected, but no preview frame was returned.", "Error"); }
   finally { previewInFlight = false; }
 }
 function stopPreviewPolling(message = "Preview paused.") {
@@ -117,6 +122,7 @@ if (obsApi) {
   action("obs-stop-stream", async () => { if (!confirm("Stop the live stream?")) return; const state = unwrap(await obsApi.stopStream()); if (state) renderObs(state); });
   action("obs-start-recording", async () => { const state = unwrap(await obsApi.startRecording()); if (state) renderObs(state); });
   action("obs-stop-recording", async () => { if (!confirm("Stop recording?")) return; const state = unwrap(await obsApi.stopRecording()); if (state) renderObs(state); });
+  el("test-preview").addEventListener("click", () => void requestPreviewFrame(true));
   obsApi.onStateChanged(renderObs);
   void obsApi.settings().then((result) => { const saved = unwrap(result); if (!saved) return; el<HTMLInputElement>("obs-host").value = saved.config.host; el<HTMLInputElement>("obs-port").value = String(saved.config.port); el<HTMLInputElement>("obs-remember").checked = saved.settings.rememberSettings; }).catch(() => showStudioFailure());
   void obsApi.getState().then((result) => { const state = unwrap(result); if (state) renderObs(state); }).catch(() => showStudioFailure());

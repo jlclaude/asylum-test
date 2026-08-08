@@ -128,18 +128,25 @@ export class ObsController {
     return [...this.state.scenes];
   }
 
-  async getProgramPreview(): Promise<ObsProgramPreview> {
+  async getProgramPreview(diagnostic = false): Promise<ObsProgramPreview> {
     this.requireConnected();
     const sceneName = this.state.currentScene;
     if (!sceneName) return { imageDataUrl: null, sceneName: null };
     try {
+      const sceneItems = record(await this.client.call("GetSceneItemList", { sceneName }));
+      const sources = Array.isArray(sceneItems.sceneItems) ? sceneItems.sceneItems.map((item) => { const value = record(item); return { sourceName: value.sourceName, sourceType: value.sourceType, sceneItemEnabled: value.sceneItemEnabled }; }) : [];
+      if (sources.length === 0) throw Object.assign(new Error("Preview source unavailable."), { code: 600 });
       const response = record(await this.client.call("GetSourceScreenshot", {
         sourceName: sceneName,
-        imageFormat: "jpg",
+        imageFormat: "png",
         imageWidth: 960,
         imageHeight: 540,
         imageCompressionQuality: 70,
       }));
+      if (diagnostic) {
+        const imageData = typeof response.imageData === "string" ? response.imageData : "";
+        this.logger.info("preview test", { sourceName: sceneName, responseReceived: true, imageDataPresent: Boolean(imageData), imageDataLength: imageData.length, imageDataPrefix: imageData.slice(0, imageData.indexOf(",") + 1), imageWidth: 960, imageHeight: 540, sources });
+      }
       if (this.state.currentScene !== sceneName) return { imageDataUrl: null, sceneName: this.state.currentScene };
       const returnedImage = response.imageData;
       if (typeof returnedImage !== "string" || returnedImage.length > 8_000_000) {
@@ -151,9 +158,10 @@ export class ObsController {
       const format = match?.[1] === "png" ? "png" : "jpeg";
       return { imageDataUrl: `data:image/${format};base64,${base64}`, sceneName };
     } catch (error) {
+      if (diagnostic) this.logger.warn("preview test failed", { sourceName: sceneName, responseReceived: false, category: "SCREENSHOT_REQUEST" });
       const details = record(error);
       const message = error instanceof Error ? error.message : String(details.message ?? "");
-      if (Number(details.code) === 600 || /source.*(?:not found|exist)|(?:not found|exist).*source/i.test(message)) {
+      if (Number(details.code) === 600 || /source.*(?:not found|exist|unavailable)|(?:not found|exist).*source/i.test(message)) {
         throw new Error("Preview source unavailable.");
       }
       throw new Error("Preview temporarily unavailable.");

@@ -10,7 +10,7 @@ declare global {
     facebook: { back(): Promise<void>; forward(): Promise<void>; reload(): Promise<void>; retry(): Promise<void>; openGroup(): Promise<void>; openExternal(): Promise<void>; clearSession(): Promise<void> };
     integration: { copyGameLink(): Promise<boolean>; copyFacebookPost(): Promise<boolean> };
     obs: {
-      settings(): Promise<ObsResult<{ config: { host: string; port: number }; settings: { rememberSettings: boolean; passwordStored: boolean } }>>; getState(): Promise<ObsResult<ObsState>>; getScenes(): Promise<ObsResult<string[]>>; getProgramPreview(): Promise<ObsResult<ObsProgramPreview>>;
+      settings(): Promise<ObsResult<{ config: { host: string; port: number }; settings: { rememberSettings: boolean; passwordStored: boolean } }>>; getState(): Promise<ObsResult<ObsState>>; getScenes(): Promise<ObsResult<string[]>>; getProgramPreview(): Promise<ObsResult<ObsProgramPreview>>; testProgramPreview(): Promise<ObsResult<ObsProgramPreview>>;
       connect(settings: { host: string; port: number; password: string; rememberSettings: boolean }): Promise<ObsResult<ObsState>>; disconnect(): Promise<ObsResult<ObsState>>; refresh(): Promise<ObsResult<ObsState>>;
       switchScene(name: string): Promise<ObsResult<ObsState>>; startStream(): Promise<ObsResult<ObsState>>; stopStream(): Promise<ObsResult<ObsState>>; startRecording(): Promise<ObsResult<ObsState>>; stopRecording(): Promise<ObsResult<ObsState>>;
       onStateChanged(callback: (state: ObsState) => void): () => void;

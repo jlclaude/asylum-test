@@ -8,15 +8,19 @@ import type { ObsClient, ObsTimer } from "../main/obs/obs-types";
 class FakeObs implements ObsClient {
   handlers = new Map<string, (event?: unknown) => void>();
   calls: string[] = [];
+  requests: Array<{ type: string; data?: Record<string, unknown> }> = [];
+  hasSceneItems = true;
   stream = false; recording = false; current = "Main";
   async connect(url: string, password?: string) { this.calls.push(`connect:${url}:${password ?? ""}`); }
   async disconnect() { this.calls.push("disconnect"); }
   on(event: string, handler: (event?: unknown) => void) { this.handlers.set(event, handler); }
   async call(type: string, data?: Record<string, unknown>): Promise<unknown> {
     this.calls.push(type);
+    this.requests.push({ type, data });
     if (type === "GetSceneList") return { currentProgramSceneName: this.current, scenes: [{ sceneName: "Main" }, { sceneName: "Break" }] };
     if (type === "GetStreamStatus") return { outputActive: this.stream, outputDuration: 0 };
     if (type === "GetRecordStatus") return { outputActive: this.recording };
+    if (type === "GetSceneItemList") return { sceneItems: this.hasSceneItems ? [{ sourceName: "Color", sourceType: "OBS_SOURCE_TYPE_INPUT", sceneItemEnabled: true }] : [] };
     if (type === "GetSourceScreenshot") return { imageData: "data:image/jpg;base64,aGVsbG8=" };
     if (type === "SetCurrentProgramScene") this.current = String(data?.sceneName);
     if (type === "StartStream") this.stream = true; if (type === "StopStream") this.stream = false;
@@ -53,6 +57,7 @@ async function run() {
   const preview = await controller.getProgramPreview(); assert.equal(preview.sceneName, "Main"); assert.equal(preview.imageDataUrl, "data:image/jpeg;base64,aGVsbG8=");
   assert.equal(logs.join(" ").includes("top-secret"), false, "password must never be logged");
   state = await controller.switchScene("Break"); assert.equal(state.currentScene, "Break");
+  await controller.getProgramPreview(); assert.equal(fake.requests.filter((request) => request.type === "GetSourceScreenshot").at(-1)?.data?.sourceName, "Break");
   await assert.rejects(controller.switchScene("Missing"), /no longer exists/);
   state = await controller.startStream(); assert.equal(state.streaming, true);
   state = await controller.startRecording(); assert.equal(state.recording, true);
@@ -61,6 +66,11 @@ async function run() {
   fake.emit("StreamStateChanged", { outputActive: false }); assert.equal(controller.getState().streaming, false);
   fake.emit("RecordStateChanged", { outputActive: false }); assert.equal(controller.getState().recording, false);
   state = await controller.disconnect(); assert.equal(state.connection, "DISCONNECTED"); assert.equal(state.streaming, false);
+
+  const emptySceneClient = new FakeObs(); emptySceneClient.hasSceneItems = false;
+  const emptySceneController = new ObsController(emptySceneClient, { info: () => undefined, warn: () => undefined });
+  await emptySceneController.connect({ host: "localhost", port: 4455 });
+  await assert.rejects(emptySceneController.getProgramPreview(), /Preview source unavailable/);
 
   const reconnectClient = new FakeObs(); const timer = new FakeTimer();
   const reconnecting = new ObsController(reconnectClient, { info: () => undefined, warn: () => undefined }, timer);
@@ -73,6 +83,7 @@ async function run() {
   assert.match(preload, /getState: \(\) => invoke\("obs:get-state"\)/);
   assert.match(preload, /getScenes: \(\) => invoke\("obs:get-scenes"\)/);
   assert.match(preload, /getProgramPreview: \(\) => invoke\("obs:get-program-preview"\)/);
+  assert.match(preload, /testProgramPreview: \(\) => invoke\("obs:test-program-preview"\)/);
   assert.doesNotMatch(preload, /\bcall:\s*|rawObs|child_process|\bWebSocket\s*:/i, "preload must not expose arbitrary OBS or system access");
   const renderer = await readFile(join(process.cwd(), "renderer/desktop-shell.ts"), "utf8");
   assert.doesNotMatch(renderer, /localStorage[^\n]*password|password[^\n]*localStorage/i);
