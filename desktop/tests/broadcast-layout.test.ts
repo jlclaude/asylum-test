@@ -12,17 +12,17 @@ async function run() {
   const presentation = await readFile(join(process.cwd(), "../app/components/broadcast/BroadcastPresentation.tsx"), "utf8");
   const model = await readFile(join(process.cwd(), "../app/models/broadcast.server.ts"), "utf8");
   const css = await readFile(join(process.cwd(), "../app/styles/broadcast-presentation.css"), "utf8");
+  const gameCss = await readFile(join(process.cwd(), "../app/styles/broadcast-mode.css"), "utf8");
   const main = await readFile(join(process.cwd(), "main/main.ts"), "utf8");
   const activeGame = await readFile(join(process.cwd(), "main/active-game.ts"), "utf8");
   const engine = await readFile(join(process.cwd(), "main/obs/ObsAutomationEngine.ts"), "utf8");
   assert.doesNotMatch(publicRoute, /<button|<form|<nav|GameModeToolbar|useFetcher/, "public broadcast must remain viewer-only");
-  assert.match(publicRoute, /<BroadcastPresentation/); assert.match(gameRoute, /<BroadcastPresentation/); assert.match(hostRoute, /BroadcastModePage/);
-  assert.match(gameRoute, /<WheelSection/); assert.match(publicRoute, /<WheelCanvas/); assert.match(presentation, /broadcast-presentation-stage/);
+  assert.match(publicRoute, /<BroadcastPresentation/); assert.doesNotMatch(gameRoute, /<BroadcastPresentation/); assert.match(hostRoute, /BroadcastModePage/);
+  assert.match(gameRoute, /<WheelSection/); assert.match(gameRoute, /BroadcastWheelRail/); assert.match(gameRoute, /BroadcastGameHeader/); assert.match(gameRoute, /SpinMusicControls/); assert.match(publicRoute, /<WheelCanvas/); assert.match(presentation, /broadcast-presentation-stage/);
   assert.match(presentation, /broadcast-presentation-lower/); assert.match(presentation, /ASYLUM GAMES LIVE/);
-  assert.match(css, /width: 1920px/); assert.match(css, /height: 1080px/);
-  assert.match(css, /broadcast-viewport-operator\.is-manual[\s\S]*overflow: auto/); assert.match(css, /broadcast-viewport-output[\s\S]*overflow: hidden/);
-  assert.match(css, /width: 670px/); assert.match(css, /broadcast-presentation-wheel[\s\S]*overflow: visible/); assert.doesNotMatch(css, /broadcast-information-left|broadcast-information-right|broadcast-presentation-watermark/);
-  assert.doesNotMatch(gameRoute, /BroadcastWheelRail|BroadcastGameHeader/);
+  assert.match(css, /grid-template-rows:12vh auto minmax\(0,1fr\) 15vh 4vh/);
+  assert.match(css, /width:min\(94vh,1280px,100%\)/); assert.doesNotMatch(css, /broadcast-information-left|broadcast-information-right|broadcast-presentation-watermark/);
+  assert.match(gameCss, /width:min\(94vh,1280px,100%\)/); assert.match(gameCss, /overflow-x:hidden/); assert.doesNotMatch(gameCss, /broadcast-viewport|1080px/);
   assert.match(publicRoute, /Math\.min\(1_000 \* 2 \*\* failures\.current, 15_000\)/); assert.match(publicRoute, /data\.broadcast \?\? lastKnown/);
   assert.doesNotMatch(model, /randomInt|winnerEntryIndex\s*=/, "broadcast model must never calculate winners");
   assert.doesNotMatch(model, /facebookHandle|claimId|prizeClaim|payment/i, "broadcast payload must omit sensitive claim data");
@@ -30,7 +30,7 @@ async function run() {
   assert.match(activeGame, /host\/games\/\$\{encodeURIComponent\(gameId\)\}\/broadcast/); assert.doesNotMatch(activeGame, /\/broadcast\?gameId/);
   assert.match(broadcastLoader, /validBroadcastToken/); assert.match(tokenRoute, /status: 405/); assert.match(tokenRoute, /loadReadOnlyBroadcast/);
   assert.match(hostLinkRoute, /requireHostPermission/); assert.match(hostLinkRoute, /requireHostMutation/); assert.match(tokenService, /createHmac/); assert.match(tokenService, /randomBytes\(32\)/); assert.doesNotMatch(tokenService, /console\./);
-  assert.match(main, /partition: "persist:asylum-host"[\s\S]*broadcast-preload\.js/); assert.match(main, /broadcast:copy-obs-url/); assert.match(main, /asylum-broadcast-scale/);
-  console.info("Shared Broadcast presentation and routing tests passed");
+  assert.match(main, /partition: "persist:asylum-host"[\s\S]*broadcast-preload\.js/); assert.match(main, /broadcast:copy-obs-url/);
+  console.info("Restored game Broadcast and isolated OBS presentation tests passed");
 }
 void run().catch((error) => { console.error(error); process.exitCode = 1; });

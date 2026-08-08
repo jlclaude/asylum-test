@@ -37,7 +37,6 @@ export default function ProductionBroadcast() {
   const wheelVisible = Boolean(wheel && entries.length && state !== "WAITING");
   const waitingMessage = data.error === "INVALID_LINK" ? "BROADCAST LINK IS INVALID OR EXPIRED" : "WAITING TO BEGIN";
   return <main className={`production-broadcast state-${state.toLowerCase()}`}><BroadcastPresentation
-    viewportMode="output"
     healthState={state}
     info={{ gameTitle: broadcast?.game.title ?? "Broadcast Standby", raffleCode: broadcast?.game.raffleCode ?? "—", gameStatus: broadcast?.game.status ?? "WAITING", wheelLabel: wheel?.label ?? null, wheelSequence: null, wheelStatus: state === "READY" ? "READY TO SPIN" : state, entryCount: entries.length, winner: !reward ? persistedResult : null, secondChance: secondChanceNames.map((name, index) => ({ label: index === 0 ? "BEFORE" : "AFTER", value: name })), upNext: broadcast?.upcomingPrize ?? null, reward: broadcast?.completed.reward ?? (reward ? persistedResult : null), bonus: broadcast?.upcomingPrize ?? null, spinning: state === "SPINNING" }}
     wheel={wheelVisible ? <div className="broadcast-readonly-wheel"><WheelCanvas entries={entries} type={wheel!.type} themeKey="classic" rotation={0} spinning={state === "SPINNING"} duration={null} pointerTick={0} pointerIntensity={state === "SPINNING" ? 1 : .35} winnerEntryIndex={wheel!.winnerEntryIndex} celebrating={wheel!.status === "COMPLETED"} /></div> : <section className="broadcast-readonly-message"><strong>{waitingMessage}</strong><span>{data.error ? "Retrying…" : "Drawing starting soon"}</span></section>}
