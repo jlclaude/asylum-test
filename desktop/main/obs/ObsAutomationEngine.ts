@@ -11,6 +11,7 @@ const defaultTimer: ObsTimer = { set: (callback, delay) => setTimeout(callback, 
 export class ObsAutomationEngine {
   private status: ObsAutomationStatus = { mode: "WAITING", pending: null, log: [] };
   private timer: unknown = null;
+  private queued: { mode: ObsAutomationMode; sceneName: string; delay: number } | null = null;
   private subscribers = new Set<(status: ObsAutomationStatus) => void>();
 
   constructor(private readonly controller: Pick<ObsController, "getState" | "getScenes" | "switchScene">, private readonly settings: Pick<ObsSettingsStore, "loadSceneMappings">, private readonly timerApi: ObsTimer = defaultTimer) {}
@@ -19,9 +20,14 @@ export class ObsAutomationEngine {
   subscribe(callback: (status: ObsAutomationStatus) => void) { this.subscribers.add(callback); callback(this.getStatus()); return () => this.subscribers.delete(callback); }
 
   async handle(event: ObsAutomationEvent): Promise<void> {
-    this.cancelPending();
     const settings = await this.settings.loadSceneMappings();
+    if (!settings.automation.enabled) { this.cancelPending(); this.patch({ mode: "WAITING", pending: null }); return; }
     const target = this.target(event, settings);
+    if (event === "SECOND_CHANCE" && this.timer && this.status.pending === "WINNER" && target?.enabled && target.sceneName) {
+      this.queued = { mode: target.mode, sceneName: target.sceneName, delay: target.delay };
+      return;
+    }
+    this.cancelPending();
     if (!target || !target.enabled || !target.sceneName) {
       // A missing Second Chance mapping deliberately leaves OBS (and the
       // displayed automation state) on the Winner scene.
@@ -53,12 +59,17 @@ export class ObsAutomationEngine {
   private async execute(mode: ObsAutomationMode, sceneName: string) {
     if (this.controller.getState().connection !== "CONNECTED") { this.addLog(mode, sceneName, "OBS unavailable"); return; }
     if (!this.controller.getScenes().includes(sceneName)) { this.addLog(mode, sceneName, "Mapped scene unavailable"); return; }
-    try { await this.controller.switchScene(sceneName); this.patch({ mode, pending: null }); this.addLog(mode, sceneName, `${this.label(mode)} Scene`); }
+    try {
+      if (this.controller.getState().currentScene !== sceneName) await this.controller.switchScene(sceneName);
+      this.patch({ mode, pending: null }); this.addLog(mode, sceneName, `${this.label(mode)} Scene`);
+      this.runQueued();
+    }
     catch { this.addLog(mode, sceneName, "OBS unavailable"); }
   }
 
   private label(mode: ObsAutomationMode) { return mode === "SECOND_CHANCE" ? "Second Chance" : mode[0] + mode.slice(1).toLowerCase(); }
-  private cancelPending() { if (this.timer) this.timerApi.clear(this.timer); this.timer = null; this.patch({ pending: null }); }
+  private runQueued() { const target = this.queued; this.queued = null; if (!target) return; this.patch({ pending: target.mode }); const run = () => { this.timer = null; void this.execute(target.mode, target.sceneName); }; if (target.delay === 0) run(); else this.timer = this.timerApi.set(run, target.delay); }
+  private cancelPending() { if (this.timer) this.timerApi.clear(this.timer); this.timer = null; this.queued = null; this.patch({ pending: null }); }
   private addLog(mode: ObsAutomationMode, sceneName: string, message: string) { this.status = { ...this.status, pending: null, log: [{ at: new Date().toISOString(), mode, sceneName, message }, ...this.status.log].slice(0, 100) }; this.emit(); }
   private patch(update: Partial<ObsAutomationStatus>) { this.status = { ...this.status, ...update }; this.emit(); }
   private emit() { const snapshot = this.getStatus(); for (const subscriber of this.subscribers) subscriber(snapshot); }

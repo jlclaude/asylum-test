@@ -4,7 +4,7 @@ import type { ObsSceneMappings, ObsTimer } from "../main/obs/obs-types";
 
 const mappings: ObsSceneMappings = {
   scenes: { host: "Host", wheel: "Wheel", winner: "Winner", secondChance: "Second", reward: "Reward", break: null, ending: "Ending" },
-  automation: { spinToWheel: true, revealToWinner: true, secondChance: true, reward: true, acceptToHost: true, finishToEnding: true },
+  automation: { enabled: true, spinToWheel: true, revealToWinner: true, secondChance: true, reward: true, acceptToHost: true, finishToEnding: true },
   delays: { wheel: 0, winner: 1_000, secondChance: 1_000, reward: 1_000, host: 3_000 },
 };
 class Timer implements ObsTimer {
@@ -23,8 +23,13 @@ async function run() {
     await engine.handle(event); assert.equal(timer.pending[0]?.delay, delay); timer.run(); await flush(); assert.equal(switched.at(-1), scene);
   }
   await engine.handle("ACCEPT_RESULT"); assert.equal(timer.pending.length, 1); await engine.handle("SPIN"); await flush(); assert.equal(timer.pending.length, 0); assert.equal(switched.at(-1), "Wheel");
+  await engine.handle("WINNER"); await engine.handle("SECOND_CHANCE"); assert.equal(timer.pending[0]?.delay, 1_000); timer.run(); await flush(); assert.equal(switched.at(-1), "Winner"); assert.equal(timer.pending[0]?.delay, 1_000); timer.run(); await flush(); assert.equal(switched.at(-1), "Second");
   connected = false; const before = switched.length; await engine.handle("WINNER"); assert.equal(switched.length, before); assert.equal(engine.getStatus().log[0]?.message, "OBS unavailable");
   connected = true; await engine.handle("RAFFLE_FINISHED"); await flush(); assert.equal(switched.at(-1), "Ending");
+  mappings.automation.enabled = false; const disabledCount = switched.length; await engine.handle("SPIN"); await flush(); assert.equal(switched.length, disabledCount); assert.equal(engine.getStatus().mode, "WAITING");
+  mappings.automation.enabled = true;
+  controller.getState = () => ({ connection: "CONNECTED", currentScene: "Wheel" }) as never;
+  const activeCount = switched.length; await engine.handle("SPIN"); await flush(); assert.equal(switched.length, activeCount, "already-active scenes must not send duplicate OBS commands");
   engine.dispose(); console.info("OBS automation engine tests passed");
 }
 void run().catch((error) => { console.error(error); process.exitCode = 1; });

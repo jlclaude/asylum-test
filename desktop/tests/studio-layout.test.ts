@@ -26,6 +26,7 @@ async function run() {
   assert.match(html, /Test Preview/); assert.match(html, /Preview bytes:/); assert.match(renderer, /testProgramPreview/);
   for (const label of ["Host Scene", "Wheel Scene", "Winner Scene", "Second Chance Scene", "Reward Chamber Scene", "Break Scene", "Ending Scene"]) assert.match(html, new RegExp(label));
   assert.match(html, /Switch to Wheel Scene when Spin starts/); assert.match(html, /Return to Host Scene after Accept Result/);
+  assert.match(html, /OBS Automation Enabled/); assert.match(html, /Winner Celebration Package/);
   assert.match(renderer, /saveSceneMappings/); assert.doesNotMatch(renderer, /integration.*scene|raffle.*switchScene/i, "mapping toggles must not execute raffle automation");
   assert.match(html, /Export Studio Profile/); assert.match(html, /Import Studio Profile/); assert.match(html, /Automatic Scene Switching/);
   assert.match(renderer, /testMappedScene/); assert.doesNotMatch(renderer, /data-test-mapping[^\n]*switchScene/, "mapped tests must use the restricted mapped-scene API");
@@ -34,7 +35,8 @@ async function run() {
   assert.match(renderer, /getAutomationStatus/); assert.match(renderer, /onAutomationStateChanged/);
   assert.match(hostPreload, /emitAutomationEvent/); assert.doesNotMatch(hostPreload, /switchScene|obs-websocket|GetSourceScreenshot/, "host preload must expose semantic events only");
   assert.match(main, /event\.sender !== hostView\?\.webContents/); assert.match(main, /const allowed: ObsAutomationEvent\[\]/);
-  assert.match(wheel, /wheel\.type === "VALUE" \? "REWARD" : "SPIN"/); assert.doesNotMatch(wheel, /emitDesktopAutomationEvent\("SHUFFLE"/);
+  assert.match(wheel, /data\?\.intent !== "spin-wheel"[\s\S]*wheel\.type === "VALUE" \? "REWARD" : "SPIN"/); assert.doesNotMatch(wheel, /emitDesktopAutomationEvent\("SHUFFLE"/);
+  assert.doesNotMatch(wheel, /onReveal\(\)[\s\S]{0,100}emitDesktopAutomationEvent/, "winner automation must not be sourced from reveal animation callbacks");
   console.info("Studio layout and fallback tests passed");
 }
 void run().catch((error) => { console.error(error); process.exitCode = 1; });

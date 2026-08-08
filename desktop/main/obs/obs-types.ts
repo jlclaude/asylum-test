@@ -26,7 +26,7 @@ export type ObsProgramPreview = {
 
 export type ObsSceneMappings = {
   scenes: { host: string | null; wheel: string | null; winner: string | null; secondChance: string | null; reward: string | null; break: string | null; ending: string | null };
-  automation: { spinToWheel: boolean; revealToWinner: boolean; secondChance: boolean; reward: boolean; acceptToHost: boolean; finishToEnding: boolean };
+  automation: { enabled: boolean; spinToWheel: boolean; revealToWinner: boolean; secondChance: boolean; reward: boolean; acceptToHost: boolean; finishToEnding: boolean };
   delays: { wheel: number; winner: number; secondChance: number; reward: number; host: number };
 };
 

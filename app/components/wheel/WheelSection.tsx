@@ -225,7 +225,6 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(
         selectedDuration,
       });
       if (blocked) return { triggered: false, message: blocked };
-      emitDesktopAutomationEvent(wheel.type === "VALUE" ? "REWARD" : "SPIN", wheel.id);
       stopIdle();
 
       const submit = () =>
@@ -407,6 +406,7 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(
 
       lastSpinToken.current = wheel.spunAt;
       completionSent.current = false;
+      emitDesktopAutomationEvent(wheel.type === "VALUE" ? "REWARD" : "SPIN", wheel.id);
 
       const finalResult =
         wheel.winnerDisplayName ?? wheel.winnerValue ?? "Result";
@@ -497,6 +497,7 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(
       wheel.spinDurationSeconds,
       wheel.spunAt,
       wheel.status,
+      wheel.type,
       wheel.winnerDisplayName,
       wheel.winnerEntryIndex,
       wheel.winnerValue,
@@ -518,6 +519,7 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(
 
       lastSpinToken.current = data.spinToken;
       completionSent.current = false;
+      emitDesktopAutomationEvent(wheel.type === "VALUE" ? "REWARD" : "SPIN", wheel.id);
 
       const finalResult =
         data.winnerDisplayName ?? data.winnerValue ?? "Result";
@@ -603,9 +605,13 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(
         !completionNotified.current
       ) {
         completionNotified.current = true;
+        if (wheel.type === "NAME") {
+          emitDesktopAutomationEvent("WINNER", wheel.id);
+          if (data.secondChance) emitDesktopAutomationEvent("SECOND_CHANCE", wheel.id);
+        }
         onCompleted(wheel.id);
       }
-    }, [fetcher.data, onCompleted, revalidator, wheel.id]);
+    }, [fetcher.data, onCompleted, revalidator, wheel.id, wheel.type]);
 
     const actionMessage = recoveryError
       ? { error: recoveryError }
@@ -679,7 +685,6 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(
                 key={lastSpinToken.current ?? revealResult}
                 result={revealResult}
                 onReveal={() => {
-                  if (wheel.type === "NAME") emitDesktopAutomationEvent("WINNER", wheel.id);
                   setResult(revealResult);
                   setCelebrating(true);
                   playWinnerTone();
@@ -705,7 +710,6 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(
                     setCelebrating(false);
                     celebrationCleanup.current?.();
                     celebrationCleanup.current = null;
-                    if (secondChanceResult) emitDesktopAutomationEvent("SECOND_CHANCE", wheel.id);
                   }, 5000);
                 }}
               />

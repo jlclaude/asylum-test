@@ -69,6 +69,7 @@
             <div class="mapping-status"><span>Current OBS Program Scene <strong id="mapping-current-scene">—</strong></span><span id="mapping-status-host">Mapped Host Scene: —</span><span id="mapping-status-wheel">Mapped Wheel Scene: —</span><span id="mapping-status-winner">Mapped Winner Scene: —</span></div>
             <h3>Automation</h3>
             <div class="automation-options">
+              <label><input id="automation-enabled" type="checkbox"> OBS Automation Enabled</label>
               <label><input id="automation-spin-wheel" type="checkbox"> Switch to Wheel Scene when Spin starts</label>
               <label><input id="automation-reveal-winner" type="checkbox"> Switch to Winner Scene when Winner is revealed</label>
               <label><input id="automation-second-chance" type="checkbox"> Switch to Second Chance Scene</label>
@@ -87,7 +88,8 @@
             <div class="profile-actions"><button id="export-studio-profile">Export Studio Profile</button><button id="import-studio-profile">Import Studio Profile</button></div>
             <div class="next-version"><h3>Next Version</h3><p>Automatic Scene Switching · Winner Overlay · Scoreboard Overlay · Wheel Overlay · Soundboard · Stream Deck</p></div>
           </section>
-          <section class="automation-live" aria-labelledby="automation-live-title"><h2 id="automation-live-title">Live Show Automation</h2><div><span>Current OBS Scene <strong id="automation-current-scene">—</strong></span><span>Current Automation State <strong id="automation-state">Waiting</strong></span></div><h3>Live Event Log</h3><ol id="automation-log"><li>No automation events yet.</li></ol></section>
+          <section class="automation-live" aria-labelledby="automation-live-title"><h2 id="automation-live-title">Live Show Automation</h2><div><span>Automation <strong id="automation-running">Paused</strong></span><span>Current Step <strong id="automation-state">Waiting</strong></span><span>Current OBS Scene <strong id="automation-current-scene">—</strong></span></div><h3>Last Automation</h3><ol id="automation-log"><li>No automation events yet.</li></ol></section>
+          <section class="next-version" aria-labelledby="winner-package-title"><h2 id="winner-package-title">Winner Celebration Package</h2><p>Future: Play Spin Music · Play Winner Sound · Trigger Confetti · Display Winner Overlay</p></section>
           <p id="obs-error" class="obs-error" hidden></p>
           <details><summary>To connect OBS</summary><ol><li>Open OBS Studio.</li><li>Go to Tools → WebSocket Server Settings.</li><li>Enable WebSocket server.</li><li>Use port 4455.</li><li>Enter the same password here if authentication is enabled.</li></ol><p>Only OBS on this computer is supported.</p></details>
         </div>

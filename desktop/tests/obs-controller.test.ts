@@ -48,9 +48,9 @@ async function run() {
   assert.throws(() => validateObsConfig({ host: "localhost", port: 70000 }), /port/);
   assert.equal(obsWebSocketUrl({ host: "::1", port: 4455 }), "ws://[::1]:4455");
   assert.throws(() => validateSceneName(""), /scene/i);
-  const mapping = validateObsSceneMappings({ scenes: { host: "Main", wheel: null, winner: "Break", secondChance: null, reward: null, break: null, ending: null }, automation: { spinToWheel: true, revealToWinner: false, secondChance: true, reward: false, acceptToHost: true, finishToEnding: false }, delays: { wheel: 0, winner: 1000, secondChance: 1000, reward: 1000, host: 3000 } }, ["Main", "Break"]);
+  const mapping = validateObsSceneMappings({ scenes: { host: "Main", wheel: null, winner: "Break", secondChance: null, reward: null, break: null, ending: null }, automation: { enabled: true, spinToWheel: true, revealToWinner: false, secondChance: true, reward: false, acceptToHost: true, finishToEnding: false }, delays: { wheel: 0, winner: 1000, secondChance: 1000, reward: 1000, host: 3000 } }, ["Main", "Break"]);
   assert.equal(mapping.scenes.host, "Main"); assert.equal(mapping.automation.spinToWheel, true);
-  assert.throws(() => validateObsSceneMappings({ scenes: { host: "Deleted", wheel: null, winner: null, secondChance: null, reward: null, break: null, ending: null }, automation: { spinToWheel: false, revealToWinner: false, secondChance: false, reward: false, acceptToHost: false, finishToEnding: false }, delays: { wheel: 0, winner: 1000, secondChance: 1000, reward: 1000, host: 3000 } }, ["Main"]), /no longer exists/);
+  assert.throws(() => validateObsSceneMappings({ scenes: { host: "Deleted", wheel: null, winner: null, secondChance: null, reward: null, break: null, ending: null }, automation: { enabled: false, spinToWheel: false, revealToWinner: false, secondChance: false, reward: false, acceptToHost: false, finishToEnding: false }, delays: { wheel: 0, winner: 1000, secondChance: 1000, reward: 1000, host: 3000 } }, ["Main"]), /no longer exists/);
   const profile = exportStudioProfile(mapping); assert.equal(profile.hostScene, "Main"); assert.equal(profile.automation.secondChance, true); assert.deepEqual(importStudioProfile(profile), mapping);
 
   const fake = new FakeObs(); const logs: string[] = [];
