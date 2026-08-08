@@ -35,16 +35,17 @@
             <label>Port <input id="obs-port" type="number" min="1" max="65535" value="4455"></label>
             <label>Password <input id="obs-password" type="password" autocomplete="current-password"></label>
             <label class="check"><input id="obs-remember" type="checkbox"> Remember securely</label>
-            <button id="obs-connect" type="submit">Connect</button>
+            <button id="obs-connect" type="submit">Connect / Reconnect</button>
           </form>
           <div id="obs-controls" class="obs-controls" hidden>
             <div class="obs-summary"><span>Program: <strong id="obs-program">—</strong></span><span>Streaming: <strong id="obs-stream">OFF</strong></span><span>Recording: <strong id="obs-record">OFF</strong></span></div>
-            <label>Scene <select id="obs-scenes"></select></label><button id="obs-switch">Switch scene</button>
-            <button id="obs-stream-toggle">Start stream</button><button id="obs-record-toggle">Start recording</button>
+            <label>Scene <select id="obs-scenes"></select></label>
+            <button id="obs-start-stream">Start stream</button><button id="obs-stop-stream">Stop stream</button>
+            <button id="obs-start-recording">Start recording</button><button id="obs-stop-recording">Stop recording</button>
             <button id="obs-refresh">Refresh</button><button id="obs-disconnect">Disconnect</button>
           </div>
           <p id="obs-error" class="obs-error" hidden></p>
-          <details><summary>Connection help</summary><p>In OBS, open Tools → WebSocket Server Settings, enable the server, and use its port (normally 4455). Only OBS on this computer is supported.</p></details>
+          <details><summary>To connect OBS</summary><ol><li>Open OBS Studio.</li><li>Go to Tools → WebSocket Server Settings.</li><li>Enable WebSocket server.</li><li>Use port 4455.</li><li>Enter the same password here if authentication is enabled.</li></ol><p>Only OBS on this computer is supported.</p></details>
         </div>
       </section>
       <div id="divider" role="separator" aria-orientation="horizontal" tabindex="0"></div>

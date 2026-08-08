@@ -10,7 +10,6 @@ export type ObsState = {
   scenes: string[];
   streaming: boolean;
   recording: boolean;
-  streamDurationMs: number | null;
   lastError: string | null;
 };
 

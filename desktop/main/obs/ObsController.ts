@@ -1,4 +1,4 @@
-import OBSWebSocket from "obs-websocket-js";
+import ObsWebSocketClient from "obs-websocket-js";
 import type {
   ObsClient,
   ObsConnectConfig,
@@ -26,7 +26,7 @@ const defaultTimer: ObsTimer = {
 };
 
 function createClient(): ObsClient {
-  return new OBSWebSocket() as unknown as ObsClient;
+  return new ObsWebSocketClient() as unknown as ObsClient;
 }
 
 function record(value: unknown): Record<string, unknown> {
@@ -53,7 +53,6 @@ export class ObsController {
     scenes: [],
     streaming: false,
     recording: false,
-    streamDurationMs: null,
     lastError: null,
   };
   private readonly subscribers = new Set<(state: ObsState) => void>();
@@ -119,7 +118,6 @@ export class ObsController {
       currentScene: typeof scene.currentProgramSceneName === "string" ? scene.currentProgramSceneName : null,
       streaming: Boolean(stream.outputActive),
       recording: Boolean(recording.outputActive),
-      streamDurationMs: Number.isFinite(stream.outputDuration) ? Number(stream.outputDuration) : null,
       lastError: null,
     });
     return this.getState();
@@ -207,8 +205,7 @@ export class ObsController {
       this.patch({ scenes: normalizeSceneList(record(event).scenes) });
     });
     this.client.on("StreamStateChanged", (event) => {
-      const outputActive = Boolean(record(event).outputActive);
-      this.patch({ streaming: outputActive, ...(!outputActive ? { streamDurationMs: null } : {}) });
+      this.patch({ streaming: Boolean(record(event).outputActive) });
     });
     this.client.on("RecordStateChanged", (event) => {
       this.patch({ recording: Boolean(record(event).outputActive) });
@@ -246,7 +243,6 @@ export class ObsController {
       scenes: [],
       streaming: false,
       recording: false,
-      streamDurationMs: null,
       lastError,
     });
   }

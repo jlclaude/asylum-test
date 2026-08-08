@@ -8,7 +8,6 @@ const hostError = document.querySelector<HTMLElement>("#host-error")!;
 const facebookError = document.querySelector<HTMLElement>("#facebook-error")!;
 let panel = (localStorage.getItem("desktop-panel") ?? "facebook") as "host" | "facebook" | "obs";
 let ratio = Number(localStorage.getItem("desktop-panel-ratio") ?? "0.4");
-let obsState: ObsState | null = null;
 
 const el = <T extends HTMLElement>(id: string) => document.querySelector<T>(`#${id}`)!;
 function rect(element: HTMLElement) { const value = element.getBoundingClientRect(); return { x: Math.round(value.x), y: Math.round(value.y), width: Math.round(value.width), height: Math.round(value.height) }; }
@@ -39,12 +38,13 @@ el("show-studio").addEventListener("click", () => { panel = "obs"; applyLayout()
 function unwrap<T>(result: ObsResult<T>): T | undefined { if (!result.ok) { showObsError(result.error ?? "OBS request failed."); return; } return result.value; }
 function showObsError(message?: string) { const node = el("obs-error"); node.textContent = message ?? ""; node.hidden = !message; }
 function renderObs(state: ObsState) {
-  obsState = state; const connected = state.connection === "CONNECTED";
+  const connected = state.connection === "CONNECTED";
   const badge = el("obs-status"); badge.textContent = state.connection; badge.className = `status-pill ${state.connection.toLowerCase()}`;
   el("obs-connect-form").hidden = connected; el("obs-controls").hidden = !connected;
   el("obs-program").textContent = state.currentScene || "—"; el("obs-stream").textContent = state.streaming ? "LIVE" : "OFF"; el("obs-record").textContent = state.recording ? "ON" : "OFF";
   const scenes = el<HTMLSelectElement>("obs-scenes"); const selected = scenes.value; scenes.replaceChildren(...state.scenes.map((name) => new Option(name, name, false, name === (selected || state.currentScene))));
-  el("obs-stream-toggle").textContent = state.streaming ? "Stop stream" : "Start stream"; el("obs-record-toggle").textContent = state.recording ? "Stop recording" : "Start recording";
+  el<HTMLButtonElement>("obs-start-stream").disabled = state.streaming; el<HTMLButtonElement>("obs-stop-stream").disabled = !state.streaming;
+  el<HTMLButtonElement>("obs-start-recording").disabled = state.recording; el<HTMLButtonElement>("obs-stop-recording").disabled = !state.recording;
   showObsError(state.lastError ?? undefined);
 }
 el<HTMLFormElement>("obs-connect-form").addEventListener("submit", async (event) => {
@@ -54,14 +54,16 @@ el<HTMLFormElement>("obs-connect-form").addEventListener("submit", async (event)
 });
 action("obs-disconnect", async () => { const state = unwrap(await window.asylumDesktop.obs.disconnect()); if (state) renderObs(state); });
 action("obs-refresh", async () => { const state = unwrap(await window.asylumDesktop.obs.refresh()); if (state) renderObs(state); });
-action("obs-switch", async () => { const state = unwrap(await window.asylumDesktop.obs.switchScene(el<HTMLSelectElement>("obs-scenes").value)); if (state) renderObs(state); });
-action("obs-stream-toggle", async () => { if (!obsState) return; if (obsState.streaming && !confirm("Stop the live stream?")) return; const result = obsState.streaming ? await window.asylumDesktop.obs.stopStream() : await window.asylumDesktop.obs.startStream(); const state = unwrap(result); if (state) renderObs(state); });
-action("obs-record-toggle", async () => { if (!obsState) return; if (obsState.recording && !confirm("Stop recording?")) return; const result = obsState.recording ? await window.asylumDesktop.obs.stopRecording() : await window.asylumDesktop.obs.startRecording(); const state = unwrap(result); if (state) renderObs(state); });
+el<HTMLSelectElement>("obs-scenes").addEventListener("change", async (event) => { const state = unwrap(await window.asylumDesktop.obs.switchScene((event.currentTarget as HTMLSelectElement).value)); if (state) renderObs(state); });
+action("obs-start-stream", async () => { const state = unwrap(await window.asylumDesktop.obs.startStream()); if (state) renderObs(state); });
+action("obs-stop-stream", async () => { if (!confirm("Stop the live stream?")) return; const state = unwrap(await window.asylumDesktop.obs.stopStream()); if (state) renderObs(state); });
+action("obs-start-recording", async () => { const state = unwrap(await window.asylumDesktop.obs.startRecording()); if (state) renderObs(state); });
+action("obs-stop-recording", async () => { if (!confirm("Stop recording?")) return; const state = unwrap(await window.asylumDesktop.obs.stopRecording()); if (state) renderObs(state); });
 
 window.asylumDesktop.onStatus(({ target, state }) => { (target === "host" ? hostError : facebookError).hidden = state !== "failed" && state !== "crashed"; });
 window.asylumDesktop.obs.onStateChanged(renderObs);
 window.addEventListener("resize", reportLayout); new ResizeObserver(reportLayout).observe(shell);
 void window.asylumDesktop.version().then((version) => { el("version").textContent = `Asylum Games Desktop ${version}`; });
 void window.asylumDesktop.obs.settings().then((result) => { const saved = unwrap(result); if (!saved) return; el<HTMLInputElement>("obs-host").value = saved.config.host; el<HTMLInputElement>("obs-port").value = String(saved.config.port); el<HTMLInputElement>("obs-remember").checked = saved.settings.rememberSettings; });
-void window.asylumDesktop.obs.state().then((result) => { const state = unwrap(result); if (state) renderObs(state); });
+void window.asylumDesktop.obs.getState().then((result) => { const state = unwrap(result); if (state) renderObs(state); });
 applyLayout();

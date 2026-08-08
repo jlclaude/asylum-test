@@ -6,6 +6,7 @@ import { ASYLUM_ORIGIN, denyPermissions, isAsylumUrl, openExternalHttps, restric
 import { ObsController } from "./obs/ObsController";
 import { ObsSettingsStore } from "./obs/obs-settings";
 import type { ObsConnectConfig } from "./obs/obs-types";
+import { validateObsConfig } from "./obs/obs-validation";
 
 const hostUrl = process.env.ASYLUM_DESKTOP_HOST_URL ?? `${ASYLUM_ORIGIN}/host`;
 const hostOrigin = new URL(hostUrl).origin;
@@ -111,13 +112,18 @@ function registerIpc() {
       catch (error) { return { ok: false, error: error instanceof Error ? error.message : "OBS request failed." }; }
     });
   };
-  obsAction("obs:settings", () => obsSettings.load());
-  obsAction("obs:state", () => obsController.getState());
+  obsAction("obs:settings", async () => {
+    const saved = await obsSettings.load();
+    return { config: { host: saved.config.host, port: saved.config.port }, settings: saved.settings };
+  });
+  obsAction("obs:get-state", () => obsController.getState());
+  obsAction("obs:get-scenes", () => obsController.getScenes());
   obsAction("obs:connect", async (payload) => {
     if (!payload || typeof payload !== "object") throw new Error("Invalid OBS connection settings.");
     const candidate = payload as ObsConnectConfig & { rememberSettings?: boolean };
+    if (candidate.rememberSettings !== undefined && typeof candidate.rememberSettings !== "boolean") throw new Error("Invalid OBS connection settings.");
     const saved = await obsSettings.load();
-    const config = { host: candidate.host, port: candidate.port, password: candidate.password || (saved.config.host === candidate.host && saved.config.port === candidate.port ? saved.config.password : "") };
+    const config = validateObsConfig({ host: candidate.host, port: candidate.port, password: candidate.password || (saved.config.host === candidate.host && saved.config.port === candidate.port ? saved.config.password : undefined) });
     await obsSettings.save(config, candidate.rememberSettings === true);
     await obsController.connect(config);
     return obsController.getState();
