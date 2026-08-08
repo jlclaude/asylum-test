@@ -32,6 +32,11 @@
         <div class="section-title">PRODUCTION STUDIO <span id="obs-status" class="status-pill">DISCONNECTED</span></div>
         <div class="obs-content">
           <div class="studio-baseline"><h1>Production Studio</h1><p>OBS Status: <strong id="obs-status-copy">Disconnected</strong></p></div>
+          <section class="program-preview" aria-labelledby="program-preview-title">
+            <h2 id="program-preview-title">Program Preview</h2>
+            <div class="preview-frame"><img id="program-preview-image" alt="Current OBS Program output" hidden><p id="program-preview-placeholder">OBS is not connected.</p></div>
+            <div class="preview-meta"><span>Current Scene: <strong id="preview-scene">—</strong></span><span>Preview status: <strong id="preview-status">OBS is not connected.</strong></span></div>
+          </section>
           <form id="obs-connect-form" class="obs-connect">
             <label>Host <input id="obs-host" value="127.0.0.1" autocomplete="off"></label>
             <label>Port <input id="obs-port" type="number" min="1" max="65535" value="4455"></label>

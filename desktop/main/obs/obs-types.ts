@@ -19,6 +19,11 @@ export type ObsConnectConfig = {
   password?: string;
 };
 
+export type ObsProgramPreview = {
+  imageDataUrl: string | null;
+  sceneName: string | null;
+};
+
 export type ObsStoredSettings = {
   host: string;
   port: number;

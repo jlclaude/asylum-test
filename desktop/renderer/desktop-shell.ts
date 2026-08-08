@@ -9,6 +9,11 @@ const facebookError = document.querySelector<HTMLElement>("#facebook-error")!;
 const obsApi = window.asylumDesktop?.obs;
 let panel = (localStorage.getItem("desktop-panel") ?? "facebook") as "host" | "facebook" | "obs";
 let ratio = Number(localStorage.getItem("desktop-panel-ratio") ?? "0.4");
+let currentObsState: ObsState | null = null;
+let previewTimer: number | null = null;
+let previewInFlight = false;
+let previewScene: string | null = null;
+const PREVIEW_INTERVAL_MS = 500;
 
 const el = <T extends HTMLElement>(id: string) => document.querySelector<T>(`#${id}`)!;
 function rect(element: HTMLElement) { const value = element.getBoundingClientRect(); return { x: Math.round(value.x), y: Math.round(value.y), width: Math.round(value.width), height: Math.round(value.height) }; }
@@ -18,6 +23,7 @@ function applyLayout() {
   facebookPanel.hidden = panel !== "facebook"; obsPanel.hidden = panel !== "obs"; divider.hidden = !open;
   shell.style.gridTemplateRows = open ? `54px minmax(120px, ${1 - ratio}fr) 7px minmax(260px, ${ratio}fr)` : "54px minmax(120px, 1fr) 0 0";
   localStorage.setItem("desktop-panel", panel); requestAnimationFrame(reportLayout);
+  updatePreviewPolling();
 }
 divider.addEventListener("pointerdown", (start) => {
   divider.setPointerCapture(start.pointerId);
@@ -43,16 +49,54 @@ function showStudioFailure(message = "OBS controls could not be loaded.") {
   el("studio-error").hidden = false;
   el("obs-panel").querySelector<HTMLElement>(".obs-content")!.hidden = true;
 }
+function setPreviewPlaceholder(message: string, status = message) {
+  const image = el<HTMLImageElement>("program-preview-image");
+  image.hidden = true; image.removeAttribute("src");
+  el("program-preview-placeholder").hidden = false; el("program-preview-placeholder").textContent = message;
+  el("preview-status").textContent = status;
+}
+function previewShouldRun() { return Boolean(obsApi && panel === "obs" && document.visibilityState === "visible" && currentObsState?.connection === "CONNECTED"); }
+async function requestPreviewFrame() {
+  if (!previewShouldRun() || previewInFlight || !obsApi) return;
+  previewInFlight = true; el("preview-status").textContent = "Updating";
+  try {
+    const result = await obsApi.getProgramPreview();
+    if (!previewShouldRun()) return;
+    if (!result.ok || !result.value?.imageDataUrl) { setPreviewPlaceholder(result.error ?? "Preview temporarily unavailable.", "Error"); return; }
+    const image = el<HTMLImageElement>("program-preview-image");
+    image.src = result.value.imageDataUrl; image.hidden = false; el("program-preview-placeholder").hidden = true;
+    previewScene = result.value.sceneName; el("preview-scene").textContent = previewScene ?? "—"; el("preview-status").textContent = "Live";
+  } catch { if (previewShouldRun()) setPreviewPlaceholder("Preview temporarily unavailable.", "Error"); }
+  finally { previewInFlight = false; }
+}
+function stopPreviewPolling(message = "Preview paused.") {
+  if (previewTimer !== null) window.clearInterval(previewTimer);
+  previewTimer = null;
+  if (currentObsState?.connection !== "CONNECTED") setPreviewPlaceholder("OBS is not connected.");
+  else setPreviewPlaceholder(message);
+}
+function updatePreviewPolling() {
+  if (!previewShouldRun()) { stopPreviewPolling(); return; }
+  if (previewTimer === null) {
+    void requestPreviewFrame();
+    previewTimer = window.setInterval(() => void requestPreviewFrame(), PREVIEW_INTERVAL_MS);
+  }
+}
 function renderObs(state: ObsState) {
+  const sceneChanged = currentObsState?.currentScene !== state.currentScene;
+  currentObsState = state;
   const connected = state.connection === "CONNECTED";
   const badge = el("obs-status"); badge.textContent = state.connection; badge.className = `status-pill ${state.connection.toLowerCase()}`;
   el("obs-status-copy").textContent = state.connection === "CONNECTED" ? "Connected" : state.connection === "CONNECTING" ? "Connecting" : state.connection === "ERROR" ? "Error" : "Disconnected";
   el("obs-connect-form").hidden = connected; el("obs-controls").hidden = !connected;
   el("obs-program").textContent = state.currentScene || "—"; el("obs-stream").textContent = state.streaming ? "LIVE" : "OFF"; el("obs-record").textContent = state.recording ? "ON" : "OFF";
+  el("preview-scene").textContent = state.currentScene || "—";
+  if (sceneChanged && previewScene !== state.currentScene) setPreviewPlaceholder(connected ? "Updating preview…" : "OBS is not connected.", connected ? "Updating" : "OBS is not connected.");
   const scenes = el<HTMLSelectElement>("obs-scenes"); const selected = scenes.value; scenes.replaceChildren(...state.scenes.map((name) => new Option(name, name, false, name === (selected || state.currentScene))));
   el<HTMLButtonElement>("obs-start-stream").disabled = state.streaming; el<HTMLButtonElement>("obs-stop-stream").disabled = !state.streaming;
   el<HTMLButtonElement>("obs-start-recording").disabled = state.recording; el<HTMLButtonElement>("obs-stop-recording").disabled = !state.recording;
   showObsError(state.lastError ?? undefined);
+  updatePreviewPolling();
 }
 el("studio-retry").addEventListener("click", () => location.reload());
 if (obsApi) {
@@ -77,5 +121,7 @@ if (obsApi) {
 
 window.asylumDesktop.onStatus(({ target, state }) => { (target === "host" ? hostError : facebookError).hidden = state !== "failed" && state !== "crashed"; });
 window.addEventListener("resize", reportLayout); new ResizeObserver(reportLayout).observe(shell);
+document.addEventListener("visibilitychange", updatePreviewPolling);
+window.addEventListener("beforeunload", () => stopPreviewPolling());
 void window.asylumDesktop.version().then((version) => { el("version").textContent = `Asylum Games Desktop ${version}`; });
 applyLayout();

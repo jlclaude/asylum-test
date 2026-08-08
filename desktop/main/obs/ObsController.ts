@@ -3,6 +3,7 @@ import type {
   ObsClient,
   ObsConnectConfig,
   ObsLogger,
+  ObsProgramPreview,
   ObsState,
   ObsTimer,
 } from "./obs-types";
@@ -125,6 +126,29 @@ export class ObsController {
 
   getScenes(): string[] {
     return [...this.state.scenes];
+  }
+
+  async getProgramPreview(): Promise<ObsProgramPreview> {
+    this.requireConnected();
+    const sceneName = this.state.currentScene;
+    if (!sceneName) return { imageDataUrl: null, sceneName: null };
+    try {
+      const response = record(await this.client.call("GetSourceScreenshot", {
+        sourceName: sceneName,
+        imageFormat: "jpg",
+        imageWidth: 960,
+        imageHeight: 540,
+        imageCompressionQuality: 70,
+      }));
+      if (this.state.currentScene !== sceneName) return { imageDataUrl: null, sceneName: this.state.currentScene };
+      const imageDataUrl = response.imageData;
+      if (typeof imageDataUrl !== "string" || !/^data:image\/jpe?g;base64,[A-Za-z0-9+/=]+$/.test(imageDataUrl) || imageDataUrl.length > 8_000_000) {
+        throw new Error("invalid screenshot response");
+      }
+      return { imageDataUrl, sceneName };
+    } catch {
+      throw new Error("Preview temporarily unavailable.");
+    }
   }
 
   async switchScene(value: unknown): Promise<ObsState> {

@@ -8,12 +8,16 @@ async function run() {
   const renderer = await readFile(join(process.cwd(), "renderer/desktop-shell.ts"), "utf8");
   assert.ok(html.indexOf('id="divider"') < html.indexOf('id="obs-panel"'), "divider must precede every lower panel");
   assert.match(html, /Production Studio/); assert.match(html, /OBS Status:/); assert.match(html, /id="studio-error"/);
+  assert.match(html, /Program Preview/); assert.match(html, /id="program-preview-image"/); assert.match(html, /Preview status:/);
   assert.match(css, /#divider\s*\{\s*grid-row:\s*3/); assert.match(css, /#facebook-panel, #obs-panel\s*\{\s*grid-row:\s*4/);
   assert.doesNotMatch(css, /#obs-panel[^,{]*:hover|\.studio[^,{]*:hover/i, "Studio root must not have a hover background");
   assert.doesNotMatch(css, /#(?:f00|ff0000)|\b(?:red|crimson)\b/i, "desktop CSS must not contain red debug fills");
   assert.match(renderer, /panel === "facebook" \? rect\(facebookRegion\) : null/, "Studio must hide the Facebook native view");
   assert.match(renderer, /window\.asylumDesktop\?\.obs/, "Studio must guard a missing OBS preload bridge");
   assert.match(renderer, /showStudioFailure/, "renderer errors must produce the Studio fallback");
+  assert.match(renderer, /PREVIEW_INTERVAL_MS = 500/); assert.match(renderer, /previewInFlight/);
+  assert.match(renderer, /document\.visibilityState === "visible"/); assert.match(renderer, /panel === "obs"/);
+  assert.match(renderer, /beforeunload.*stopPreviewPolling/); assert.doesNotMatch(renderer, /writeFile|imageFilePath/);
   console.info("Studio layout and fallback tests passed");
 }
 void run().catch((error) => { console.error(error); process.exitCode = 1; });

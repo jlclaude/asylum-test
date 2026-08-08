@@ -119,6 +119,7 @@ function registerIpc() {
   });
   obsAction("obs:get-state", () => obsController.getState());
   obsAction("obs:get-scenes", () => obsController.getScenes());
+  obsAction("obs:get-program-preview", () => obsController.getProgramPreview());
   obsAction("obs:connect", async (payload) => {
     if (!payload || typeof payload !== "object") throw new Error("Invalid OBS connection settings.");
     const candidate = payload as ObsConnectConfig & { rememberSettings?: boolean };
