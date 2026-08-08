@@ -38,6 +38,7 @@ import type {
   WheelOperatorHandle,
   WheelOperatorState,
 } from "./types";
+import { emitDesktopAutomationEvent } from "../../lib/desktop-automation.client";
 
 type WheelSectionProps = {
   wheel: WheelData;
@@ -224,6 +225,7 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(
         selectedDuration,
       });
       if (blocked) return { triggered: false, message: blocked };
+      emitDesktopAutomationEvent(wheel.type === "VALUE" ? "REWARD" : "SPIN", wheel.id);
       stopIdle();
 
       const submit = () =>
@@ -281,6 +283,7 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(
       wheel.id,
       wheel.label,
       wheel.status,
+      wheel.type,
     ]);
 
     useImperativeHandle(
@@ -676,6 +679,7 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(
                 key={lastSpinToken.current ?? revealResult}
                 result={revealResult}
                 onReveal={() => {
+                  if (wheel.type === "NAME") emitDesktopAutomationEvent("WINNER", wheel.id);
                   setResult(revealResult);
                   setCelebrating(true);
                   playWinnerTone();
@@ -701,6 +705,7 @@ export const WheelSection = forwardRef<WheelOperatorHandle, WheelSectionProps>(
                     setCelebrating(false);
                     celebrationCleanup.current?.();
                     celebrationCleanup.current = null;
+                    if (secondChanceResult) emitDesktopAutomationEvent("SECOND_CHANCE", wheel.id);
                   }, 5000);
                 }}
               />

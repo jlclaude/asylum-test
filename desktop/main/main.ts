@@ -9,6 +9,7 @@ import { ObsSettingsStore } from "./obs/obs-settings";
 import type { ObsConnectConfig, ObsMappingKey } from "./obs/obs-types";
 import { validateObsConfig } from "./obs/obs-validation";
 import { exportStudioProfile, importStudioProfile, validateObsSceneMappings } from "./obs/obs-scene-mappings";
+import { ObsAutomationEngine, type ObsAutomationEvent } from "./obs/ObsAutomationEngine";
 
 const hostUrl = process.env.ASYLUM_DESKTOP_HOST_URL ?? `${ASYLUM_ORIGIN}/host`;
 const hostOrigin = new URL(hostUrl).origin;
@@ -20,6 +21,7 @@ let currentGameLink = "";
 let currentFacebookPost = "";
 let obsController: ObsController;
 let obsSettings: ObsSettingsStore;
+let obsAutomation: ObsAutomationEngine;
 const viewStates = { host: "loading", facebook: "loading" } as Record<"host" | "facebook", "loading" | "ready" | "failed" | "crashed">;
 
 function status(target: "host" | "facebook", state: "loading" | "ready" | "failed" | "crashed") {
@@ -108,6 +110,14 @@ function registerIpc() {
     currentFacebookPost = candidate.facebookPost;
     return true;
   });
+  ipcMain.on("automation:event", (event, payload: unknown) => {
+    if (event.sender !== hostView?.webContents || !payload || typeof payload !== "object") return;
+    const candidate = payload as Record<string, unknown>;
+    const allowed: ObsAutomationEvent[] = ["SPIN", "WINNER", "SECOND_CHANCE", "REWARD", "ACCEPT_RESULT", "RAFFLE_FINISHED"];
+    if (typeof candidate.event !== "string" || !allowed.includes(candidate.event as ObsAutomationEvent)) return;
+    if (candidate.wheelId !== undefined && (typeof candidate.wheelId !== "string" || candidate.wheelId.length > 200)) return;
+    void obsAutomation.handle(candidate.event as ObsAutomationEvent).catch(() => console.warn("[desktop][obs] automation event failed safely"));
+  });
   const obsAction = (channel: string, action: (...args: unknown[]) => Promise<unknown> | unknown) => {
     ipcMain.handle(channel, async (event, ...args) => {
       if (!fromShell(event)) return { ok: false, error: "Unauthorized request." };
@@ -124,6 +134,7 @@ function registerIpc() {
   obsAction("obs:get-program-preview", () => obsController.getProgramPreview());
   obsAction("obs:test-program-preview", () => obsController.getProgramPreview(true));
   obsAction("obs:get-scene-mappings", () => obsSettings.loadSceneMappings());
+  obsAction("obs:get-automation-status", () => obsAutomation.getStatus());
   obsAction("obs:save-scene-mappings", async (value) => {
     const mappings = validateObsSceneMappings(value, obsController.getScenes());
     await obsSettings.saveSceneMappings(mappings);
@@ -173,9 +184,11 @@ app.whenReady().then(() => {
   session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
   obsSettings = new ObsSettingsStore();
   obsController = new ObsController();
-  obsController.subscribe((state) => windowRef?.webContents.send("obs:state-changed", state));
+  obsAutomation = new ObsAutomationEngine(obsController, obsSettings);
+  obsController.subscribe((state) => { if (state.connection !== "CONNECTED") obsAutomation.markUnavailable(); windowRef?.webContents.send("obs:state-changed", state); });
+  obsAutomation.subscribe((state) => windowRef?.webContents.send("obs:automation-state-changed", state));
   registerIpc(); createWindow();
   app.on("activate", () => { if (BaseWindow.getAllWindows().length === 0) createWindow(); });
 });
-app.on("before-quit", () => { void obsController?.disconnect(); });
+app.on("before-quit", () => { obsAutomation?.dispose(); void obsController?.disconnect(); });
 app.on("window-all-closed", () => { if (process.platform !== "darwin") app.quit(); });

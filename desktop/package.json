@@ -10,7 +10,7 @@
     "build": "npm run clean && tsc -p tsconfig.json && node scripts/copy-static.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "tsc -p tsconfig.json --noEmit",
-    "test": "vite-node tests/obs-controller.test.ts && vite-node tests/studio-layout.test.ts",
+    "test": "vite-node tests/obs-controller.test.ts && vite-node tests/automation-engine.test.ts && vite-node tests/studio-layout.test.ts",
     "dev": "npm run build && electron .",
     "package:mac": "npm run build && electron-builder --mac --arm64 --x64 --dir"
   },

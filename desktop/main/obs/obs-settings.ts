@@ -62,7 +62,7 @@ export class ObsSettingsStore {
     const stored = await this.read();
     try {
       if (!stored.sceneMappings) return structuredClone(DEFAULT_OBS_SCENE_MAPPINGS);
-      return validateObsSceneMappings({ scenes: { ...DEFAULT_OBS_SCENE_MAPPINGS.scenes, ...stored.sceneMappings.scenes }, automation: { ...DEFAULT_OBS_SCENE_MAPPINGS.automation, ...stored.sceneMappings.automation } });
+      return validateObsSceneMappings({ scenes: { ...DEFAULT_OBS_SCENE_MAPPINGS.scenes, ...stored.sceneMappings.scenes }, automation: { ...DEFAULT_OBS_SCENE_MAPPINGS.automation, ...stored.sceneMappings.automation }, delays: { ...DEFAULT_OBS_SCENE_MAPPINGS.delays, ...stored.sceneMappings.delays } });
     }
     catch { return structuredClone(DEFAULT_OBS_SCENE_MAPPINGS); }
   }

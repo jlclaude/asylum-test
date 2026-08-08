@@ -8,4 +8,5 @@ contextBridge.exposeInMainWorld("asylumDesktopHost", {
     publicClaimUrl: string;
     facebookPost: string;
   }) => ipcRenderer.invoke("integration:update", context),
+  emitAutomationEvent: (event: { event: "SPIN" | "WINNER" | "SECOND_CHANCE" | "REWARD" | "ACCEPT_RESULT" | "RAFFLE_FINISHED"; wheelId?: string }) => ipcRenderer.send("automation:event", event),
 });

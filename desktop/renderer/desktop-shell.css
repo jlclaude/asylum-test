@@ -50,12 +50,21 @@ input, select { min-width: 130px; border: 1px solid #3a4654; border-radius: 5px;
 .mapping-status .matches { color: #8df0b7; }
 .automation-options { display: grid; gap: 7px; margin: 12px 0; color: #cdd6df; font-size: 12px; }
 .automation-options label { display: flex; align-items: center; gap: 7px; }
+.automation-delays { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px; max-width: 960px; margin: 12px 0; }
+.automation-delays label { display: grid; grid-template-columns: 1fr 90px auto; align-items: center; gap: 5px; color: #aeb9c4; font-size: 11px; }
+.automation-delays input { min-width: 0; width: 90px; }
 .mapping-warning { color: #ffb9bf !important; }
 #mapping-save-status { margin-left: 10px; color: #8df0b7; font-size: 12px; }
 .profile-actions { display: flex; gap: 8px; margin-top: 12px; }
 .next-version { margin-top: 18px; padding: 12px; border: 1px solid #29323d; border-radius: 6px; color: #748291; }
 .next-version h3, .scene-mapping h3 { margin: 14px 0 8px; color: #aeb9c4; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; }
 .next-version h3 { margin-top: 0; }.next-version p { margin-bottom: 0; font-size: 12px; }
+.automation-live { margin-top: 20px; padding-top: 16px; border-top: 1px solid #29323d; }
+.automation-live h2, .automation-live h3 { color: #cdd6df; font-size: 12px; letter-spacing: .14em; text-transform: uppercase; }
+.automation-live > div { display: flex; flex-wrap: wrap; gap: 24px; color: #aeb9c4; font-size: 12px; }
+#automation-log { display: grid; gap: 6px; max-height: 180px; overflow: auto; margin: 0; padding: 0; list-style: none; }
+#automation-log li { display: flex; gap: 12px; padding: 7px 9px; background: #0c1116; color: #aeb9c4; font-size: 12px; }
+#automation-log time { color: #748291; }
 .obs-error { color: #ff9da6; }
 details { margin-top: 14px; color: #9aa7b5; font-size: 12px; }
 .section-title { color: #cdd6df; font-size: 12px; }

@@ -45,6 +45,7 @@ import {
 import { authenticate } from "../shopify.server";
 import { handleGameModeAction, loadGameModeData } from "../services/game-mode.server";
 import { shopifyOperator } from "../lib/operator-context.server";
+import { emitDesktopAutomationEvent } from "../lib/desktop-automation.client";
 
 import "../styles/asylum-brand.css";
 import "../styles/game-results.css";
@@ -179,7 +180,9 @@ export default function GameModePage() {
         : wheel),
       wheelId,
     );
+    emitDesktopAutomationEvent("ACCEPT_RESULT", wheelId);
     if (!nextId) {
+      emitDesktopAutomationEvent("RAFFLE_FINISHED", wheelId);
       setOperatorMessage("All persisted results accepted.");
       return;
     }

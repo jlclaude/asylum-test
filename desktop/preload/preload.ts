@@ -32,6 +32,7 @@ contextBridge.exposeInMainWorld("asylumDesktop", {
     getProgramPreview: () => invoke("obs:get-program-preview"),
     testProgramPreview: () => invoke("obs:test-program-preview"),
     getSceneMappings: () => invoke("obs:get-scene-mappings"),
+    getAutomationStatus: () => invoke("obs:get-automation-status"),
     saveSceneMappings: (mappings: unknown) => invoke("obs:save-scene-mappings", mappings),
     testMappedScene: (mapping: string) => invoke("obs:test-mapped-scene", mapping),
     exportStudioProfile: () => invoke("obs:export-studio-profile"),
@@ -46,6 +47,11 @@ contextBridge.exposeInMainWorld("asylumDesktop", {
       const listener = (_event: Electron.IpcRendererEvent, state: unknown) => callback(state);
       ipcRenderer.on("obs:state-changed", listener);
       return () => ipcRenderer.removeListener("obs:state-changed", listener);
+    },
+    onAutomationStateChanged: (callback: (state: unknown) => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, state: unknown) => callback(state);
+      ipcRenderer.on("obs:automation-state-changed", listener);
+      return () => ipcRenderer.removeListener("obs:automation-state-changed", listener);
     },
   },
   onStatus: (callback: (status: unknown) => void) => {

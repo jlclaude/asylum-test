@@ -15,7 +15,7 @@ let previewInFlight = false;
 let previewScene: string | null = null;
 const PREVIEW_INTERVAL_MS = 1_000;
 const mappingKeys: ObsMappingKey[] = ["host", "wheel", "winner", "secondChance", "reward", "break", "ending"];
-let sceneMappings: ObsSceneMappings = { scenes: { host: null, wheel: null, winner: null, secondChance: null, reward: null, break: null, ending: null }, automation: { spinToWheel: false, revealToWinner: false, secondChance: false, reward: false, acceptToHost: false, finishToEnding: false } };
+let sceneMappings: ObsSceneMappings = { scenes: { host: null, wheel: null, winner: null, secondChance: null, reward: null, break: null, ending: null }, automation: { spinToWheel: false, revealToWinner: false, secondChance: false, reward: false, acceptToHost: false, finishToEnding: false }, delays: { wheel: 0, winner: 1_000, secondChance: 1_000, reward: 1_000, host: 3_000 } };
 
 const el = <T extends HTMLElement>(id: string) => document.querySelector<T>(`#${id}`)!;
 function rect(element: HTMLElement) { const value = element.getBoundingClientRect(); return { x: Math.round(value.x), y: Math.round(value.y), width: Math.round(value.width), height: Math.round(value.height) }; }
@@ -119,7 +119,18 @@ function collectSceneMappings(): ObsSceneMappings {
   return {
     scenes: { host: el<HTMLSelectElement>("mapping-host").value || null, wheel: el<HTMLSelectElement>("mapping-wheel").value || null, winner: el<HTMLSelectElement>("mapping-winner").value || null, secondChance: el<HTMLSelectElement>("mapping-secondChance").value || null, reward: el<HTMLSelectElement>("mapping-reward").value || null, break: el<HTMLSelectElement>("mapping-break").value || null, ending: el<HTMLSelectElement>("mapping-ending").value || null },
     automation: { spinToWheel: el<HTMLInputElement>("automation-spin-wheel").checked, revealToWinner: el<HTMLInputElement>("automation-reveal-winner").checked, secondChance: el<HTMLInputElement>("automation-second-chance").checked, reward: el<HTMLInputElement>("automation-reward").checked, acceptToHost: el<HTMLInputElement>("automation-accept-host").checked, finishToEnding: el<HTMLInputElement>("automation-finish-ending").checked },
+    delays: { wheel: Number(el<HTMLInputElement>("delay-wheel").value), winner: Number(el<HTMLInputElement>("delay-winner").value), secondChance: Number(el<HTMLInputElement>("delay-secondChance").value), reward: Number(el<HTMLInputElement>("delay-reward").value), host: Number(el<HTMLInputElement>("delay-host").value) },
   };
+}
+function applyAutomationSettings(settings: ObsSceneMappings) {
+  el<HTMLInputElement>("automation-spin-wheel").checked = settings.automation.spinToWheel; el<HTMLInputElement>("automation-reveal-winner").checked = settings.automation.revealToWinner; el<HTMLInputElement>("automation-second-chance").checked = settings.automation.secondChance; el<HTMLInputElement>("automation-reward").checked = settings.automation.reward; el<HTMLInputElement>("automation-accept-host").checked = settings.automation.acceptToHost; el<HTMLInputElement>("automation-finish-ending").checked = settings.automation.finishToEnding;
+  el<HTMLInputElement>("delay-wheel").value = String(settings.delays.wheel); el<HTMLInputElement>("delay-winner").value = String(settings.delays.winner); el<HTMLInputElement>("delay-secondChance").value = String(settings.delays.secondChance); el<HTMLInputElement>("delay-reward").value = String(settings.delays.reward); el<HTMLInputElement>("delay-host").value = String(settings.delays.host);
+}
+function renderAutomationStatus(status: ObsAutomationStatus) {
+  el("automation-state").textContent = (status.pending ?? status.mode).replace("_", " ").toLowerCase().replace(/(^| )\w/g, (letter) => letter.toUpperCase());
+  const log = el<HTMLOListElement>("automation-log");
+  if (!status.log.length) { log.replaceChildren(Object.assign(document.createElement("li"), { textContent: "No automation events yet." })); return; }
+  log.replaceChildren(...status.log.map((entry) => { const item = document.createElement("li"); const time = document.createElement("time"); time.textContent = new Date(entry.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); const message = document.createElement("span"); message.textContent = `${entry.message} · ${entry.sceneName}`; item.append(time, message); return item; }));
 }
 function renderObs(state: ObsState) {
   const sceneChanged = currentObsState?.currentScene !== state.currentScene;
@@ -129,6 +140,7 @@ function renderObs(state: ObsState) {
   el("obs-status-copy").textContent = state.connection === "CONNECTED" ? "Connected" : state.connection === "CONNECTING" ? "Connecting" : state.connection === "ERROR" ? "Error" : "Disconnected";
   el("obs-connect-form").hidden = connected; el("obs-controls").hidden = !connected;
   el("obs-program").textContent = state.currentScene || "—"; el("obs-stream").textContent = state.streaming ? "LIVE" : "OFF"; el("obs-record").textContent = state.recording ? "ON" : "OFF";
+  el("automation-current-scene").textContent = state.currentScene || "—";
   el("preview-scene").textContent = state.currentScene || "—";
   if (sceneChanged && previewScene !== state.currentScene) setPreviewPlaceholder(connected ? "Updating preview…" : "OBS is not connected.", connected ? "Updating" : "OBS is not connected.");
   const scenes = el<HTMLSelectElement>("obs-scenes"); const selected = scenes.value; scenes.replaceChildren(...state.scenes.map((name) => new Option(name, name, false, name === (selected || state.currentScene))));
@@ -173,7 +185,7 @@ if (obsApi) {
     if (!result.imported || !result.mappings) { el("mapping-save-status").textContent = "Import canceled."; return; }
     sceneMappings = result.mappings;
     for (const key of mappingKeys) el<HTMLSelectElement>(`mapping-${key}`).replaceChildren();
-    el<HTMLInputElement>("automation-spin-wheel").checked = sceneMappings.automation.spinToWheel; el<HTMLInputElement>("automation-reveal-winner").checked = sceneMappings.automation.revealToWinner; el<HTMLInputElement>("automation-second-chance").checked = sceneMappings.automation.secondChance; el<HTMLInputElement>("automation-reward").checked = sceneMappings.automation.reward; el<HTMLInputElement>("automation-accept-host").checked = sceneMappings.automation.acceptToHost; el<HTMLInputElement>("automation-finish-ending").checked = sceneMappings.automation.finishToEnding;
+    applyAutomationSettings(sceneMappings);
     renderSceneMappings(currentObsState?.scenes ?? [], currentObsState?.connection === "CONNECTED"); el("mapping-save-status").textContent = "Studio profile imported.";
   });
   obsApi.onStateChanged(renderObs);
@@ -181,10 +193,12 @@ if (obsApi) {
   void obsApi.getState().then((result) => { const state = unwrap(result); if (state) renderObs(state); }).catch(() => showStudioFailure());
   void obsApi.getSceneMappings().then((result) => {
     const saved = unwrap(result); if (!saved) return; sceneMappings = saved;
-    el<HTMLInputElement>("automation-spin-wheel").checked = saved.automation.spinToWheel; el<HTMLInputElement>("automation-reveal-winner").checked = saved.automation.revealToWinner; el<HTMLInputElement>("automation-second-chance").checked = saved.automation.secondChance; el<HTMLInputElement>("automation-reward").checked = saved.automation.reward; el<HTMLInputElement>("automation-accept-host").checked = saved.automation.acceptToHost; el<HTMLInputElement>("automation-finish-ending").checked = saved.automation.finishToEnding;
+    applyAutomationSettings(saved);
     for (const key of mappingKeys) el<HTMLSelectElement>(`mapping-${key}`).replaceChildren();
     renderSceneMappings(currentObsState?.scenes ?? [], currentObsState?.connection === "CONNECTED");
   }).catch(() => { el("mapping-save-status").textContent = "Mappings could not be loaded."; });
+  obsApi.onAutomationStateChanged(renderAutomationStatus);
+  void obsApi.getAutomationStatus().then((result) => { const status = unwrap(result); if (status) renderAutomationStatus(status); });
 } else showStudioFailure("OBS desktop bridge is unavailable. Restart the desktop application after rebuilding.");
 
 window.asylumDesktop.onStatus(({ target, state }) => { (target === "host" ? hostError : facebookError).hidden = state !== "failed" && state !== "crashed"; });

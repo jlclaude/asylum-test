@@ -6,6 +6,9 @@ async function run() {
   const html = await readFile(join(process.cwd(), "renderer/index.html"), "utf8");
   const css = await readFile(join(process.cwd(), "renderer/desktop-shell.css"), "utf8");
   const renderer = await readFile(join(process.cwd(), "renderer/desktop-shell.ts"), "utf8");
+  const hostPreload = await readFile(join(process.cwd(), "preload/host-preload.ts"), "utf8");
+  const main = await readFile(join(process.cwd(), "main/main.ts"), "utf8");
+  const wheel = await readFile(join(process.cwd(), "../app/components/wheel/WheelSection.tsx"), "utf8");
   assert.ok(html.indexOf('id="divider"') < html.indexOf('id="obs-panel"'), "divider must precede every lower panel");
   assert.match(html, /Production Studio/); assert.match(html, /OBS Status:/); assert.match(html, /id="studio-error"/);
   assert.match(html, /Program Preview/); assert.match(html, /id="program-preview-image"/); assert.match(html, /Preview status:/);
@@ -26,6 +29,12 @@ async function run() {
   assert.match(renderer, /saveSceneMappings/); assert.doesNotMatch(renderer, /integration.*scene|raffle.*switchScene/i, "mapping toggles must not execute raffle automation");
   assert.match(html, /Export Studio Profile/); assert.match(html, /Import Studio Profile/); assert.match(html, /Automatic Scene Switching/);
   assert.match(renderer, /testMappedScene/); assert.doesNotMatch(renderer, /data-test-mapping[^\n]*switchScene/, "mapped tests must use the restricted mapped-scene API");
+  for (const delay of ["wheel", "winner", "secondChance", "reward", "host"]) assert.match(html, new RegExp(`id="delay-${delay}"`));
+  assert.match(html, /Live Show Automation/); assert.match(html, /id="automation-state"/); assert.match(html, /id="automation-log"/);
+  assert.match(renderer, /getAutomationStatus/); assert.match(renderer, /onAutomationStateChanged/);
+  assert.match(hostPreload, /emitAutomationEvent/); assert.doesNotMatch(hostPreload, /switchScene|obs-websocket|GetSourceScreenshot/, "host preload must expose semantic events only");
+  assert.match(main, /event\.sender !== hostView\?\.webContents/); assert.match(main, /const allowed: ObsAutomationEvent\[\]/);
+  assert.match(wheel, /wheel\.type === "VALUE" \? "REWARD" : "SPIN"/); assert.doesNotMatch(wheel, /emitDesktopAutomationEvent\("SHUFFLE"/);
   console.info("Studio layout and fallback tests passed");
 }
 void run().catch((error) => { console.error(error); process.exitCode = 1; });

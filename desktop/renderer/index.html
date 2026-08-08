@@ -76,10 +76,18 @@
               <label><input id="automation-accept-host" type="checkbox"> Return to Host Scene after Accept Result</label>
               <label><input id="automation-finish-ending" type="checkbox"> Switch to Ending Scene when raffle finishes</label>
             </div>
+            <div class="automation-delays">
+              <label>Wheel Scene Delay <input id="delay-wheel" type="number" min="0" max="60000" step="100"> ms</label>
+              <label>Winner Scene Delay <input id="delay-winner" type="number" min="0" max="60000" step="100"> ms</label>
+              <label>Second Chance Delay <input id="delay-secondChance" type="number" min="0" max="60000" step="100"> ms</label>
+              <label>Reward Scene Delay <input id="delay-reward" type="number" min="0" max="60000" step="100"> ms</label>
+              <label>Return to Host Delay <input id="delay-host" type="number" min="0" max="60000" step="100"> ms</label>
+            </div>
             <button id="save-scene-mappings">Save Scene Mappings</button><span id="mapping-save-status" role="status"></span>
             <div class="profile-actions"><button id="export-studio-profile">Export Studio Profile</button><button id="import-studio-profile">Import Studio Profile</button></div>
             <div class="next-version"><h3>Next Version</h3><p>Automatic Scene Switching · Winner Overlay · Scoreboard Overlay · Wheel Overlay · Soundboard · Stream Deck</p></div>
           </section>
+          <section class="automation-live" aria-labelledby="automation-live-title"><h2 id="automation-live-title">Live Show Automation</h2><div><span>Current OBS Scene <strong id="automation-current-scene">—</strong></span><span>Current Automation State <strong id="automation-state">Waiting</strong></span></div><h3>Live Event Log</h3><ol id="automation-log"><li>No automation events yet.</li></ol></section>
           <p id="obs-error" class="obs-error" hidden></p>
           <details><summary>To connect OBS</summary><ol><li>Open OBS Studio.</li><li>Go to Tools → WebSocket Server Settings.</li><li>Enable WebSocket server.</li><li>Use port 4455.</li><li>Enter the same password here if authentication is enabled.</li></ol><p>Only OBS on this computer is supported.</p></details>
         </div>
