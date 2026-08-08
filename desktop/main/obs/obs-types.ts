@@ -25,9 +25,11 @@ export type ObsProgramPreview = {
 };
 
 export type ObsSceneMappings = {
-  scenes: { host: string | null; wheel: string | null; winner: string | null; break: string | null; ending: string | null };
-  automation: { spinToWheel: boolean; revealToWinner: boolean; acceptToHost: boolean; finishToEnding: boolean };
+  scenes: { host: string | null; wheel: string | null; winner: string | null; secondChance: string | null; reward: string | null; break: string | null; ending: string | null };
+  automation: { spinToWheel: boolean; revealToWinner: boolean; secondChance: boolean; reward: boolean; acceptToHost: boolean; finishToEnding: boolean };
 };
+
+export type ObsMappingKey = keyof ObsSceneMappings["scenes"];
 
 export type ObsStoredSettings = {
   host: string;

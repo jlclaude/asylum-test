@@ -14,8 +14,8 @@ let previewTimer: number | null = null;
 let previewInFlight = false;
 let previewScene: string | null = null;
 const PREVIEW_INTERVAL_MS = 1_000;
-const mappingKeys = ["host", "wheel", "winner", "break", "ending"] as const;
-let sceneMappings: ObsSceneMappings = { scenes: { host: null, wheel: null, winner: null, break: null, ending: null }, automation: { spinToWheel: false, revealToWinner: false, acceptToHost: false, finishToEnding: false } };
+const mappingKeys: ObsMappingKey[] = ["host", "wheel", "winner", "secondChance", "reward", "break", "ending"];
+let sceneMappings: ObsSceneMappings = { scenes: { host: null, wheel: null, winner: null, secondChance: null, reward: null, break: null, ending: null }, automation: { spinToWheel: false, revealToWinner: false, secondChance: false, reward: false, acceptToHost: false, finishToEnding: false } };
 
 const el = <T extends HTMLElement>(id: string) => document.querySelector<T>(`#${id}`)!;
 function rect(element: HTMLElement) { const value = element.getBoundingClientRect(); return { x: Math.round(value.x), y: Math.round(value.y), width: Math.round(value.width), height: Math.round(value.height) }; }
@@ -103,13 +103,23 @@ function renderSceneMappings(availableScenes: string[], connected: boolean) {
       if (connected) missing.push(selected);
     }
     select.value = selected ?? ""; select.disabled = !connected;
+    el(`mapping-${key}-warning`).hidden = !(connected && selected && !availableScenes.includes(selected));
+    const testButton = document.querySelector<HTMLButtonElement>(`[data-test-mapping="${key}"]`)!;
+    testButton.disabled = !connected || !selected || !availableScenes.includes(selected);
   }
   const warning = el("mapping-warning"); warning.textContent = missing.length ? `Mapped scenes no longer exist in OBS: ${[...new Set(missing)].join(", ")}` : ""; warning.hidden = missing.length === 0;
-  for (const [buttonId, key] of [["test-host-scene", "host"], ["test-wheel-scene", "wheel"], ["test-winner-scene", "winner"]] as const) {
-    const value = el<HTMLSelectElement>(`mapping-${key}`).value;
-    el<HTMLButtonElement>(buttonId).disabled = !connected || !value || !availableScenes.includes(value);
-  }
   el<HTMLButtonElement>("save-scene-mappings").disabled = !connected;
+  el("mapping-current-scene").textContent = currentObsState?.currentScene ?? "—";
+  for (const key of ["host", "wheel", "winner"] as const) {
+    const selected = el<HTMLSelectElement>(`mapping-${key}`).value;
+    const node = el(`mapping-status-${key}`); node.textContent = `Mapped ${key[0].toUpperCase()}${key.slice(1)} Scene: ${selected || "—"}`; node.classList.toggle("matches", Boolean(selected && selected === currentObsState?.currentScene));
+  }
+}
+function collectSceneMappings(): ObsSceneMappings {
+  return {
+    scenes: { host: el<HTMLSelectElement>("mapping-host").value || null, wheel: el<HTMLSelectElement>("mapping-wheel").value || null, winner: el<HTMLSelectElement>("mapping-winner").value || null, secondChance: el<HTMLSelectElement>("mapping-secondChance").value || null, reward: el<HTMLSelectElement>("mapping-reward").value || null, break: el<HTMLSelectElement>("mapping-break").value || null, ending: el<HTMLSelectElement>("mapping-ending").value || null },
+    automation: { spinToWheel: el<HTMLInputElement>("automation-spin-wheel").checked, revealToWinner: el<HTMLInputElement>("automation-reveal-winner").checked, secondChance: el<HTMLInputElement>("automation-second-chance").checked, reward: el<HTMLInputElement>("automation-reward").checked, acceptToHost: el<HTMLInputElement>("automation-accept-host").checked, finishToEnding: el<HTMLInputElement>("automation-finish-ending").checked },
+  };
 }
 function renderObs(state: ObsState) {
   const sceneChanged = currentObsState?.currentScene !== state.currentScene;
@@ -145,28 +155,33 @@ if (obsApi) {
   action("obs-start-recording", async () => { const state = unwrap(await obsApi.startRecording()); if (state) renderObs(state); });
   action("obs-stop-recording", async () => { if (!confirm("Stop recording?")) return; const state = unwrap(await obsApi.stopRecording()); if (state) renderObs(state); });
   el("test-preview").addEventListener("click", () => void requestPreviewFrame(true));
-  const testMappedScene = async (key: "host" | "wheel" | "winner") => {
+  const testMappedScene = async (key: ObsMappingKey) => {
     const sceneName = el<HTMLSelectElement>(`mapping-${key}`).value;
     if (!sceneName) { el("mapping-save-status").textContent = "Assign a scene first."; return; }
-    const state = unwrap(await obsApi.switchScene(sceneName)); if (state) renderObs(state);
+    const saved = unwrap(await obsApi.saveSceneMappings(collectSceneMappings())); if (!saved) return; sceneMappings = saved;
+    const state = unwrap(await obsApi.testMappedScene(key)); if (state) renderObs(state);
   };
-  el("test-host-scene").addEventListener("click", () => void testMappedScene("host"));
-  el("test-wheel-scene").addEventListener("click", () => void testMappedScene("wheel"));
-  el("test-winner-scene").addEventListener("click", () => void testMappedScene("winner"));
+  for (const button of Array.from(document.querySelectorAll<HTMLButtonElement>("[data-test-mapping]"))) button.addEventListener("click", () => void testMappedScene(button.dataset.testMapping as ObsMappingKey));
+  for (const key of mappingKeys) el<HTMLSelectElement>(`mapping-${key}`).addEventListener("change", () => renderSceneMappings(currentObsState?.scenes ?? [], currentObsState?.connection === "CONNECTED"));
   el("save-scene-mappings").addEventListener("click", async () => {
-    const value: ObsSceneMappings = {
-      scenes: { host: el<HTMLSelectElement>("mapping-host").value || null, wheel: el<HTMLSelectElement>("mapping-wheel").value || null, winner: el<HTMLSelectElement>("mapping-winner").value || null, break: el<HTMLSelectElement>("mapping-break").value || null, ending: el<HTMLSelectElement>("mapping-ending").value || null },
-      automation: { spinToWheel: el<HTMLInputElement>("automation-spin-wheel").checked, revealToWinner: el<HTMLInputElement>("automation-reveal-winner").checked, acceptToHost: el<HTMLInputElement>("automation-accept-host").checked, finishToEnding: el<HTMLInputElement>("automation-finish-ending").checked },
-    };
-    const saved = unwrap(await obsApi.saveSceneMappings(value));
+    const saved = unwrap(await obsApi.saveSceneMappings(collectSceneMappings()));
     if (saved) { sceneMappings = saved; el("mapping-save-status").textContent = "Saved locally."; }
+  });
+  el("export-studio-profile").addEventListener("click", async () => { const result = unwrap(await obsApi.exportStudioProfile()); if (result) el("mapping-save-status").textContent = result.exported ? "Studio profile exported." : "Export canceled."; });
+  el("import-studio-profile").addEventListener("click", async () => {
+    const result = unwrap(await obsApi.importStudioProfile()); if (!result) return;
+    if (!result.imported || !result.mappings) { el("mapping-save-status").textContent = "Import canceled."; return; }
+    sceneMappings = result.mappings;
+    for (const key of mappingKeys) el<HTMLSelectElement>(`mapping-${key}`).replaceChildren();
+    el<HTMLInputElement>("automation-spin-wheel").checked = sceneMappings.automation.spinToWheel; el<HTMLInputElement>("automation-reveal-winner").checked = sceneMappings.automation.revealToWinner; el<HTMLInputElement>("automation-second-chance").checked = sceneMappings.automation.secondChance; el<HTMLInputElement>("automation-reward").checked = sceneMappings.automation.reward; el<HTMLInputElement>("automation-accept-host").checked = sceneMappings.automation.acceptToHost; el<HTMLInputElement>("automation-finish-ending").checked = sceneMappings.automation.finishToEnding;
+    renderSceneMappings(currentObsState?.scenes ?? [], currentObsState?.connection === "CONNECTED"); el("mapping-save-status").textContent = "Studio profile imported.";
   });
   obsApi.onStateChanged(renderObs);
   void obsApi.settings().then((result) => { const saved = unwrap(result); if (!saved) return; el<HTMLInputElement>("obs-host").value = saved.config.host; el<HTMLInputElement>("obs-port").value = String(saved.config.port); el<HTMLInputElement>("obs-remember").checked = saved.settings.rememberSettings; }).catch(() => showStudioFailure());
   void obsApi.getState().then((result) => { const state = unwrap(result); if (state) renderObs(state); }).catch(() => showStudioFailure());
   void obsApi.getSceneMappings().then((result) => {
     const saved = unwrap(result); if (!saved) return; sceneMappings = saved;
-    el<HTMLInputElement>("automation-spin-wheel").checked = saved.automation.spinToWheel; el<HTMLInputElement>("automation-reveal-winner").checked = saved.automation.revealToWinner; el<HTMLInputElement>("automation-accept-host").checked = saved.automation.acceptToHost; el<HTMLInputElement>("automation-finish-ending").checked = saved.automation.finishToEnding;
+    el<HTMLInputElement>("automation-spin-wheel").checked = saved.automation.spinToWheel; el<HTMLInputElement>("automation-reveal-winner").checked = saved.automation.revealToWinner; el<HTMLInputElement>("automation-second-chance").checked = saved.automation.secondChance; el<HTMLInputElement>("automation-reward").checked = saved.automation.reward; el<HTMLInputElement>("automation-accept-host").checked = saved.automation.acceptToHost; el<HTMLInputElement>("automation-finish-ending").checked = saved.automation.finishToEnding;
     for (const key of mappingKeys) el<HTMLSelectElement>(`mapping-${key}`).replaceChildren();
     renderSceneMappings(currentObsState?.scenes ?? [], currentObsState?.connection === "CONNECTED");
   }).catch(() => { el("mapping-save-status").textContent = "Mappings could not be loaded."; });

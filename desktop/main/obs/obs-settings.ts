@@ -60,7 +60,10 @@ export class ObsSettingsStore {
 
   async loadSceneMappings(): Promise<ObsSceneMappings> {
     const stored = await this.read();
-    try { return stored.sceneMappings ? validateObsSceneMappings(stored.sceneMappings) : structuredClone(DEFAULT_OBS_SCENE_MAPPINGS); }
+    try {
+      if (!stored.sceneMappings) return structuredClone(DEFAULT_OBS_SCENE_MAPPINGS);
+      return validateObsSceneMappings({ scenes: { ...DEFAULT_OBS_SCENE_MAPPINGS.scenes, ...stored.sceneMappings.scenes }, automation: { ...DEFAULT_OBS_SCENE_MAPPINGS.automation, ...stored.sceneMappings.automation } });
+    }
     catch { return structuredClone(DEFAULT_OBS_SCENE_MAPPINGS); }
   }
 

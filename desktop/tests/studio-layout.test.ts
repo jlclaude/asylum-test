@@ -21,9 +21,11 @@ async function run() {
   assert.match(renderer, /beforeunload.*stopPreviewPolling/); assert.doesNotMatch(renderer, /writeFile|imageFilePath/);
   assert.match(renderer, /candidate\.onerror/); assert.match(renderer, /new Image\(\)/, "frames must decode before replacing the visible preview");
   assert.match(html, /Test Preview/); assert.match(html, /Preview bytes:/); assert.match(renderer, /testProgramPreview/);
-  for (const label of ["Host Scene", "Wheel Scene", "Winner Scene", "Break Scene", "Ending Scene"]) assert.match(html, new RegExp(label));
+  for (const label of ["Host Scene", "Wheel Scene", "Winner Scene", "Second Chance Scene", "Reward Chamber Scene", "Break Scene", "Ending Scene"]) assert.match(html, new RegExp(label));
   assert.match(html, /Switch to Wheel Scene when Spin starts/); assert.match(html, /Return to Host Scene after Accept Result/);
   assert.match(renderer, /saveSceneMappings/); assert.doesNotMatch(renderer, /integration.*scene|raffle.*switchScene/i, "mapping toggles must not execute raffle automation");
+  assert.match(html, /Export Studio Profile/); assert.match(html, /Import Studio Profile/); assert.match(html, /Automatic Scene Switching/);
+  assert.match(renderer, /testMappedScene/); assert.doesNotMatch(renderer, /data-test-mapping[^\n]*switchScene/, "mapped tests must use the restricted mapped-scene API");
   console.info("Studio layout and fallback tests passed");
 }
 void run().catch((error) => { console.error(error); process.exitCode = 1; });

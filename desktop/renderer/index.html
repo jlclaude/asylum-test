@@ -57,21 +57,28 @@
             <h2 id="scene-mapping-title">OBS Scene Mapping</h2>
             <p>Optional desktop-only assignments. Automation is saved but not active yet.</p>
             <div class="mapping-grid">
-              <label>Host Scene <select id="mapping-host"></select></label>
-              <label>Wheel Scene <select id="mapping-wheel"></select></label>
-              <label>Winner Scene <select id="mapping-winner"></select></label>
-              <label>Break Scene <select id="mapping-break"></select></label>
-              <label>Ending Scene <select id="mapping-ending"></select></label>
+              <div class="mapping-row"><label>Host Scene <select id="mapping-host"></select></label><button data-test-mapping="host">Test</button><span id="mapping-host-warning" class="mapping-warning" hidden>⚠ Scene missing</span></div>
+              <div class="mapping-row"><label>Wheel Scene <select id="mapping-wheel"></select></label><button data-test-mapping="wheel">Test</button><span id="mapping-wheel-warning" class="mapping-warning" hidden>⚠ Scene missing</span></div>
+              <div class="mapping-row"><label>Winner Scene <select id="mapping-winner"></select></label><button data-test-mapping="winner">Test</button><span id="mapping-winner-warning" class="mapping-warning" hidden>⚠ Scene missing</span></div>
+              <div class="mapping-row"><label>Second Chance Scene <select id="mapping-secondChance"></select></label><button data-test-mapping="secondChance">Test</button><span id="mapping-secondChance-warning" class="mapping-warning" hidden>⚠ Scene missing</span></div>
+              <div class="mapping-row"><label>Reward Chamber Scene <select id="mapping-reward"></select></label><button data-test-mapping="reward">Test</button><span id="mapping-reward-warning" class="mapping-warning" hidden>⚠ Scene missing</span></div>
+              <div class="mapping-row"><label>Break Scene <select id="mapping-break"></select></label><button data-test-mapping="break">Test</button><span id="mapping-break-warning" class="mapping-warning" hidden>⚠ Scene missing</span></div>
+              <div class="mapping-row"><label>Ending Scene <select id="mapping-ending"></select></label><button data-test-mapping="ending">Test</button><span id="mapping-ending-warning" class="mapping-warning" hidden>⚠ Scene missing</span></div>
             </div>
             <p id="mapping-warning" class="mapping-warning" hidden></p>
-            <div class="mapping-tests"><button id="test-host-scene">Test Host Scene</button><button id="test-wheel-scene">Test Wheel Scene</button><button id="test-winner-scene">Test Winner Scene</button></div>
+            <div class="mapping-status"><span>Current OBS Program Scene <strong id="mapping-current-scene">—</strong></span><span id="mapping-status-host">Mapped Host Scene: —</span><span id="mapping-status-wheel">Mapped Wheel Scene: —</span><span id="mapping-status-winner">Mapped Winner Scene: —</span></div>
+            <h3>Automation</h3>
             <div class="automation-options">
               <label><input id="automation-spin-wheel" type="checkbox"> Switch to Wheel Scene when Spin starts</label>
               <label><input id="automation-reveal-winner" type="checkbox"> Switch to Winner Scene when Winner is revealed</label>
+              <label><input id="automation-second-chance" type="checkbox"> Switch to Second Chance Scene</label>
+              <label><input id="automation-reward" type="checkbox"> Switch to Reward Chamber Scene</label>
               <label><input id="automation-accept-host" type="checkbox"> Return to Host Scene after Accept Result</label>
               <label><input id="automation-finish-ending" type="checkbox"> Switch to Ending Scene when raffle finishes</label>
             </div>
             <button id="save-scene-mappings">Save Scene Mappings</button><span id="mapping-save-status" role="status"></span>
+            <div class="profile-actions"><button id="export-studio-profile">Export Studio Profile</button><button id="import-studio-profile">Import Studio Profile</button></div>
+            <div class="next-version"><h3>Next Version</h3><p>Automatic Scene Switching · Winner Overlay · Scoreboard Overlay · Wheel Overlay · Soundboard · Stream Deck</p></div>
           </section>
           <p id="obs-error" class="obs-error" hidden></p>
           <details><summary>To connect OBS</summary><ol><li>Open OBS Studio.</li><li>Go to Tools → WebSocket Server Settings.</li><li>Enable WebSocket server.</li><li>Use port 4455.</li><li>Enter the same password here if authentication is enabled.</li></ol><p>Only OBS on this computer is supported.</p></details>

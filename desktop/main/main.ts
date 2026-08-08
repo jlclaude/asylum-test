@@ -1,13 +1,14 @@
-import { app, BaseWindow, BrowserWindow, clipboard, ipcMain, session, WebContentsView } from "electron";
+import { app, BaseWindow, BrowserWindow, clipboard, dialog, ipcMain, session, WebContentsView } from "electron";
 import { join } from "node:path";
+import { readFile, writeFile } from "node:fs/promises";
 import { createFacebookView, clearFacebookSession } from "./facebook-view";
 import { goBack, goForward, navigate } from "./navigation";
 import { ASYLUM_ORIGIN, denyPermissions, isAsylumUrl, openExternalHttps, restrictNavigation } from "./security";
 import { ObsController } from "./obs/ObsController";
 import { ObsSettingsStore } from "./obs/obs-settings";
-import type { ObsConnectConfig } from "./obs/obs-types";
+import type { ObsConnectConfig, ObsMappingKey } from "./obs/obs-types";
 import { validateObsConfig } from "./obs/obs-validation";
-import { validateObsSceneMappings } from "./obs/obs-scene-mappings";
+import { exportStudioProfile, importStudioProfile, validateObsSceneMappings } from "./obs/obs-scene-mappings";
 
 const hostUrl = process.env.ASYLUM_DESKTOP_HOST_URL ?? `${ASYLUM_ORIGIN}/host`;
 const hostOrigin = new URL(hostUrl).origin;
@@ -127,6 +128,26 @@ function registerIpc() {
     const mappings = validateObsSceneMappings(value, obsController.getScenes());
     await obsSettings.saveSceneMappings(mappings);
     return mappings;
+  });
+  obsAction("obs:test-mapped-scene", async (value) => {
+    const allowed: ObsMappingKey[] = ["host", "wheel", "winner", "secondChance", "reward", "break", "ending"];
+    if (typeof value !== "string" || !allowed.includes(value as ObsMappingKey)) throw new Error("Invalid OBS scene mapping.");
+    const mappings = await obsSettings.loadSceneMappings(); const sceneName = mappings.scenes[value as ObsMappingKey];
+    if (!sceneName || !obsController.getScenes().includes(sceneName)) throw new Error("Mapped scene is unavailable.");
+    return obsController.switchScene(sceneName);
+  });
+  obsAction("obs:export-studio-profile", async () => {
+    const result = await dialog.showSaveDialog({ title: "Export Studio Profile", defaultPath: "asylum-studio-profile.json", filters: [{ name: "JSON", extensions: ["json"] }] });
+    if (result.canceled || !result.filePath) return { exported: false };
+    await writeFile(result.filePath, `${JSON.stringify(exportStudioProfile(await obsSettings.loadSceneMappings()), null, 2)}\n`, { mode: 0o600 });
+    return { exported: true };
+  });
+  obsAction("obs:import-studio-profile", async () => {
+    const result = await dialog.showOpenDialog({ title: "Import Studio Profile", filters: [{ name: "JSON", extensions: ["json"] }], properties: ["openFile"] });
+    if (result.canceled || !result.filePaths[0]) return { imported: false };
+    const raw = await readFile(result.filePaths[0], "utf8"); if (raw.length > 100_000) throw new Error("Studio profile is too large.");
+    const mappings = importStudioProfile(JSON.parse(raw) as unknown); await obsSettings.saveSceneMappings(mappings);
+    return { imported: true, mappings };
   });
   obsAction("obs:connect", async (payload) => {
     if (!payload || typeof payload !== "object") throw new Error("Invalid OBS connection settings.");
