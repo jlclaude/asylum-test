@@ -17,7 +17,7 @@ class FakeObs implements ObsClient {
     if (type === "GetSceneList") return { currentProgramSceneName: this.current, scenes: [{ sceneName: "Main" }, { sceneName: "Break" }] };
     if (type === "GetStreamStatus") return { outputActive: this.stream, outputDuration: 0 };
     if (type === "GetRecordStatus") return { outputActive: this.recording };
-    if (type === "GetSourceScreenshot") return { imageData: "data:image/jpeg;base64,aGVsbG8=" };
+    if (type === "GetSourceScreenshot") return { imageData: "data:image/jpg;base64,aGVsbG8=" };
     if (type === "SetCurrentProgramScene") this.current = String(data?.sceneName);
     if (type === "StartStream") this.stream = true; if (type === "StopStream") this.stream = false;
     if (type === "StartRecord") this.recording = true; if (type === "StopRecord") this.recording = false;
@@ -50,7 +50,7 @@ async function run() {
   let state = await controller.connect({ host: "127.0.0.1", port: 4455, password: "top-secret" });
   assert.equal(state.connection, "CONNECTED"); assert.deepEqual(state.scenes, ["Main", "Break"]); assert.equal(state.currentScene, "Main");
   assert.deepEqual(controller.getScenes(), ["Main", "Break"]);
-  const preview = await controller.getProgramPreview(); assert.equal(preview.sceneName, "Main"); assert.match(preview.imageDataUrl ?? "", /^data:image\/jpeg;base64,/);
+  const preview = await controller.getProgramPreview(); assert.equal(preview.sceneName, "Main"); assert.equal(preview.imageDataUrl, "data:image/jpeg;base64,aGVsbG8=");
   assert.equal(logs.join(" ").includes("top-secret"), false, "password must never be logged");
   state = await controller.switchScene("Break"); assert.equal(state.currentScene, "Break");
   await assert.rejects(controller.switchScene("Missing"), /no longer exists/);

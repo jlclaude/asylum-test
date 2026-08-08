@@ -141,12 +141,21 @@ export class ObsController {
         imageCompressionQuality: 70,
       }));
       if (this.state.currentScene !== sceneName) return { imageDataUrl: null, sceneName: this.state.currentScene };
-      const imageDataUrl = response.imageData;
-      if (typeof imageDataUrl !== "string" || !/^data:image\/jpe?g;base64,[A-Za-z0-9+/=]+$/.test(imageDataUrl) || imageDataUrl.length > 8_000_000) {
+      const returnedImage = response.imageData;
+      if (typeof returnedImage !== "string" || returnedImage.length > 8_000_000) {
         throw new Error("invalid screenshot response");
       }
-      return { imageDataUrl, sceneName };
-    } catch {
+      const match = /^data:image\/(png|jpe?g);base64,([A-Za-z0-9+/=]+)$/.exec(returnedImage);
+      const base64 = match?.[2] ?? (/^[A-Za-z0-9+/=]+$/.test(returnedImage) ? returnedImage : null);
+      if (!base64) throw new Error("invalid screenshot response");
+      const format = match?.[1] === "png" ? "png" : "jpeg";
+      return { imageDataUrl: `data:image/${format};base64,${base64}`, sceneName };
+    } catch (error) {
+      const details = record(error);
+      const message = error instanceof Error ? error.message : String(details.message ?? "");
+      if (Number(details.code) === 600 || /source.*(?:not found|exist)|(?:not found|exist).*source/i.test(message)) {
+        throw new Error("Preview source unavailable.");
+      }
       throw new Error("Preview temporarily unavailable.");
     }
   }

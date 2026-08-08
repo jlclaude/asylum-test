@@ -9,6 +9,7 @@ async function run() {
   assert.ok(html.indexOf('id="divider"') < html.indexOf('id="obs-panel"'), "divider must precede every lower panel");
   assert.match(html, /Production Studio/); assert.match(html, /OBS Status:/); assert.match(html, /id="studio-error"/);
   assert.match(html, /Program Preview/); assert.match(html, /id="program-preview-image"/); assert.match(html, /Preview status:/);
+  assert.match(html, /img-src 'self' data:/, "CSP must permit in-memory OBS preview data URLs");
   assert.match(css, /#divider\s*\{\s*grid-row:\s*3/); assert.match(css, /#facebook-panel, #obs-panel\s*\{\s*grid-row:\s*4/);
   assert.doesNotMatch(css, /#obs-panel[^,{]*:hover|\.studio[^,{]*:hover/i, "Studio root must not have a hover background");
   assert.doesNotMatch(css, /#(?:f00|ff0000)|\b(?:red|crimson)\b/i, "desktop CSS must not contain red debug fills");
@@ -18,6 +19,7 @@ async function run() {
   assert.match(renderer, /PREVIEW_INTERVAL_MS = 500/); assert.match(renderer, /previewInFlight/);
   assert.match(renderer, /document\.visibilityState === "visible"/); assert.match(renderer, /panel === "obs"/);
   assert.match(renderer, /beforeunload.*stopPreviewPolling/); assert.doesNotMatch(renderer, /writeFile|imageFilePath/);
+  assert.match(renderer, /candidate\.onerror/); assert.match(renderer, /new Image\(\)/, "frames must decode before replacing the visible preview");
   console.info("Studio layout and fallback tests passed");
 }
 void run().catch((error) => { console.error(error); process.exitCode = 1; });

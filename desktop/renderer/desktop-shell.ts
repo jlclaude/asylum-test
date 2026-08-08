@@ -63,8 +63,11 @@ async function requestPreviewFrame() {
     const result = await obsApi.getProgramPreview();
     if (!previewShouldRun()) return;
     if (!result.ok || !result.value?.imageDataUrl) { setPreviewPlaceholder(result.error ?? "Preview temporarily unavailable.", "Error"); return; }
+    const candidate = new Image();
+    await new Promise<void>((resolve, reject) => { candidate.onload = () => resolve(); candidate.onerror = () => reject(new Error("invalid preview image")); candidate.src = result.value!.imageDataUrl!; });
+    if (!previewShouldRun()) return;
     const image = el<HTMLImageElement>("program-preview-image");
-    image.src = result.value.imageDataUrl; image.hidden = false; el("program-preview-placeholder").hidden = true;
+    image.src = candidate.src; image.hidden = false; el("program-preview-placeholder").hidden = true;
     previewScene = result.value.sceneName; el("preview-scene").textContent = previewScene ?? "—"; el("preview-status").textContent = "Live";
   } catch { if (previewShouldRun()) setPreviewPlaceholder("Preview temporarily unavailable.", "Error"); }
   finally { previewInFlight = false; }
