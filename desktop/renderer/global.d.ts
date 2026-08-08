@@ -10,7 +10,7 @@ declare global {
   interface WinnerPresentationPublic { enabled: boolean; confetti: boolean; sound: boolean; volume: number; overlayDelay: number; duration: number; audioSelected: boolean }
   interface Window { asylumDesktop: {
     version(): Promise<string>; layout: { update(layout: DesktopLayout): Promise<void> };
-    host: { retry(): Promise<void>; reload(): Promise<void>; openExternal(): Promise<void> };
+    host: { retry(): Promise<void>; reload(): Promise<void>; openPortal(): Promise<void>; openBroadcast(): Promise<void>; openExternal(): Promise<void> };
     facebook: { back(): Promise<void>; forward(): Promise<void>; reload(): Promise<void>; retry(): Promise<void>; openGroup(): Promise<void>; openExternal(): Promise<void>; clearSession(): Promise<void> };
     integration: { copyGameLink(): Promise<boolean>; copyFacebookPost(): Promise<boolean> };
     winner: { getSettings(): Promise<ObsResult<WinnerPresentationPublic>>; saveSettings(value: unknown): Promise<ObsResult<WinnerPresentationPublic>>; chooseAudio(): Promise<ObsResult<WinnerPresentationPublic | null>>; test(mode: "overlay" | "confetti" | "sound"): Promise<ObsResult<boolean>>; replay(): Promise<ObsResult<boolean>>; hide(): Promise<ObsResult<void>> };

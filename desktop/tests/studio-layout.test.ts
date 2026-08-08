@@ -28,7 +28,7 @@ async function run() {
   assert.match(html, /Test Preview/); assert.match(html, /Preview bytes:/); assert.match(renderer, /testProgramPreview/);
   for (const label of ["Host Scene", "Wheel Scene", "Winner Scene", "Second Chance Scene", "Reward Chamber Scene", "Break Scene", "Ending Scene"]) assert.match(html, new RegExp(label));
   assert.match(html, /Switch to Wheel Scene when Spin starts/); assert.match(html, /Return to Host Scene after Accept Result/);
-  assert.match(html, /OBS Automation Enabled/); assert.match(html, /Winner Celebration Package/);
+  assert.match(html, /OBS Automation Disabled/); assert.match(html, /Winner Celebration Package/);
   assert.match(renderer, /saveSceneMappings/); assert.doesNotMatch(renderer, /integration.*scene|raffle.*switchScene/i, "mapping toggles must not execute raffle automation");
   assert.match(html, /Export Studio Profile/); assert.match(html, /Import Studio Profile/); assert.match(html, /Automatic Scene Switching/);
   assert.match(renderer, /testMappedScene/); assert.doesNotMatch(renderer, /data-test-mapping[^\n]*switchScene/, "mapped tests must use the restricted mapped-scene API");

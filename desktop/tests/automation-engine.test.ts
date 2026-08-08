@@ -17,7 +17,7 @@ async function flush() { await Promise.resolve(); await Promise.resolve(); }
 async function run() {
   const switched: string[] = []; let connected = true; const timer = new Timer();
   const controller = { getState: () => ({ connection: connected ? "CONNECTED" : "DISCONNECTED" }), getScenes: () => ["Host", "Wheel", "Winner", "Second", "Reward", "Ending"], switchScene: async (scene: unknown) => { switched.push(String(scene)); return {} as never; } };
-  const engine = new ObsAutomationEngine(controller as never, { loadSceneMappings: async () => mappings }, timer);
+  const engine = new ObsAutomationEngine(controller as never, { loadSceneMappings: async () => mappings }, timer, true);
   await engine.handle("SPIN"); await flush(); assert.equal(switched.at(-1), "Wheel");
   for (const [event, scene, delay] of [["WINNER", "Winner", 1_000], ["SECOND_CHANCE", "Second", 1_000], ["REWARD", "Reward", 1_000], ["ACCEPT_RESULT", "Host", 3_000]] as Array<[ObsAutomationEvent, string, number]>) {
     await engine.handle(event); assert.equal(timer.pending[0]?.delay, delay); timer.run(); await flush(); assert.equal(switched.at(-1), scene);

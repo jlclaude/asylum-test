@@ -41,9 +41,10 @@ action("host-retry", window.asylumDesktop.host.retry); action("reload-host", win
 action("facebook-retry", window.asylumDesktop.facebook.retry); action("facebook-error-external", window.asylumDesktop.facebook.openExternal);
 action("clear-login", async () => { if (confirm("Clear the saved Facebook login and site data for this desktop app?")) await window.asylumDesktop.facebook.clearSession(); });
 action("collapse", async () => { panel = "host"; applyLayout(); });
-el("show-host").addEventListener("click", () => { panel = "host"; applyLayout(); });
+el("show-host").addEventListener("click", () => { panel = "host"; applyLayout(); void window.asylumDesktop.host.openPortal(); });
 el("show-facebook").addEventListener("click", () => { panel = "facebook"; applyLayout(); });
 el("show-studio").addEventListener("click", () => { panel = "obs"; applyLayout(); });
+el("open-broadcast").addEventListener("click", () => { panel = "host"; applyLayout(); void window.asylumDesktop.host.openBroadcast(); });
 
 function unwrap<T>(result: ObsResult<T>): T | undefined { if (!result.ok) { showObsError(result.error ?? "OBS request failed."); return; } return result.value; }
 function showObsError(message?: string) { const node = el("obs-error"); node.textContent = message ?? ""; node.hidden = !message; }
@@ -119,12 +120,12 @@ function renderSceneMappings(availableScenes: string[], connected: boolean) {
 function collectSceneMappings(): ObsSceneMappings {
   return {
     scenes: { host: el<HTMLSelectElement>("mapping-host").value || null, wheel: el<HTMLSelectElement>("mapping-wheel").value || null, winner: el<HTMLSelectElement>("mapping-winner").value || null, secondChance: el<HTMLSelectElement>("mapping-secondChance").value || null, reward: el<HTMLSelectElement>("mapping-reward").value || null, break: el<HTMLSelectElement>("mapping-break").value || null, ending: el<HTMLSelectElement>("mapping-ending").value || null },
-    automation: { enabled: el<HTMLInputElement>("automation-enabled").checked, spinToWheel: el<HTMLInputElement>("automation-spin-wheel").checked, revealToWinner: el<HTMLInputElement>("automation-reveal-winner").checked, secondChance: el<HTMLInputElement>("automation-second-chance").checked, reward: el<HTMLInputElement>("automation-reward").checked, acceptToHost: el<HTMLInputElement>("automation-accept-host").checked, finishToEnding: el<HTMLInputElement>("automation-finish-ending").checked },
+    automation: { enabled: false, spinToWheel: el<HTMLInputElement>("automation-spin-wheel").checked, revealToWinner: el<HTMLInputElement>("automation-reveal-winner").checked, secondChance: el<HTMLInputElement>("automation-second-chance").checked, reward: el<HTMLInputElement>("automation-reward").checked, acceptToHost: el<HTMLInputElement>("automation-accept-host").checked, finishToEnding: el<HTMLInputElement>("automation-finish-ending").checked },
     delays: { wheel: Number(el<HTMLInputElement>("delay-wheel").value), winner: Number(el<HTMLInputElement>("delay-winner").value), secondChance: Number(el<HTMLInputElement>("delay-secondChance").value), reward: Number(el<HTMLInputElement>("delay-reward").value), host: Number(el<HTMLInputElement>("delay-host").value) },
   };
 }
 function applyAutomationSettings(settings: ObsSceneMappings) {
-  el<HTMLInputElement>("automation-enabled").checked = settings.automation.enabled; el<HTMLInputElement>("automation-spin-wheel").checked = settings.automation.spinToWheel; el<HTMLInputElement>("automation-reveal-winner").checked = settings.automation.revealToWinner; el<HTMLInputElement>("automation-second-chance").checked = settings.automation.secondChance; el<HTMLInputElement>("automation-reward").checked = settings.automation.reward; el<HTMLInputElement>("automation-accept-host").checked = settings.automation.acceptToHost; el<HTMLInputElement>("automation-finish-ending").checked = settings.automation.finishToEnding;
+  el<HTMLInputElement>("automation-enabled").checked = false; el<HTMLInputElement>("automation-spin-wheel").checked = settings.automation.spinToWheel; el<HTMLInputElement>("automation-reveal-winner").checked = settings.automation.revealToWinner; el<HTMLInputElement>("automation-second-chance").checked = settings.automation.secondChance; el<HTMLInputElement>("automation-reward").checked = settings.automation.reward; el<HTMLInputElement>("automation-accept-host").checked = settings.automation.acceptToHost; el<HTMLInputElement>("automation-finish-ending").checked = settings.automation.finishToEnding;
   el<HTMLInputElement>("delay-wheel").value = String(settings.delays.wheel); el<HTMLInputElement>("delay-winner").value = String(settings.delays.winner); el<HTMLInputElement>("delay-secondChance").value = String(settings.delays.secondChance); el<HTMLInputElement>("delay-reward").value = String(settings.delays.reward); el<HTMLInputElement>("delay-host").value = String(settings.delays.host);
 }
 function renderAutomationStatus(status: ObsAutomationStatus) {

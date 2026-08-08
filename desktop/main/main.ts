@@ -20,6 +20,7 @@ let hostView: WebContentsView | null = null;
 let facebookView: WebContentsView | null = null;
 let currentGameLink = "";
 let currentFacebookPost = "";
+let currentGameId = "";
 let obsController: ObsController;
 let obsSettings: ObsSettingsStore;
 let obsAutomation: ObsAutomationEngine;
@@ -92,6 +93,8 @@ function registerIpc() {
   });
   ipcMain.handle("host:retry", (event) => fromShell(event) && hostView ? navigate(hostView.webContents, hostUrl) : undefined);
   ipcMain.handle("host:reload", (event) => { if (fromShell(event)) hostView?.webContents.reload(); });
+  ipcMain.handle("host:open-portal", (event) => fromShell(event) && hostView ? navigate(hostView.webContents, hostUrl) : undefined);
+  ipcMain.handle("host:open-broadcast", (event) => fromShell(event) && hostView ? navigate(hostView.webContents, `${hostOrigin}/broadcast${currentGameId ? `?gameId=${encodeURIComponent(currentGameId)}` : ""}`) : undefined);
   ipcMain.handle("host:open-external", (event) => { if (fromShell(event)) openExternalHttps(hostView?.webContents.getURL() || hostUrl); });
   ipcMain.handle("facebook:back", (event) => { if (fromShell(event) && facebookView) goBack(facebookView.webContents); });
   ipcMain.handle("facebook:forward", (event) => { if (fromShell(event) && facebookView) goForward(facebookView.webContents); });
@@ -109,6 +112,7 @@ function registerIpc() {
     if (typeof candidate.publicClaimUrl !== "string" || !isAsylumUrl(candidate.publicClaimUrl, hostOrigin)) return false;
     if (typeof candidate.facebookPost !== "string" || candidate.facebookPost.length > 10_000) return false;
     currentGameLink = candidate.publicClaimUrl;
+    currentGameId = candidate.gameId;
     currentFacebookPost = candidate.facebookPost;
     return true;
   });

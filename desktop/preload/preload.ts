@@ -8,6 +8,8 @@ contextBridge.exposeInMainWorld("asylumDesktop", {
     update: (layout: unknown) => invoke("layout:update", layout),
   },
   host: {
+    openPortal: () => invoke("host:open-portal"),
+    openBroadcast: () => invoke("host:open-broadcast"),
     retry: () => invoke("host:retry"),
     reload: () => invoke("host:reload"),
     openExternal: () => invoke("host:open-external"),

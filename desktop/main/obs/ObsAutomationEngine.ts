@@ -14,12 +14,13 @@ export class ObsAutomationEngine {
   private queued: { mode: ObsAutomationMode; sceneName: string; delay: number } | null = null;
   private subscribers = new Set<(status: ObsAutomationStatus) => void>();
 
-  constructor(private readonly controller: Pick<ObsController, "getState" | "getScenes" | "switchScene">, private readonly settings: Pick<ObsSettingsStore, "loadSceneMappings">, private readonly timerApi: ObsTimer = defaultTimer) {}
+  constructor(private readonly controller: Pick<ObsController, "getState" | "getScenes" | "switchScene">, private readonly settings: Pick<ObsSettingsStore, "loadSceneMappings">, private readonly timerApi: ObsTimer = defaultTimer, private readonly runtimeEnabled = false) {}
 
   getStatus(): ObsAutomationStatus { return { ...this.status, log: this.status.log.map((entry) => ({ ...entry })) }; }
   subscribe(callback: (status: ObsAutomationStatus) => void) { this.subscribers.add(callback); callback(this.getStatus()); return () => this.subscribers.delete(callback); }
 
   async handle(event: ObsAutomationEvent): Promise<void> {
+    if (!this.runtimeEnabled) { this.cancelPending(); this.patch({ mode: "WAITING", pending: null }); return; }
     const settings = await this.settings.loadSceneMappings();
     if (!settings.automation.enabled) { this.cancelPending(); this.patch({ mode: "WAITING", pending: null }); return; }
     const target = this.target(event, settings);
